@@ -1,4 +1,4 @@
-import { AppBar, IconButton, Toolbar, Typography } from "@mui/material";
+import { AppBar, IconButton, Toolbar, Typography, Button } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 
 interface AppBarProps {
@@ -6,6 +6,11 @@ interface AppBarProps {
 }
 
 export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
+  const handleLogout = () => {
+    localStorage.removeItem("isAuthenticated");
+    window.location.reload();
+  };
+
   return (
     <AppBar
       position="fixed"
@@ -35,6 +40,9 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
         >
           APOLLO
         </Typography>
+        <Button color="inherit" onClick={handleLogout}>
+          Logout
+        </Button>
       </Toolbar>
     </AppBar>
   );

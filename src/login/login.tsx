@@ -11,12 +11,22 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 
+// This should ideally be in a global state management solution like Redux
+declare global {
+  interface Window {
+    signedOn: boolean;
+  }
+}
+
+window.signedOn = false; // Default to false
+
 export const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+  const [error, setError] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -24,12 +34,21 @@ export const Login = () => {
       ...prev,
       [name]: value,
     }));
+    setError(""); // Clear error when user types
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log("Login attempted with:", formData);
+
+    if (
+      formData.email === "apollo@wgrant.com" &&
+      formData.password === "test"
+    ) {
+      localStorage.setItem("isAuthenticated", "true");
+      window.location.reload(); // Force reload to update the app state
+    } else {
+      setError("Invalid email or password");
+    }
   };
 
   return (
@@ -60,6 +79,11 @@ export const Login = () => {
           >
             Sign In
           </Typography>
+          {error && (
+            <Typography color="error" sx={{ mb: 2 }}>
+              {error}
+            </Typography>
+          )}
           <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
             <TextField
               margin="normal"

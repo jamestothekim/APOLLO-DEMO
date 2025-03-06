@@ -82,7 +82,14 @@ const AppLayout = () => {
   );
 };
 
-function App() {
+export const App = () => {
+  // Check if user is signed in using localStorage
+  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -95,6 +102,6 @@ function App() {
       </ForecastProvider>
     </ThemeProvider>
   );
-}
+};
 
 export default App;
