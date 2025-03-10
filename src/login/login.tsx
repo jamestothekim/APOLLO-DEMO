@@ -88,8 +88,6 @@ export const Login: React.FC = () => {
     setNotification({ ...notification, open: false });
   };
 
-  console.log("Login component rendering", theme);
-
   return (
     <Box
       sx={{
