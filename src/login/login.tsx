@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -17,7 +17,7 @@ import { useUser } from "../userContext";
 
 export const Login: React.FC = () => {
   const theme = useTheme();
-  const { login } = useUser();
+  const { login, isLoggedIn } = useUser();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
@@ -29,6 +29,14 @@ export const Login: React.FC = () => {
     severity: "success" as "success" | "error",
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  // If already logged in, this component shouldn't be shown
+  useEffect(() => {
+    if (isLoggedIn) {
+      // Store login state in localStorage for persistence across page refreshes
+      localStorage.setItem("isAuthenticated", "true");
+    }
+  }, [isLoggedIn]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -51,6 +59,8 @@ export const Login: React.FC = () => {
           message: "Login successful!",
           severity: "success",
         });
+        // Store login state in localStorage
+        localStorage.setItem("isAuthenticated", "true");
       } else {
         setNotification({
           open: true,

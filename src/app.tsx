@@ -17,7 +17,7 @@ import ProfitModel from "./profitModel/profitModel";
 import { SettingsContainer } from "./settings/settingsContainer";
 import { DiscountsView } from "./discounts/discounts";
 import { Login } from "./login/login";
-import { UserProvider } from "./userContext";
+import { UserProvider, useUser } from "./userContext";
 
 const drawerWidth = 240;
 
@@ -83,25 +83,34 @@ const AppLayout = () => {
   );
 };
 
-export const App = () => {
-  // Check if user is signed in using localStorage
-  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+const AppContent = () => {
+  const { isLoggedIn } = useUser();
+  // We'll still check localStorage for initial state on page refresh
+  const storedAuthState = localStorage.getItem("isAuthenticated") === "true";
 
+  // Show login if not logged in
+  if (!isLoggedIn && !storedAuthState) {
+    return <Login />;
+  }
+
+  // Otherwise show the main app
+  return (
+    <ForecastProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/*" element={<AppLayout />} />
+        </Routes>
+      </BrowserRouter>
+    </ForecastProvider>
+  );
+};
+
+export const App = () => {
   return (
     <UserProvider>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        {!isAuthenticated ? (
-          <Login />
-        ) : (
-          <ForecastProvider>
-            <BrowserRouter>
-              <Routes>
-                <Route path="/*" element={<AppLayout />} />
-              </Routes>
-            </BrowserRouter>
-          </ForecastProvider>
-        )}
+        <AppContent />
       </ThemeProvider>
     </UserProvider>
   );
