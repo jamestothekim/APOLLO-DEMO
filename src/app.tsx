@@ -17,6 +17,7 @@ import ProfitModel from "./profitModel/profitModel";
 import { SettingsContainer } from "./settings/settingsContainer";
 import { DiscountsView } from "./discounts/discounts";
 import { Login } from "./login/login";
+import { UserProvider } from "./userContext";
 
 const drawerWidth = 240;
 
@@ -86,21 +87,23 @@ export const App = () => {
   // Check if user is signed in using localStorage
   const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
 
-  if (!isAuthenticated) {
-    return <Login />;
-  }
-
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <ForecastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/*" element={<AppLayout />} />
-          </Routes>
-        </BrowserRouter>
-      </ForecastProvider>
-    </ThemeProvider>
+    <UserProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        {!isAuthenticated ? (
+          <Login />
+        ) : (
+          <ForecastProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/*" element={<AppLayout />} />
+              </Routes>
+            </BrowserRouter>
+          </ForecastProvider>
+        )}
+      </ThemeProvider>
+    </UserProvider>
   );
 };
 
