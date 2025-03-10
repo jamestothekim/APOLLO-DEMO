@@ -152,7 +152,25 @@ export const Login: React.FC = () => {
               autoFocus
               value={formData.username}
               onChange={handleChange}
-              sx={{ mb: 1.5 }}
+              sx={{
+                mb: 1.5,
+                "& .MuiOutlinedInput-root": {
+                  "& fieldset": {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  "&:hover fieldset": {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  "& input:-webkit-autofill": {
+                    WebkitBoxShadow: `0 0 0 100px ${theme.palette.background.paper} inset`,
+                    WebkitTextFillColor: theme.palette.text.primary,
+                    borderColor: theme.palette.primary.main,
+                  },
+                },
+              }}
               size="small"
             />
 
@@ -182,7 +200,25 @@ export const Login: React.FC = () => {
                   </InputAdornment>
                 ),
               }}
-              sx={{ mb: 2 }}
+              sx={{
+                mb: 2,
+                "& .MuiOutlinedInput-root": {
+                  "& fieldset": {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  "&:hover fieldset": {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  "& input:-webkit-autofill": {
+                    WebkitBoxShadow: `0 0 0 100px ${theme.palette.background.paper} inset`,
+                    WebkitTextFillColor: theme.palette.text.primary,
+                    borderColor: theme.palette.primary.main,
+                  },
+                },
+              }}
             />
 
             <Button
