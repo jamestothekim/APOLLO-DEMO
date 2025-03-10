@@ -1,5 +1,6 @@
-import { AppBar, IconButton, Toolbar, Typography, Button } from "@mui/material";
+import { AppBar, IconButton, Toolbar, Typography, Box } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
+import LogoutIcon from "@mui/icons-material/Logout";
 
 interface AppBarProps {
   toggleSidebar: () => void;
@@ -36,13 +37,19 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
           variant="h6"
           noWrap
           component="div"
-          sx={{ color: (theme) => theme.palette.text.primary }}
+          sx={{ color: (theme) => theme.palette.text.primary, flexGrow: 1 }}
         >
           APOLLO
         </Typography>
-        <Button color="inherit" onClick={handleLogout}>
-          Logout
-        </Button>
+        <Box sx={{ flexGrow: 0 }}>
+          <IconButton
+            aria-label="logout"
+            onClick={handleLogout}
+            sx={{ color: (theme) => theme.palette.text.primary }}
+          >
+            <LogoutIcon />
+          </IconButton>
+        </Box>
       </Toolbar>
     </AppBar>
   );
