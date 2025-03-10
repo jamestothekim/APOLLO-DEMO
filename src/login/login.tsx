@@ -84,56 +84,6 @@ export const Login: React.FC = () => {
     setShowPassword(!showPassword);
   };
 
-  const handleCreateAccount = async () => {
-    try {
-      const response = await fetch(
-        "https://api.apollo.illysium.ai/users/create-dummy-account",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            // Using default values from the backend
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setNotification({
-          open: true,
-          message: "Dummy account created successfully!",
-          severity: "success",
-        });
-        console.log("Account created:", data);
-
-        // Auto-fill the login form with the created account credentials
-        if (data.user && data.user.email) {
-          setFormData({
-            username: data.user.email,
-            password: "password", // Default password from backend
-          });
-        }
-      } else {
-        setNotification({
-          open: true,
-          message: data.error || "Failed to create account",
-          severity: "error",
-        });
-        console.error("Error creating account:", data);
-      }
-    } catch (error) {
-      console.error("Error creating account:", error);
-      setNotification({
-        open: true,
-        message: "Network error occurred",
-        severity: "error",
-      });
-    }
-  };
-
   const handleCloseNotification = () => {
     setNotification({ ...notification, open: false });
   };
@@ -255,27 +205,6 @@ export const Login: React.FC = () => {
               }}
             >
               {isLoading ? "Signing In..." : "Sign In"}
-            </Button>
-
-            <Button
-              fullWidth
-              variant="outlined"
-              size="medium"
-              onClick={handleCreateAccount}
-              disabled={isLoading}
-              sx={{
-                mt: 0.5,
-                mb: 1.5,
-                py: 1,
-                borderColor: theme.palette.secondary.main,
-                color: theme.palette.secondary.main,
-                "&:hover": {
-                  borderColor: theme.palette.secondary.dark,
-                  backgroundColor: theme.palette.action.hover,
-                },
-              }}
-            >
-              Create Account
             </Button>
           </Box>
         </Paper>
