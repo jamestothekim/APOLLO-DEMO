@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   FormControl,
@@ -14,11 +14,11 @@ import {
   IconButton,
   Collapse,
 } from "@mui/material";
-import { Model as Depletions } from "./depletions/depletions";
-import { MARKET_OPTIONS, ITEM_OPTIONS } from "../data/data";
-import { Shipments } from "./shipments/shipments";
+import { Depletions } from "./depletions/depletions";
 import RemoveIcon from "@mui/icons-material/Remove";
 import AddIcon from "@mui/icons-material/Add";
+import { useUser } from "../userContext";
+import { Toolbox } from "./components/toolbox";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -44,10 +44,36 @@ const TabPanel = (props: TabPanelProps) => {
 };
 
 export const VolumeForecast: React.FC = () => {
+  const { user } = useUser();
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [tabValue, setTabValue] = useState(0);
   const [expanded, setExpanded] = useState(true);
+  const [isBrandsLoading, setIsBrandsLoading] = useState(false);
+
+  // Get available markets from user access
+  const availableMarkets = user?.user_access?.Markets || [];
+
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        setIsBrandsLoading(true);
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/volume/brands`
+        );
+        if (!response.ok) throw new Error("Failed to fetch brands");
+        const data = await response.json();
+        setAvailableBrands(data);
+      } catch (error) {
+        console.error("Error loading brands:", error);
+      } finally {
+        setIsBrandsLoading(false);
+      }
+    };
+
+    fetchBrands();
+  }, []);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -58,21 +84,9 @@ export const VolumeForecast: React.FC = () => {
     setSelectedMarkets(typeof value === "string" ? value.split(",") : value);
   };
 
-  const handleItemChange = (event: SelectChangeEvent<string[]>) => {
+  const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
-    setSelectedItems(typeof value === "string" ? value.split(",") : value);
-  };
-
-  const handleDeleteMarket = (marketToDelete: string) => {
-    setSelectedMarkets((current) =>
-      current.filter((market) => market !== marketToDelete)
-    );
-  };
-
-  const handleDeleteItem = (itemToDelete: string) => {
-    setSelectedItems((current) =>
-      current.filter((item) => item !== itemToDelete)
-    );
+    setSelectedBrands(typeof value === "string" ? value.split(",") : value);
   };
 
   return (
@@ -129,45 +143,54 @@ export const VolumeForecast: React.FC = () => {
               >
                 Market:
               </Typography>
-              <FormControl sx={{ width: "300px" }}>
+              <FormControl sx={{ minWidth: "300px", flex: 1 }}>
                 <Select
                   multiple
                   value={selectedMarkets}
                   onChange={handleMarketChange}
                   input={<OutlinedInput />}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => (
-                        <Chip
-                          key={value}
-                          label={value}
-                          size="small"
-                          onDelete={() => handleDeleteMarket(value)}
-                          onMouseDown={(event) => {
-                            event.stopPropagation();
-                          }}
-                          sx={{ fontSize: "0.875rem" }}
-                        />
-                      ))}
-                    </Box>
-                  )}
                   size="small"
-                  MenuProps={{
-                    PaperProps: {
-                      style: {
-                        maxHeight: 250,
-                      },
-                    },
+                  renderValue={(selected) => {
+                    if (selected.length === 0) {
+                      return "Please select market";
+                    }
+                    return (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 0.5,
+                          maxWidth: "100%", // Ensure chips wrap within container
+                        }}
+                      >
+                        {selected.map((value) => (
+                          <Chip
+                            key={value}
+                            label={value}
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            sx={{
+                              borderRadius: "16px",
+                              backgroundColor: "transparent",
+                              "& .MuiChip-label": {
+                                px: 1,
+                              },
+                            }}
+                            onDelete={() =>
+                              setSelectedMarkets((prev) =>
+                                prev.filter((market) => market !== value)
+                              )
+                            }
+                          />
+                        ))}
+                      </Box>
+                    );
                   }}
-                  sx={{ fontSize: "0.875rem" }}
                 >
-                  {MARKET_OPTIONS.map((market) => (
-                    <MenuItem
-                      key={market}
-                      value={market}
-                      sx={{ fontSize: "0.875rem" }}
-                    >
-                      {market}
+                  {availableMarkets.map((market) => (
+                    <MenuItem key={market.state_code} value={market.state_code}>
+                      {market.state}
                     </MenuItem>
                   ))}
                 </Select>
@@ -190,47 +213,47 @@ export const VolumeForecast: React.FC = () => {
                   fontSize: "0.875rem",
                 }}
               >
-                Item:
+                Brand:
               </Typography>
               <FormControl sx={{ width: "300px" }}>
                 <Select
                   multiple
-                  value={selectedItems}
-                  onChange={handleItemChange}
+                  value={selectedBrands}
+                  onChange={handleBrandChange}
                   input={<OutlinedInput />}
+                  disabled={isBrandsLoading}
+                  size="small"
                   renderValue={(selected) => (
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => (
-                        <Chip
-                          key={value}
-                          label={value}
-                          size="small"
-                          onDelete={() => handleDeleteItem(value)}
-                          onMouseDown={(event) => {
-                            event.stopPropagation();
-                          }}
-                          sx={{ fontSize: "0.875rem" }}
-                        />
-                      ))}
+                      {isBrandsLoading
+                        ? "Loading..."
+                        : selected.map((value) => (
+                            <Chip
+                              key={value}
+                              label={value}
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              sx={{
+                                borderRadius: "16px",
+                                backgroundColor: "transparent",
+                                "& .MuiChip-label": {
+                                  px: 1,
+                                },
+                              }}
+                              onDelete={() =>
+                                setSelectedBrands((prev) =>
+                                  prev.filter((brand) => brand !== value)
+                                )
+                              }
+                            />
+                          ))}
                     </Box>
                   )}
-                  size="small"
-                  MenuProps={{
-                    PaperProps: {
-                      style: {
-                        maxHeight: 250,
-                      },
-                    },
-                  }}
-                  sx={{ fontSize: "0.875rem" }}
                 >
-                  {ITEM_OPTIONS.map((item) => (
-                    <MenuItem
-                      key={item}
-                      value={item}
-                      sx={{ fontSize: "0.875rem" }}
-                    >
-                      {item}
+                  {availableBrands.map((brand) => (
+                    <MenuItem key={brand} value={brand}>
+                      {brand}
                     </MenuItem>
                   ))}
                 </Select>
@@ -238,23 +261,18 @@ export const VolumeForecast: React.FC = () => {
             </Box>
           </Box>
 
+          <Toolbox />
+
           <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
             <Tabs value={tabValue} onChange={handleTabChange}>
               <Tab label="Depletion" />
-              <Tab label="Shipment" />
             </Tabs>
           </Box>
 
           <TabPanel value={tabValue} index={0}>
             <Depletions
               selectedMarkets={selectedMarkets}
-              selectedItems={selectedItems}
-            />
-          </TabPanel>
-          <TabPanel value={tabValue} index={1}>
-            <Shipments
-              selectedMarkets={selectedMarkets}
-              selectedItems={selectedItems}
+              selectedBrands={selectedBrands}
             />
           </TabPanel>
         </Box>

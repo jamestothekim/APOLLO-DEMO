@@ -19,7 +19,7 @@ import { useForecast } from "../data/data";
 import { DiscountSidebar } from "./discountSidebar";
 import EditIcon from "@mui/icons-material/Edit";
 import CommentIcon from "@mui/icons-material/Comment";
-import { CommentDialog } from "../volume/components/CommentDialog";
+import { CommentDialog } from "../volume/components/commentDialog";
 
 interface MonthData {
   value: number;

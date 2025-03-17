@@ -39,7 +39,7 @@ export interface Column {
   sortable?: boolean;
 }
 
-interface DynamicTableProps {
+export interface DynamicTableProps {
   data: any[];
   columns: Column[];
   sections?: { label: string; value: string }[];
@@ -62,6 +62,10 @@ interface DynamicTableProps {
   onAddCustomColumn?: (type: CustomColumnType) => void;
   onRemoveCustomColumn?: (columnId: string) => void;
   showPagination?: boolean;
+  loading?: boolean;
+  expandableRows?: boolean;
+  renderExpanded?: (row: any) => React.ReactNode;
+  dense?: boolean;
 }
 
 export const DynamicTable: React.FC<DynamicTableProps> = ({
@@ -71,8 +75,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   onSectionChange,
   onRowClick,
   selectedRow,
-  rowsPerPageOptions = [5, 10, 25, { value: -1, label: "All" }],
-  defaultRowsPerPage = 5,
+  rowsPerPageOptions = [10, 25, 50, { value: -1, label: "All" }],
+  defaultRowsPerPage = 20,
   page: controlledPage,
   onPageChange: controlledPageChange,
   rowsPerPage: controlledRowsPerPage,
@@ -89,6 +93,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     useState(defaultRowsPerPage);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
+  const tableColumns = columns.filter((column) => !column.detailsOnly);
   const page = controlledPage ?? internalPage;
   const rowsPerPage = controlledRowsPerPage ?? internalRowsPerPage;
 
@@ -133,7 +138,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     });
   };
 
-  const tableColumns = columns.filter((column) => !column.detailsOnly);
   const displayData = useMemo(() => {
     let sortedData = [...data];
 

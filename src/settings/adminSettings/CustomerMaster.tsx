@@ -1,236 +1,231 @@
-import { useState } from "react";
-import {
-  Box,
-  TextField,
-  IconButton,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-} from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import SaveIcon from "@mui/icons-material/Save";
-import CancelIcon from "@mui/icons-material/Cancel";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
-import { CUSTOMER_MASTER_DATA, CustomerMasterData } from "../../data/data";
+import { useEffect, useState } from "react";
+import { Box } from "@mui/material";
+import axios from "axios";
 import { DynamicTable, Column } from "../../reusableComponents/dynamicTable";
+import QualSidebar from "../../reusableComponents/qualSidebar";
+import { MenuItem, TextField } from "@mui/material";
+
+interface CustomerData {
+  market: string;
+  customer_actual_data: string;
+  planning_member: string;
+  customer_stat_level: string;
+  managed_by: "Market" | "Customer";
+  weight_percentage?: number;
+}
 
 export const CustomerMaster = () => {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<CustomerMasterData | null>(null);
-  const [data, setData] = useState(CUSTOMER_MASTER_DATA);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [newCustomer, setNewCustomer] = useState<Partial<CustomerMasterData>>(
-    {}
+  const [data, setData] = useState<CustomerData[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerData | null>(
+    null
   );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleEdit = (row: CustomerMasterData) => {
-    setEditingId(row.customer_id);
-    setEditData({ ...row });
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/admin/customer-master`
+        );
+        setData(response.data);
+      } catch (error) {
+        console.error("Error fetching SKU data:", error);
+      }
+    };
 
-  const handleSave = () => {
-    if (editData) {
-      setData(
-        data.map((row) => (row.customer_id === editingId ? editData : row))
+    fetchData();
+  }, []);
+
+  const handleManagedByChange = async (value: "Market" | "Customer") => {
+    if (!selectedCustomer) return;
+
+    try {
+      await axios.put(
+        `${import.meta.env.VITE_API_URL}/admin/customer-master/managed-by`,
+        {
+          customer_actual_data: selectedCustomer.customer_actual_data,
+          managed_by: value,
+        }
       );
-      setEditingId(null);
-      setEditData(null);
-    }
-  };
 
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditData(null);
-  };
+      const updatedCustomer = { ...selectedCustomer, managed_by: value };
+      setSelectedCustomer(updatedCustomer);
 
-  const handleDelete = (customerId: string) => {
-    setData(data.filter((row) => row.customer_id !== customerId));
-    setEditingId(null);
-    setEditData(null);
-  };
-
-  const handleChange = (field: keyof CustomerMasterData, value: string) => {
-    if (editData) {
-      setEditData({ ...editData, [field]: value });
-    }
-  };
-
-  const handleNewCustomerChange = (
-    field: keyof CustomerMasterData,
-    value: string
-  ) => {
-    setNewCustomer((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleAddCustomer = () => {
-    if (newCustomer.customer_id && newCustomer.customer_name) {
-      setData([...data, newCustomer as CustomerMasterData]);
-      setOpenDialog(false);
-      setNewCustomer({});
-    }
-  };
-
-  const renderEditableCell = (
-    value: string,
-    field: keyof CustomerMasterData,
-    row: CustomerMasterData
-  ) => {
-    if (editingId === row.customer_id) {
-      return (
-        <TextField
-          size="small"
-          value={editData?.[field] || ""}
-          onChange={(e) => handleChange(field, e.target.value)}
-          fullWidth
-        />
+      setData((prev) =>
+        prev.map((item) =>
+          item.customer_actual_data === selectedCustomer.customer_actual_data
+            ? updatedCustomer
+            : item
+        )
       );
+    } catch (error) {
+      console.error("Error updating managed by:", error);
     }
-    return value;
+  };
+
+  const handleWeightPercentageChange = async (
+    customerId: string,
+    value: number
+  ) => {
+    try {
+      await axios.put(
+        `${import.meta.env.VITE_API_URL}/admin/customer-master/weight`,
+        {
+          customer_actual_data: customerId,
+          weight_percentage: value,
+        }
+      );
+
+      setData((prev) =>
+        prev.map((item) =>
+          item.customer_actual_data === customerId
+            ? { ...item, weight_percentage: value }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error("Error updating weight percentage:", error);
+    }
   };
 
   const columns: Column[] = [
     {
-      key: "customer_id",
-      header: "Customer ID",
-      render: (value, row) => renderEditableCell(value, "customer_id", row),
+      key: "market",
+      header: "Market",
+      render: (value) => value,
     },
     {
-      key: "customer_name",
-      header: "Customer Name",
-      render: (value, row) => renderEditableCell(value, "customer_name", row),
+      key: "customer_actual_data",
+      header: "Customer",
+      render: (value) => value,
     },
     {
-      key: "market_id",
-      header: "Market ID",
-      render: (value, row) => renderEditableCell(value, "market_id", row),
+      key: "planning_member",
+      header: "Planning Member",
+      render: (value) => value,
     },
     {
-      key: "market_name",
-      header: "Market Name",
-      render: (value, row) => renderEditableCell(value, "market_name", row),
+      key: "customer_stat_level",
+      header: "Stat Level",
+      render: (value) => value,
     },
     {
-      key: "actions",
-      header: "Actions",
-      render: (_, row) =>
-        editingId === row.customer_id ? (
-          <Box>
-            <IconButton size="small" onClick={handleSave} color="primary">
-              <SaveIcon />
-            </IconButton>
-            <IconButton
-              size="small"
-              onClick={() => handleDelete(row.customer_id)}
-              color="error"
-            >
-              <DeleteIcon />
-            </IconButton>
-            <IconButton size="small" onClick={handleCancel}>
-              <CancelIcon />
-            </IconButton>
-          </Box>
-        ) : (
-          <IconButton size="small" onClick={() => handleEdit(row)}>
-            <EditIcon />
-          </IconButton>
-        ),
+      key: "managed_by",
+      header: "Managed By",
+      render: () => "Market", // Hardcoded to "Market" for now
     },
   ];
+
+  const marketCustomers = data.filter(
+    (customer) => customer.market === selectedCustomer?.market
+  );
 
   return (
     <Box sx={{ position: "relative", minHeight: "400px" }}>
       <DynamicTable
         data={data}
         columns={columns}
-        getRowId={(row) => row.customer_id}
-        defaultRowsPerPage={10}
-        rowsPerPageOptions={[10, 25, 100]}
+        getRowId={(row) => row.customer_actual_data}
+        defaultRowsPerPage={20}
+        rowsPerPageOptions={[20, 50, 100]}
+        onRowClick={(row) => {
+          setSelectedCustomer(row);
+          setSidebarOpen(true);
+        }}
       />
 
-      <Box
-        sx={{
-          position: "absolute",
-          bottom: 16,
-          left: 0,
-          zIndex: 1,
-        }}
-      >
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-        >
-          Add Customer
-        </Button>
-      </Box>
+      <QualSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        width="400px"
+        tabs={[
+          {
+            label: "Customer Details",
+            component: (
+              <Box sx={{ p: 2 }}>
+                {/* Customer Details Section */}
+                <TextField
+                  label="Market"
+                  value={selectedCustomer?.market || ""}
+                  fullWidth
+                  margin="normal"
+                  disabled
+                />
+                <TextField
+                  label="Customer"
+                  value={selectedCustomer?.customer_actual_data || ""}
+                  fullWidth
+                  margin="normal"
+                  disabled
+                />
+                <TextField
+                  label="Planning Member"
+                  value={selectedCustomer?.planning_member || ""}
+                  fullWidth
+                  margin="normal"
+                  disabled
+                />
+                <TextField
+                  label="Stat Level"
+                  value={selectedCustomer?.customer_stat_level || ""}
+                  fullWidth
+                  margin="normal"
+                  disabled
+                />
 
-      <Dialog
-        open={openDialog}
-        onClose={() => setOpenDialog(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Add New Customer</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Customer ID"
-                value={newCustomer.customer_id || ""}
-                onChange={(e) =>
-                  handleNewCustomerChange("customer_id", e.target.value)
-                }
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Customer Name"
-                value={newCustomer.customer_name || ""}
-                onChange={(e) =>
-                  handleNewCustomerChange("customer_name", e.target.value)
-                }
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Market ID"
-                value={newCustomer.market_id || ""}
-                onChange={(e) =>
-                  handleNewCustomerChange("market_id", e.target.value)
-                }
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Market Name"
-                value={newCustomer.market_name || ""}
-                onChange={(e) =>
-                  handleNewCustomerChange("market_name", e.target.value)
-                }
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button
-            onClick={handleAddCustomer}
-            variant="contained"
-            color="primary"
-          >
-            Add
-          </Button>
-        </DialogActions>
-      </Dialog>
+                {/* Management Section */}
+                <Box sx={{ mt: 4, mb: 2 }}>
+                  <TextField
+                    select
+                    label="Managed By"
+                    value={selectedCustomer?.managed_by || "Market"}
+                    onChange={(e) =>
+                      handleManagedByChange(
+                        e.target.value as "Market" | "Customer"
+                      )
+                    }
+                    fullWidth
+                  >
+                    <MenuItem value="Market">Market</MenuItem>
+                    <MenuItem value="Customer">Customer</MenuItem>
+                  </TextField>
+                </Box>
+
+                {/* Volume Distribution Section - Only enabled if managed by Customer */}
+                {selectedCustomer?.managed_by === "Customer" && (
+                  <Box sx={{ mt: 4 }}>
+                    <Box sx={{ mb: 2, fontWeight: "bold" }}>
+                      Volume Distribution
+                    </Box>
+                    {marketCustomers.map((customer) => (
+                      <TextField
+                        key={customer.customer_actual_data}
+                        label={customer.customer_stat_level}
+                        type="number"
+                        value={customer.weight_percentage || 0}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            handleWeightPercentageChange(
+                              customer.customer_actual_data,
+                              value
+                            );
+                          }
+                        }}
+                        fullWidth
+                        margin="normal"
+                        InputProps={{
+                          endAdornment: "%",
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            ),
+          },
+        ]}
+      />
     </Box>
   );
 };

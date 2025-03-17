@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, IconButton, Box, Button } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { DepletionDetails } from "./depletionDetails";
@@ -8,20 +8,58 @@ interface DetailsContainerProps {
   open: boolean;
   onClose: () => void;
   market: string;
-  item: string;
+  product: string;
   value: number;
+  month: any;
+  year: number;
 }
 
 export const DetailsContainer = ({
   open,
   onClose,
   market,
-  item,
+  product,
   value,
+  month,
+  year,
 }: DetailsContainerProps) => {
+  // Log the props to verify they are coming through
+  console.log("Market:", market);
+  console.log("Product:", product);
+  console.log("Value:", value);
+  console.log("Month:", month);
+  console.log("Year:", year);
+
   const [selectedVipId, setSelectedVipId] = useState<string | null>(null);
   const [selectedPremiseType, setSelectedPremiseType] = useState<string>("");
   const [selectedName, setSelectedName] = useState<string>("");
+  const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
+
+  useEffect(() => {
+    const fetchAccountLevelSales = async () => {
+      try {
+        const response = await fetch(
+          `${
+            import.meta.env.VITE_API_URL
+          }/volume/account-level-sales?month=${month}&market=${market}&product=${product}`
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch account level sales");
+        }
+
+        const data = await response.json();
+        console.log("Account Level Sales Data:", data); // Log the returned data
+        setAccountLevelSalesData(data); // Store the data
+      } catch (error) {
+        console.error("Error fetching account level sales:", error);
+      }
+    };
+
+    if (open) {
+      fetchAccountLevelSales();
+    }
+  }, [open, month, market, product]);
 
   const handleRetailerClick = (
     vipId: string,
@@ -57,9 +95,13 @@ export const DetailsContainer = ({
         ) : (
           <DepletionDetails
             market={market}
-            item={item}
+            item={product}
             value={value}
+            month={Number(month)}
+            year={year}
+            variant_size_pack={product}
             onRetailerClick={handleRetailerClick}
+            accountLevelSalesData={accountLevelSalesData}
           />
         )}
         <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>

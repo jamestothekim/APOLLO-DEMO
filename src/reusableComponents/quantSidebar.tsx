@@ -15,13 +15,14 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  type ForecastData,
+  type ExtendedForecastData,
   type ForecastLogic,
-  useForecast,
-} from "../../data/data";
-import { InteractiveGraph } from "../../reusableComponents/interactiveGraph";
+} from "../volume/depletions/depletions";
+import { useForecast } from "../data/data";
+import { InteractiveGraph } from "./interactiveGraph";
 import { useTheme } from "@mui/material/styles";
-import { MonthlyValues } from "../../reusableComponents/monthlyValues";
+import { MonthlyValues } from "./monthlyValues";
+import { processMonthData } from "../utils/dataProcessing";
 
 interface MonthData {
   value: number;
@@ -29,29 +30,29 @@ interface MonthData {
   isManuallyModified?: boolean;
 }
 
-interface ForecastSidebarProps {
+interface QuantSidebarProps {
   open: boolean;
   onClose: () => void;
-  selectedData?: ForecastData;
-  onSave: (data: ForecastData) => void;
-  forecastLogicOptions: readonly string[];
+  selectedData?: ExtendedForecastData;
+  onSave: (data: ExtendedForecastData) => void;
+  forecastOptions: Array<{ id: number; label: string; value: string }>;
 }
 
-export const ForecastSidebar = ({
+export const QuantSidebar = ({
   open,
   onClose,
   selectedData,
   onSave,
-  forecastLogicOptions,
-}: ForecastSidebarProps) => {
-  const [editedData, setEditedData] = useState<ForecastData | undefined>(
-    undefined
-  );
+  forecastOptions,
+}: QuantSidebarProps) => {
+  const [editedData, setEditedData] = useState<
+    ExtendedForecastData | undefined
+  >(undefined);
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedTrendLines, setSelectedTrendLines] = useState<string[]>([]);
 
   const theme = useTheme();
-  const { budgetData, getGrowthRate } = useForecast();
+  const { budgetData } = useForecast();
 
   const trendLines = useMemo(() => {
     if (!editedData) return [];
@@ -160,7 +161,7 @@ export const ForecastSidebar = ({
     const numValue = value === "" ? 0 : Number(value);
     if (isNaN(numValue)) return;
 
-    setEditedData((prev: ForecastData | undefined) => {
+    setEditedData((prev: ExtendedForecastData | undefined) => {
       if (!prev) return prev;
       return {
         ...prev,
@@ -177,78 +178,38 @@ export const ForecastSidebar = ({
     setHasChanges(true);
   };
 
-  const handleLogicChange = (event: SelectChangeEvent<string>) => {
+  const handleLogicChange = async (event: SelectChangeEvent<string>) => {
     const newLogic = event.target.value as ForecastLogic;
+    const rowData = editedData;
 
-    setEditedData((prev: ForecastData | undefined) => {
-      if (!prev) return prev;
+    if (!rowData) return;
 
-      if (newLogic === "Flat") {
-        const lastActualMonth = Object.entries(prev.months).find(
-          ([_, data]) => data.isActual
-        );
-        const flatValue = lastActualMonth ? lastActualMonth[1].value : 0;
-
-        const flatMonths = Object.entries(prev.months).reduce(
-          (acc, [month, data]) => ({
-            ...acc,
-            [month]: data.isActual
-              ? data
-              : {
-                  value: flatValue,
-                  isActual: false,
-                  isManuallyModified: false,
-                },
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            forecastMethod: newLogic,
+            market: rowData.market,
+            variantSizePack: rowData.product,
           }),
-          {}
-        );
-
-        return {
-          ...prev,
-          forecastLogic: newLogic,
-          months: flatMonths,
-        };
-      }
-
-      if (newLogic === "Custom") {
-        return {
-          ...prev,
-          forecastLogic: newLogic,
-        };
-      }
-
-      const growthRate = getGrowthRate(newLogic);
-      const monthKeys = Object.keys(prev.months);
-      const updatedMonths = { ...prev.months };
-
-      const lastActualMonth = monthKeys
-        .reverse()
-        .find((month) => prev.months[month].isActual);
-
-      if (!lastActualMonth) return prev;
-
-      const baseValue = prev.months[lastActualMonth].value;
-      let currentValue = baseValue;
-
-      monthKeys.forEach((month) => {
-        if (!prev.months[month].isActual) {
-          const randomFactor = Math.random() * 0.2 - 0.1;
-          currentValue = currentValue * (1 + growthRate + randomFactor);
-          updatedMonths[month] = {
-            ...prev.months[month],
-            value: Math.round(currentValue),
-            isManuallyModified: false,
-          };
         }
-      });
+      );
 
-      return {
-        ...prev,
-        forecastLogic: newLogic,
-        months: updatedMonths,
-      };
-    });
-    setHasChanges(true);
+      if (!response.ok) throw new Error("Failed to update forecast");
+
+      const data = await response.json();
+      const months = processMonthData(data);
+
+      setEditedData((prev) =>
+        prev ? { ...prev, months, forecastLogic: newLogic } : prev
+      );
+      setHasChanges(true);
+    } catch (error) {
+      console.error("Error updating forecast:", error);
+    }
   };
 
   const calculateTotal = () => {
@@ -259,10 +220,15 @@ export const ForecastSidebar = ({
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (editedData) {
-      onSave(editedData);
-      setHasChanges(false);
+      try {
+        onSave(editedData);
+        setHasChanges(false);
+        console.log("Changes saved successfully");
+      } catch (error) {
+        console.error("Error saving changes:", error);
+      }
     }
   };
 
@@ -326,9 +292,9 @@ export const ForecastSidebar = ({
                   value={editedData.forecastLogic}
                   onChange={handleLogicChange}
                 >
-                  {forecastLogicOptions.map((option) => (
-                    <MenuItem key={option} value={option}>
-                      {option}
+                  {forecastOptions.map((option) => (
+                    <MenuItem key={option.id} value={option.value}>
+                      {option.label}
                     </MenuItem>
                   ))}
                 </Select>

@@ -19,7 +19,7 @@ import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
 import { RATES_DATA, type RateData } from "../data/data";
 import { RatesSidebar } from "./ratesSidebar";
 import CommentIcon from "@mui/icons-material/Comment";
-import { CommentDialog } from "../volume/components/CommentDialog";
+import { CommentDialog } from "../volume/components/commentDialog";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
 export const Rates = () => {

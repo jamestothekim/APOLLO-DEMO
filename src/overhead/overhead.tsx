@@ -15,7 +15,7 @@ import { DIVISION_OPTIONS, type OverheadData, useForecast } from "../data/data";
 import { OverheadSidebar } from "./overheadSidebar";
 import EditIcon from "@mui/icons-material/Edit";
 import CommentIcon from "@mui/icons-material/Comment";
-import { CommentDialog } from "../volume/components/CommentDialog";
+import { CommentDialog } from "../volume/components/commentDialog";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
 export const Overhead: React.FC = () => {

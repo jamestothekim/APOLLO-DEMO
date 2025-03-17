@@ -44,6 +44,7 @@ export const ITEM_DETAILS: Record<(typeof ITEM_OPTIONS)[number], BrandInfo> = {
 export interface ForecastData {
   id: string;
   market: string;
+  product: string;
   item: string;
   brand: string;
   variant: string;
@@ -107,6 +108,7 @@ function generateRandomForecastData(
   return {
     id,
     market,
+    product: item,
     item,
     brand: brandInfo.brand,
     variant: brandInfo.variant,
@@ -207,6 +209,7 @@ function generateRandomShipmentData(
   return {
     id,
     market,
+    product: item,
     item,
     brand: brandInfo.brand,
     variant: brandInfo.variant,

@@ -11,40 +11,27 @@ import {
   Typography,
   Paper,
 } from "@mui/material";
-import { useState, useEffect } from "react";
-import { TransactionData, generateTransactionData } from "../../../data/data";
+import { useState } from "react";
 
 interface DepletionDetailsProps {
   market: string;
   item: string;
   value: number;
+  month: any;
+  year: number;
+  variant_size_pack: string;
   onRetailerClick: (vipId: string, premiseType: string, name: string) => void;
+  accountLevelSalesData: any[];
 }
 
 export const DepletionDetails = ({
   market,
   item,
-  value,
-  onRetailerClick,
+
+  accountLevelSalesData,
 }: DepletionDetailsProps) => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [transactions, setTransactions] = useState<TransactionData[]>([]);
-
-  useEffect(() => {
-    setTransactions(generateTransactionData(value));
-  }, [value]);
-
-  const handleChangePage = (_event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
 
   return (
     <>
@@ -62,36 +49,25 @@ export const DepletionDetails = ({
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>VIP ID</TableCell>
-              <TableCell>Date</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Retailer</TableCell>
-              <TableCell align="right">Volume</TableCell>
+              <TableCell>Account</TableCell>
+              <TableCell>City/State</TableCell>
+              <TableCell>Premise Type</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell>Qty (9L)</TableCell>
+              <TableCell>Sales ($)</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {transactions
-              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-              .map((transaction, index) => (
-                <TableRow
-                  key={index}
-                  hover
-                  onClick={() => {
-                    onRetailerClick(
-                      transaction.vipId,
-                      transaction.venue.type,
-                      transaction.venue.name
-                    );
-                  }}
-                  sx={{ cursor: "pointer" }}
-                >
-                  <TableCell>{transaction.vipId}</TableCell>
-                  <TableCell>{transaction.date}</TableCell>
-                  <TableCell>{transaction.venue.type}</TableCell>
-                  <TableCell>{transaction.venue.name}</TableCell>
-                  <TableCell align="right">{transaction.volume}</TableCell>
-                </TableRow>
-              ))}
+            {accountLevelSalesData.map((data, index) => (
+              <TableRow key={index}>
+                <TableCell>{data.outlet_name}</TableCell>
+                <TableCell>{`${data.city}, ${data.state}`}</TableCell>
+                <TableCell>{data.premise_type}</TableCell>
+                <TableCell>{data.account_type}</TableCell>
+                <TableCell>{data.case_equivalent_quantity}</TableCell>
+                <TableCell>{data.sales_dollars}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </TableContainer>
@@ -99,11 +75,14 @@ export const DepletionDetails = ({
       <TablePagination
         rowsPerPageOptions={[10, 20, 30]}
         component="div"
-        count={transactions.length}
+        count={accountLevelSalesData.length}
         rowsPerPage={rowsPerPage}
         page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
+        onPageChange={(_, newPage) => setPage(newPage)}
+        onRowsPerPageChange={(event) => {
+          setRowsPerPage(parseInt(event.target.value, 10));
+          setPage(0);
+        }}
       />
     </>
   );

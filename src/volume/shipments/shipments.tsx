@@ -9,7 +9,7 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import CommentIcon from "@mui/icons-material/Comment";
 import { ShipmentSidebar } from "./shipmentSidebar";
-import { CommentDialog } from "../components/CommentDialog";
+import { CommentDialog } from "../components/commentDialog";
 import {
   TARGET_DOI_OPTIONS,
   type ShipmentData,
