@@ -804,7 +804,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       <CommentDialog
         open={commentDialogOpen}
         onClose={() => setCommentDialogOpen(false)}
-        commentary={selectedComment}
+        initialComment={selectedComment}
+        onSave={(comment) => {
+          setSelectedComment(comment);
+          setCommentDialogOpen(false);
+        }}
       />
 
       {selectedDetails && (

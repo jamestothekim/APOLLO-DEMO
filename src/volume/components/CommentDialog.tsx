@@ -1,32 +1,45 @@
-import React from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Typography,
   Button,
+  TextField,
 } from "@mui/material";
 
 interface CommentDialogProps {
   open: boolean;
   onClose: () => void;
-  commentary?: string;
+  onSave: (comment: string) => void;
+  initialComment?: string;
 }
 
-export const CommentDialog: React.FC<CommentDialogProps> = ({
+export const CommentDialog = ({
   open,
   onClose,
-  commentary,
-}) => {
+  onSave,
+  initialComment = "",
+}: CommentDialogProps) => {
+  const [comment, setComment] = useState(initialComment);
+
   return (
     <Dialog open={open} onClose={onClose}>
-      <DialogTitle>Commentary</DialogTitle>
+      <DialogTitle>Add Comment</DialogTitle>
       <DialogContent>
-        <Typography>{commentary || "No commentary available."}</Typography>
+        <TextField
+          multiline
+          rows={4}
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          fullWidth
+        />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={() => onSave(comment)} variant="contained">
+          Save
+        </Button>
       </DialogActions>
     </Dialog>
   );

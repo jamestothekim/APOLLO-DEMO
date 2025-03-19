@@ -9,6 +9,16 @@ export const ForecastContext = React.createContext<{
   updateForecastData: () => {},
 });
 
+interface ForecastData {
+  // Add the properties that your forecast data contains
+  id?: string;
+  market_id?: string;
+  market_name?: string;
+  product?: string;
+  months?: Record<string, any>;
+  // Add other properties as needed
+}
+
 export const ForecastProvider: React.FC = ({ children }) => {
   const [forecastData, setForecastData] = useState<ForecastData[]>([]);
 
