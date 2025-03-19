@@ -19,6 +19,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import AddIcon from "@mui/icons-material/Add";
 import { useUser } from "../userContext";
 import { Toolbox } from "./components/toolbox";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -43,6 +44,27 @@ const TabPanel = (props: TabPanelProps) => {
   );
 };
 
+// Add export to the interface
+export interface MarketData {
+  id: number;
+  market_name: string;
+  market_code: string;
+  market_hyperion: string;
+  market_coding: string;
+  market_id: string;
+  customers: any[];
+  settings: any;
+  raw: string;
+}
+
+// Add after MarketData interface
+interface DistributorData {
+  id: string;
+  code: string;
+  display: string;
+  raw: string;
+}
+
 export const VolumeForecast: React.FC = () => {
   const { user } = useUser();
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
@@ -51,9 +73,14 @@ export const VolumeForecast: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [expanded, setExpanded] = useState(true);
   const [isBrandsLoading, setIsBrandsLoading] = useState(false);
+  const [undoHandler, setUndoHandler] = useState<
+    (() => Promise<void>) | undefined
+  >();
+  const [exportHandler, setExportHandler] = useState<(() => void) | null>(null);
 
-  // Get available markets from user access
-  const availableMarkets = user?.user_access?.Markets || [];
+  // Add new state for market data
+  const [marketData, setMarketData] = useState<MarketData[]>([]);
+  const [isDistributorView, setIsDistributorView] = useState(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -75,18 +102,91 @@ export const VolumeForecast: React.FC = () => {
     fetchBrands();
   }, []);
 
+  useEffect(() => {
+    const fetchMarketData = async () => {
+      try {
+        const userMarketIds = (user?.user_access?.Markets || []).map(
+          (m) => m.id
+        );
+        const response = await fetch(
+          `${
+            import.meta.env.VITE_API_URL
+          }/volume/get-markets?ids=${userMarketIds.join(",")}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch market data");
+        const markets = await response.json();
+        setMarketData(markets);
+      } catch (error) {
+        console.error("Error loading market data:", error);
+      }
+    };
+
+    if (user?.user_access?.Markets?.length) {
+      fetchMarketData();
+    }
+  }, [user]);
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
   const handleMarketChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
-    setSelectedMarkets(typeof value === "string" ? value.split(",") : value);
+    const selectedValues = typeof value === "string" ? value.split(",") : value;
+    setSelectedMarkets(selectedValues);
   };
 
   const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
     setSelectedBrands(typeof value === "string" ? value.split(",") : value);
+  };
+
+  const handleUndo = async () => {
+    if (undoHandler) {
+      await undoHandler();
+    }
+  };
+
+  const handleExportClick = () => {
+    if (exportHandler) {
+      exportHandler();
+    }
+  };
+
+  const hasCustomerManagedMarkets = marketData.some(
+    (market) => market.settings?.managed_by === "Customer"
+  );
+
+  // Add this function inside the component
+  const getCleanCustomerName = (customerData: string) => {
+    // Example: "17009 - BELLBOY CORP - USD" -> "BELLBOY CORP"
+    const parts = customerData.split(" - ");
+    return parts.length > 1 ? parts[1] : customerData;
+  };
+
+  // Update the filteredData mapping
+  const filteredData: (MarketData | DistributorData)[] = isDistributorView
+    ? marketData
+        .filter((market) => market.settings?.managed_by === "Customer")
+        .flatMap((market) =>
+          (market.customers || []).map((customer) => ({
+            id: customer.customer_id,
+            code: customer.customer_coding,
+            display: getCleanCustomerName(customer.customer_actual_data),
+            raw: customer.customer_actual_data,
+          }))
+        )
+    : marketData.filter((market) => market.settings?.managed_by === "Market");
+
+  const handleViewToggle = () => {
+    setIsDistributorView(!isDistributorView);
+    setSelectedMarkets([]);
+  };
+
+  const isDistributorData = (
+    item: MarketData | DistributorData
+  ): item is DistributorData => {
+    return "raw" in item;
   };
 
   return (
@@ -132,6 +232,24 @@ export const VolumeForecast: React.FC = () => {
                 alignItems: "center",
               }}
             >
+              {hasCustomerManagedMarkets && (
+                <IconButton
+                  size="small"
+                  onClick={handleViewToggle}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "primary.main",
+                    p: "4px",
+                    "&:hover": {
+                      backgroundColor: "primary.main",
+                      color: "white",
+                    },
+                  }}
+                  color="primary"
+                >
+                  <CompareArrowsIcon sx={{ fontSize: "1.2rem" }} />
+                </IconButton>
+              )}
               <Typography
                 variant="body2"
                 component="span"
@@ -141,7 +259,7 @@ export const VolumeForecast: React.FC = () => {
                   fontSize: "0.875rem",
                 }}
               >
-                Market:
+                {isDistributorView ? "Distributor:" : "Market:"}
               </Typography>
               <FormControl sx={{ minWidth: "300px", flex: 1 }}>
                 <Select
@@ -166,7 +284,36 @@ export const VolumeForecast: React.FC = () => {
                         {selected.map((value) => (
                           <Chip
                             key={value}
-                            label={value}
+                            label={
+                              isDistributorView
+                                ? getCleanCustomerName(
+                                    filteredData.find(
+                                      (item) =>
+                                        isDistributorData(item) &&
+                                        item.code === value
+                                    )?.raw || value
+                                  )
+                                : filteredData.find(
+                                    (item) =>
+                                      !isDistributorData(item) &&
+                                      (item as MarketData).market_id === value
+                                  ) &&
+                                  !isDistributorData(
+                                    filteredData.find(
+                                      (item) =>
+                                        !isDistributorData(item) &&
+                                        (item as MarketData).market_id === value
+                                    )!
+                                  )
+                                ? (
+                                    filteredData.find(
+                                      (item) =>
+                                        !isDistributorData(item) &&
+                                        (item as MarketData).market_id === value
+                                    ) as MarketData
+                                  ).market_code
+                                : value
+                            }
                             size="small"
                             variant="outlined"
                             color="primary"
@@ -188,9 +335,18 @@ export const VolumeForecast: React.FC = () => {
                     );
                   }}
                 >
-                  {availableMarkets.map((market) => (
-                    <MenuItem key={market.state_code} value={market.state_code}>
-                      {market.state}
+                  {filteredData.map((item) => (
+                    <MenuItem
+                      key={item.id}
+                      value={
+                        isDistributorView
+                          ? (item as DistributorData).code
+                          : (item as MarketData).market_id
+                      }
+                    >
+                      {isDistributorView
+                        ? (item as DistributorData).display
+                        : (item as MarketData).market_name}
                     </MenuItem>
                   ))}
                 </Select>
@@ -261,7 +417,11 @@ export const VolumeForecast: React.FC = () => {
             </Box>
           </Box>
 
-          <Toolbox />
+          <Toolbox
+            onUndo={handleUndo}
+            onExport={handleExportClick}
+            canUndo={!!undoHandler}
+          />
 
           <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
             <Tabs value={tabValue} onChange={handleTabChange}>
@@ -273,6 +433,9 @@ export const VolumeForecast: React.FC = () => {
             <Depletions
               selectedMarkets={selectedMarkets}
               selectedBrands={selectedBrands}
+              marketMetadata={marketData}
+              onUndo={(handler) => setUndoHandler(() => handler)}
+              onExport={(handler) => setExportHandler(() => handler)}
             />
           </TabPanel>
         </Box>

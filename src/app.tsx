@@ -9,13 +9,9 @@ import { ForecastProvider } from "./data/data";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import theme from "./theme";
-import { DataExplorer } from "./dataExplorer/dataExplorer";
-import { Overhead } from "./overhead/overhead";
-import { Marketing } from "./a&p/marketing";
 import { Rates } from "./rates/rates";
 import ProfitModel from "./profitModel/profitModel";
 import { SettingsContainer } from "./settings/settingsContainer";
-import { DiscountsView } from "./discounts/discounts";
 import { Login } from "./login/login";
 import { UserProvider, useUser } from "./userContext";
 
@@ -71,11 +67,7 @@ const AppLayout = () => {
             <Route path="/rates" element={<Rates />} />
             <Route path="/P&LModel" element={<ProfitModel />} />
             <Route path="/volume" element={<VolumeView />} />
-            <Route path="/discounts" element={<DiscountsView />} />
             <Route path="/settings" element={<SettingsContainer />} />
-            <Route path="/marketing" element={<Marketing />} />
-            <Route path="/overhead" element={<Overhead />} />
-            <Route path="/data-explorer" element={<DataExplorer />} />
           </Routes>
         </Box>
       </Box>

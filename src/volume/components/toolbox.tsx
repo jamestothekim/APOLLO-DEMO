@@ -4,17 +4,39 @@ import UndoIcon from "@mui/icons-material/Undo";
 import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
-export const Toolbox: React.FC = () => {
-  const handleUndo = () => {
-    console.log("Toolbox");
+interface ToolboxProps {
+  onUndo: (handler: () => Promise<void>) => void;
+  onColumns?: () => void;
+  onExport: () => void;
+  canUndo: boolean;
+}
+
+export const Toolbox: React.FC<ToolboxProps> = ({
+  onUndo,
+  onColumns,
+  onExport,
+  canUndo,
+}) => {
+  const handleUndo = async () => {
+    if (onUndo) {
+      try {
+        await onUndo(() => Promise.resolve());
+      } catch (error) {
+        console.error("Failed to undo:", error);
+      }
+    }
   };
 
   const handleColumns = () => {
-    console.log("Columns");
+    if (onColumns) {
+      onColumns();
+    }
   };
 
   const handleExport = () => {
-    console.log("Export CSV");
+    if (onExport) {
+      onExport();
+    }
   };
 
   return (
@@ -25,6 +47,7 @@ export const Toolbox: React.FC = () => {
           size="small"
           startIcon={<UndoIcon />}
           onClick={handleUndo}
+          disabled={!canUndo}
           sx={{
             textTransform: "none",
             borderRadius: "8px",

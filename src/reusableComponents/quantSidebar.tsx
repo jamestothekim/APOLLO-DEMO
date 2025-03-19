@@ -9,20 +9,15 @@ import {
   MenuItem,
   FormControl,
   Grid,
-  SelectChangeEvent,
 } from "@mui/material";
 
 import CloseIcon from "@mui/icons-material/Close";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  type ExtendedForecastData,
-  type ForecastLogic,
-} from "../volume/depletions/depletions";
+import { type ExtendedForecastData } from "../volume/depletions/depletions";
 import { useForecast } from "../data/data";
 import { InteractiveGraph } from "./interactiveGraph";
 import { useTheme } from "@mui/material/styles";
 import { MonthlyValues } from "./monthlyValues";
-import { processMonthData } from "../utils/dataProcessing";
 
 interface MonthData {
   value: number;
@@ -35,6 +30,7 @@ interface QuantSidebarProps {
   onClose: () => void;
   selectedData?: ExtendedForecastData;
   onSave: (data: ExtendedForecastData) => void;
+  onForecastLogicChange: (newLogic: string) => Promise<void>;
   forecastOptions: Array<{ id: number; label: string; value: string }>;
 }
 
@@ -43,11 +39,12 @@ export const QuantSidebar = ({
   onClose,
   selectedData,
   onSave,
+  onForecastLogicChange,
   forecastOptions,
 }: QuantSidebarProps) => {
-  const [editedData, setEditedData] = useState<
-    ExtendedForecastData | undefined
-  >(undefined);
+  const [editedData, setEditedData] = useState<ExtendedForecastData | null>(
+    null
+  );
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedTrendLines, setSelectedTrendLines] = useState<string[]>([]);
 
@@ -121,7 +118,7 @@ export const QuantSidebar = ({
     const baseData = [
       {
         id: "forecast",
-        label: `${editedData.market} - ${editedData.item}`,
+        label: `${editedData.market_name} - ${editedData.product}`,
         data: Object.entries(editedData.months).map(([month, data]) => ({
           month,
           value: data.value,
@@ -143,7 +140,7 @@ export const QuantSidebar = ({
   }, [editedData, trendLines, selectedTrendLines, theme.palette.primary.main]);
 
   useEffect(() => {
-    setEditedData(selectedData);
+    setEditedData(selectedData || null);
     setHasChanges(false);
   }, [selectedData]);
 
@@ -155,14 +152,12 @@ export const QuantSidebar = ({
     setSelectedTrendLines((prev) => prev.filter((id) => id !== trendLineId));
   }, []);
 
-  if (!editedData) return null;
-
   const handleMonthValueChange = (month: string, value: string) => {
     const numValue = value === "" ? 0 : Number(value);
     if (isNaN(numValue)) return;
 
-    setEditedData((prev: ExtendedForecastData | undefined) => {
-      if (!prev) return prev;
+    setEditedData((prev) => {
+      if (!prev) return null;
       return {
         ...prev,
         months: {
@@ -176,40 +171,6 @@ export const QuantSidebar = ({
       };
     });
     setHasChanges(true);
-  };
-
-  const handleLogicChange = async (event: SelectChangeEvent<string>) => {
-    const newLogic = event.target.value as ForecastLogic;
-    const rowData = editedData;
-
-    if (!rowData) return;
-
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            forecastMethod: newLogic,
-            market: rowData.market,
-            variantSizePack: rowData.product,
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to update forecast");
-
-      const data = await response.json();
-      const months = processMonthData(data);
-
-      setEditedData((prev) =>
-        prev ? { ...prev, months, forecastLogic: newLogic } : prev
-      );
-      setHasChanges(true);
-    } catch (error) {
-      console.error("Error updating forecast:", error);
-    }
   };
 
   const calculateTotal = () => {
@@ -273,14 +234,14 @@ export const QuantSidebar = ({
           <Grid item xs={12}>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
               <Typography sx={{ fontWeight: 700 }}>Market:</Typography>
-              <Typography>{editedData.market}</Typography>
+              <Typography>{editedData?.market_name}</Typography>
             </Box>
           </Grid>
 
           <Grid item xs={12}>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
               <Typography sx={{ fontWeight: 700 }}>Item:</Typography>
-              <Typography>{editedData.item}</Typography>
+              <Typography>{editedData?.product}</Typography>
             </Box>
           </Grid>
 
@@ -289,8 +250,11 @@ export const QuantSidebar = ({
               <Typography sx={{ fontWeight: 700 }}>Logic:</Typography>
               <FormControl fullWidth size="small">
                 <Select
-                  value={editedData.forecastLogic}
-                  onChange={handleLogicChange}
+                  value={editedData?.forecastLogic || ""}
+                  onChange={(e) => {
+                    onForecastLogicChange(e.target.value);
+                    setHasChanges(true);
+                  }}
                 >
                   {forecastOptions.map((option) => (
                     <MenuItem key={option.id} value={option.value}>
@@ -319,10 +283,10 @@ export const QuantSidebar = ({
                 label,
                 months: months.map((month) => ({
                   month,
-                  value: editedData?.months[month].value || 0,
-                  isActual: editedData?.months[month].isActual,
+                  value: editedData?.months[month]?.value || 0,
+                  isActual: editedData?.months[month]?.isActual || false,
                   isManuallyModified:
-                    editedData?.months[month].isManuallyModified,
+                    editedData?.months[month]?.isManuallyModified || false,
                 })),
               }))}
               onMonthValueChange={handleMonthValueChange}
@@ -337,7 +301,7 @@ export const QuantSidebar = ({
               multiline
               rows={3}
               fullWidth
-              value={editedData.commentary || ""}
+              value={editedData?.commentary || ""}
               onChange={(e) => {
                 setEditedData((prev) =>
                   prev ? { ...prev, commentary: e.target.value } : prev

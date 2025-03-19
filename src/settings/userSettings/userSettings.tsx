@@ -57,7 +57,7 @@ export const UserSettings = () => {
       role: user.role,
       division: user.user_access.Division,
       markets: user.user_access.Markets
-        ? user.user_access.Markets.map((market) => market.state_code)
+        ? user.user_access.Markets.map((market) => market.market_code)
         : [],
     };
   }, [user]);

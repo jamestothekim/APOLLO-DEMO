@@ -1,15 +1,10 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Select,
   MenuItem,
   SelectChangeEvent,
   Box,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   Snackbar,
   Tooltip,
 } from "@mui/material";
@@ -18,21 +13,32 @@ import EditIcon from "@mui/icons-material/Edit";
 import { useForecast } from "../../data/data";
 import CommentIcon from "@mui/icons-material/Comment";
 import { DetailsContainer } from "./details/detailsContainer";
-import { CommentDialog } from "../components/CommentDialog";
+import { CommentDialog } from "../components/commentDialog";
+import type { MarketData } from "../volumeForecast";
 
 import {
   DynamicTable,
   type Column,
 } from "../../reusableComponents/dynamicTable";
-import { useUser } from "../../userContext";
+import { useUser, MarketAccess } from "../../userContext";
+import {
+  FORECAST_OPTIONS,
+  MONTH_NAMES,
+  MONTH_MAPPING,
+  processMonthData,
+  exportToCSV,
+  hasNonZeroTotal,
+  calculateTotal,
+} from "./util/depletionsUtil";
 
 export interface ExtendedForecastData {
   id: string;
-  market: string;
+  market_id: string;
+  market_name: string;
   product: string;
-  item: string;
   brand: string;
   variant: string;
+  variantSize: string;
   forecastLogic: string;
   months: {
     [key: string]: {
@@ -55,85 +61,10 @@ export type ForecastLogic =
 export interface FilterSelectionProps {
   selectedMarkets: string[];
   selectedBrands: string[];
+  marketMetadata: MarketData[];
+  onUndo?: (handler: () => Promise<void>) => void;
+  onExport?: (handler: () => void) => void;
 }
-
-const FORECAST_OPTIONS = [
-  {
-    id: 1,
-    label: "Two Month",
-    value: "two_month",
-  },
-  {
-    id: 2,
-    label: "Three Month",
-    value: "three_month",
-  },
-  {
-    id: 3,
-    label: "Six Month",
-    value: "six_month",
-  },
-  {
-    id: 4,
-    label: "Nine Month",
-    value: "nine_month",
-  },
-  {
-    id: 5,
-    label: "Flat",
-    value: "flat",
-  },
-  {
-    id: 6,
-    label: "Run Rate",
-    value: "run_rate",
-  },
-];
-
-const monthMapping: { [key: string]: number } = {
-  JAN: 1,
-  FEB: 2,
-  MAR: 3,
-  APR: 4,
-  MAY: 5,
-  JUN: 6,
-  JUL: 7,
-  AUG: 8,
-  SEP: 9,
-  OCT: 10,
-  NOV: 11,
-  DEC: 12,
-};
-
-// Add these helper functions at the top of the file, before the component
-const processMonthData = (data: any[]) => {
-  const months: { [key: string]: any } = {};
-  const monthNames = [
-    "JAN",
-    "FEB",
-    "MAR",
-    "APR",
-    "MAY",
-    "JUN",
-    "JUL",
-    "AUG",
-    "SEP",
-    "OCT",
-    "NOV",
-    "DEC",
-  ];
-
-  data.forEach((item: any) => {
-    const monthName = monthNames[item.month - 1];
-    months[monthName] = {
-      value: Math.round(item.total_depletions),
-      isActual: item.data_type.includes("actual"),
-      isManuallyModified: false,
-    };
-  });
-
-  return months;
-};
 
 // Add this helper function near the top with other utility functions
 const fetchLoggedForecastChanges = async () => {
@@ -154,69 +85,96 @@ const processRawData = (
   data: any[],
   loggedChanges: any[] = []
 ): ExtendedForecastData[] => {
-  // Create a map of the stored changes
-  const storedChanges = loggedChanges.reduce(
-    (acc: { [key: string]: any }, change) => {
-      // Use the same key format as in Redis
-      const key = `${change.market}-${change.variantSize}`;
-      // Store the entire change object
-      acc[key] = {
-        forecastType: change.forecastType,
-        months: change.months, // This now contains the full months data from Redis
-      };
+  // Group by size_pack first to see what we're working with
+  const groupedByProduct = data.reduce(
+    (acc: { [key: string]: any[] }, item) => {
+      const key = item.size_pack;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
       return acc;
     },
     {}
   );
 
-  // Group data by market and variant_size_pack
-  const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
-    const key = `${item.market}-${item.variant_size_pack}`;
+  console.log("Data grouped by product:", groupedByProduct);
 
-    // Check if we have stored changes for this item
-    const storedChange = storedChanges[key];
+  // Group data by market and size_pack combination
+  const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
+    const key = `${item.market_id}-${item.size_pack}`;
 
     if (!acc[key]) {
       acc[key] = {
         id: key,
-        market: item.market,
-        product: item.variant_size_pack,
+        market_id: item.market_id,
+        market_name: item.market,
+        product: item.size_pack,
         brand: item.brand,
         variant: item.variant,
-        // Use stored forecast type if available
-        forecastLogic: storedChange
-          ? storedChange.forecastType
-          : item.forecast_method || "flat",
-        // Use stored months data if available, otherwise process the raw data
-        months: storedChange ? storedChange.months : {},
+        forecastLogic: item.forecast_method || "flat",
+        months: {},
       };
     }
+
+    // Process month data as it comes in
+    const monthName = MONTH_NAMES[item.month - 1];
+    acc[key].months[monthName] = {
+      value: Math.round(item.case_equivalent_volume * 100) / 100,
+      isActual: item.data_type?.includes("actual"),
+      isManuallyModified: item.is_manual_input || false,
+    };
+
     return acc;
   }, {});
 
-  // Only process months for items without stored changes
-  Object.keys(groupedData).forEach((key) => {
-    if (!storedChanges[key]) {
-      const rowData = data.filter(
-        (item) => `${item.market}-${item.variant_size_pack}` === key
-      );
-      groupedData[key].months = processMonthData(rowData);
+  // Fill in any missing months with zeros
+  Object.values(groupedData).forEach((item: any) => {
+    MONTH_NAMES.forEach((month) => {
+      if (!item.months[month]) {
+        item.months[month] = {
+          value: 0,
+          isActual: false,
+          isManuallyModified: false,
+        };
+      }
+    });
+  });
+
+  // Apply any logged changes
+  loggedChanges.forEach((change) => {
+    const key = `${change.market}-${change.variantSize}`;
+    if (groupedData[key]) {
+      groupedData[key].forecastLogic = change.forecastType;
+      groupedData[key].months = change.months;
     }
   });
 
   return Object.values(groupedData);
 };
 
-// Add this helper function near your other utility functions
-const hasNonZeroTotal = (row: ExtendedForecastData): boolean => {
-  return (
-    Object.values(row.months).reduce((sum, { value }) => sum + value, 0) > 0
-  );
-};
+// Add this interface
+interface UndoResponse {
+  success: boolean;
+  changedKey: string;
+  restoredState: (ExtendedForecastData & { forecastType: string }) | null;
+  hasMoreHistory: boolean;
+}
+
+// Add interface for restored state
+interface RestoredState {
+  market_id: string;
+  market_name: string;
+  variantSize: string;
+  brand?: string;
+  variant?: string;
+  forecastType: string;
+  months: any;
+}
 
 export const Depletions: React.FC<FilterSelectionProps> = ({
   selectedMarkets,
   selectedBrands,
+  onUndo,
+  onExport,
 }) => {
   const { user } = useUser();
   const { budgetData } = useForecast();
@@ -225,8 +183,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [forecastName, setForecastName] = useState("");
+
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [selectedComment, setSelectedComment] = useState<string | undefined>();
@@ -238,10 +195,20 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     month: number;
     year: number;
   } | null>(null);
+  const [undoSnackbarOpen, setUndoSnackbarOpen] = useState(false);
+  const [undoMessage, setUndoMessage] = useState("");
 
-  // Load forecast data when filters change
-  useEffect(() => {
-    const loadForecastData = async () => {
+  // Add state for selectedData
+  const [selectedDataState, setSelectedDataState] =
+    useState<ExtendedForecastData | null>(null);
+
+  // Add new state for the "no more actions" snackbar
+  const [noMoreActionsSnackbarOpen, setNoMoreActionsSnackbarOpen] =
+    useState(false);
+
+  // Update the loadForecastData to include logging
+  const loadForecastData = useMemo(
+    () => async () => {
       if (selectedMarkets.length === 0 || selectedBrands.length === 0) {
         setForecastData([]);
         return;
@@ -249,6 +216,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       try {
         setIsLoading(true);
+
         const [response, loggedChanges] = await Promise.all([
           fetch(
             `${import.meta.env.VITE_API_URL}/volume/depletions-forecast?` +
@@ -259,21 +227,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           fetchLoggedForecastChanges(),
         ]);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.details || "Failed to fetch forecast data");
-        }
+        if (!response.ok) throw new Error("Failed to fetch forecast data");
 
         const rawData = await response.json();
 
-        // Add debug logging
-        console.log("Redis changes:", loggedChanges);
-
         const processedData = processRawData(rawData, loggedChanges);
-        const nonZeroData = processedData.filter(hasNonZeroTotal);
 
-        // Add debug logging
-        console.log("Processed data with Redis changes:", processedData);
+        const nonZeroData = processedData.filter(hasNonZeroTotal);
 
         setForecastData(nonZeroData);
       } catch (error) {
@@ -281,21 +241,163 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       } finally {
         setIsLoading(false);
       }
-    };
+    },
+    [selectedMarkets, selectedBrands]
+  );
 
+  // Use loadForecastData in useEffect
+  useEffect(() => {
     loadForecastData();
-  }, [selectedMarkets, selectedBrands]);
+  }, [loadForecastData]);
 
-  const selectedData = forecastData.find((row) => row.id === selectedRow);
+  // Update handleUndo to handle the case when there's no more history
+  const handleUndo = async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/redi/undo-last-change`,
+        {
+          method: "POST",
+        }
+      );
 
-  const calculateTotal = (months: ExtendedForecastData["months"]) => {
-    return Object.values(months).reduce((acc, curr) => acc + curr.value, 0);
+      if (response.status === 404) {
+        // Show the "no more actions" snackbar
+        setNoMoreActionsSnackbarOpen(true);
+        return;
+      }
+
+      const data: UndoResponse = await response.json();
+
+      if (data.success && data.restoredState) {
+        const restored = data.restoredState as RestoredState;
+        setForecastData((prevData) => {
+          return prevData.map((item) => {
+            if (item.id === `${restored.market_id}-${restored.variantSize}`) {
+              return {
+                id: item.id,
+                market_id: restored.market_id,
+                market_name: restored.market_name,
+                product: restored.variantSize,
+                brand: restored.brand || item.brand,
+                variant: restored.variant || item.variant,
+                variantSize: restored.variantSize,
+                forecastLogic: restored.forecastType,
+                months: restored.months,
+              };
+            }
+            return item;
+          });
+        });
+
+        setUndoMessage(`Undo successful`);
+        setUndoSnackbarOpen(true);
+      }
+    } catch (error) {
+      console.error("Error undoing change:", error);
+    }
   };
+
+  // Make sure handleUndo is registered with the parent component
+  useEffect(() => {
+    if (onUndo) {
+      onUndo(handleUndo);
+    }
+  }, [onUndo]); // Remove handleUndo from dependencies to avoid recreation
 
   const handleRowClick = (id: string) => {
     setSelectedRow(id);
   };
 
+  // Update handleForecastChange to properly update selectedDataState
+  const handleForecastChange = async (
+    newLogic: string,
+    rowData: ExtendedForecastData,
+    options: {
+      updateTable?: boolean;
+      userId?: string | null;
+    } = {}
+  ) => {
+    const { updateTable = false, userId } = options;
+
+    try {
+      // Store the initial state before making any changes
+      const initialState = {
+        userId,
+        market_id: rowData.market_id,
+        market_name: rowData.market_name,
+        variantSize: rowData.product,
+        forecastType: rowData.forecastLogic,
+        months: rowData.months,
+      };
+
+      const requestBody = {
+        forecastMethod: newLogic,
+        market_id: rowData.market_id,
+        variantSizePack: rowData.product,
+      };
+
+      const forecastResponse = await fetch(
+        `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!forecastResponse.ok) throw new Error("Failed to update forecast");
+      const forecastResponseData = await forecastResponse.json();
+
+      const updatedMonths = processMonthData(forecastResponseData);
+      const updatedRow = {
+        ...rowData,
+        forecastLogic: newLogic,
+        months: updatedMonths,
+      };
+
+      if (updateTable) {
+        setForecastData((prevData: ExtendedForecastData[]) =>
+          prevData.map((row: ExtendedForecastData) =>
+            row.id === rowData.id ? updatedRow : row
+          )
+        );
+      }
+
+      // Always update selectedDataState if this is the selected row
+      if (selectedRow === rowData.id) {
+        setSelectedDataState(updatedRow);
+      }
+
+      // Only log to Redis if we have a userId
+      if (userId) {
+        await fetch(
+          `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              userId,
+              market_id: rowData.market_id,
+              market_name: rowData.market_name,
+              variantSize: rowData.product,
+              forecastType: newLogic,
+              months: updatedMonths,
+              initialState, // Include the initial state
+            }),
+          }
+        );
+      }
+
+      return updatedRow;
+    } catch (error) {
+      console.error("Error updating forecast:", error);
+      throw error;
+    }
+  };
+
+  // Update handleLogicChange to ensure sidebar state is updated
   const handleLogicChange = async (
     event: SelectChangeEvent<string>,
     rowId: string
@@ -307,66 +409,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     if (!rowData) return;
 
     try {
-      // First get the new forecast data
-      const forecastResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            forecastMethod: newLogic,
-            market: rowData.market,
-            variantSizePack: rowData.product,
-          }),
-        }
-      );
-
-      if (!forecastResponse.ok) throw new Error("Failed to update forecast");
-      const forecastResponseData = await forecastResponse.json();
-
-      // Add defensive check
-      if (!forecastResponseData || !Array.isArray(forecastResponseData)) {
-        throw new Error("Invalid forecast data received");
-      }
-
-      const processedMonths = processMonthData(forecastResponseData);
-
-      // Then log to Redis with the new forecast data
-      const redisResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: user?.id,
-            market: rowData.market,
-            variantSize: rowData.product,
-            forecastType: newLogic,
-            months: processedMonths,
-          }),
-        }
-      );
-
-      if (!redisResponse.ok) throw new Error("Failed to log to Redis");
-
-      // Update the UI with new data
-      const updatedData = forecastData.map((row: ExtendedForecastData) => {
-        if (row.id === rowId) {
-          return { ...row, months: processedMonths, forecastLogic: newLogic };
-        }
-        return row;
+      await handleForecastChange(newLogic, rowData, {
+        updateTable: true,
+        userId: user?.id?.toString(),
       });
-
-      setForecastData(updatedData);
     } catch (error) {
-      console.error("Error updating forecast:", error);
-      // Add more detailed error logging
-      if (error instanceof Error) {
-        console.error("Error details:", {
-          message: error.message,
-          stack: error.stack,
-        });
-      }
+      console.error("Error in handleLogicChange:", error);
     }
   };
 
@@ -386,7 +434,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   // Update the filtered data logic
   const filteredData = forecastData.filter((row) => {
     const marketMatch =
-      selectedMarkets.length === 0 || selectedMarkets.includes(row.market);
+      selectedMarkets.length === 0 || selectedMarkets.includes(row.market_id);
     const productMatch =
       selectedBrands.length === 0 || selectedBrands.includes(row.product);
     return marketMatch && productMatch;
@@ -396,39 +444,60 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     if (!user) return;
 
     try {
-      // Log the change to Redis
-      const rediResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
+      // Store the initial state before making changes
+      const initialState = selectedDataState
+        ? {
+            userId: user.id,
+            market_id: selectedDataState.market_id,
+            market_name: selectedDataState.market_name,
+            variantSize: selectedDataState.product,
+            forecastType: selectedDataState.forecastLogic,
+            months: selectedDataState.months,
+          }
+        : null;
+
+      // First update the forecast
+      const forecastResponse = await fetch(
+        `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({
-            userId: user.id,
-            market: editedData.market,
-            variantSize: editedData.product,
-            forecastType: editedData.forecastLogic,
-            months: editedData.months,
+            forecastMethod: editedData.forecastLogic,
+            market_id: editedData.market_id,
+            variantSizePack: editedData.product,
           }),
         }
       );
 
-      if (!rediResponse.ok) {
-        throw new Error("Failed to log forecast changes to REDI");
+      if (!forecastResponse.ok) {
+        throw new Error("Failed to update forecast");
       }
+
+      // Then log to Redis with the initial state
+      await fetch(`${import.meta.env.VITE_API_URL}/redi/log-forecast-change`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          userId: user.id,
+          market_id: editedData.market_id,
+          market_name: editedData.market_name,
+          variantSize: editedData.product,
+          forecastType: editedData.forecastLogic,
+          months: editedData.months,
+          initialState,
+        }),
+      });
 
       // Update local state
       setForecastData((prevData) =>
         prevData.map((item) => (item.id === editedData.id ? editedData : item))
       );
 
-      // Close sidebar after successful save
       setSelectedRow(null);
-
-      console.log("Changes saved successfully");
     } catch (error) {
       console.error("Error saving changes:", error);
-      // Optionally handle error (show error message, etc.)
     }
   };
 
@@ -468,10 +537,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         render: (_: any, row: ExtendedForecastData) => {
           const { user } = useUser();
           const marketInfo = user?.user_access?.Markets?.find(
-            (m: { state_code: string; state: string }) =>
-              m.state_code === row.market
+            (m: MarketAccess) => m.market_code === row.market_name
           );
-          return marketInfo?.state || row.market;
+          return marketInfo?.market || row.market_name;
         },
       },
       {
@@ -514,10 +582,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                     if (data.isActual) {
                       event.stopPropagation();
                       setSelectedDetails({
-                        market: row.market,
+                        market: row.market_name,
                         product: row.product,
-                        value: data.value,
-                        month: monthMapping[month],
+                        value: Math.round(data.value),
+                        month: MONTH_MAPPING[month],
                         year: 2025,
                       });
                       setDetailsOpen(true);
@@ -532,7 +600,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                       cursor: data.isActual ? "pointer" : "inherit",
                     }}
                   >
-                    {data.value.toLocaleString()}
+                    {Math.round(data.value).toLocaleString()}
                   </Box>
                   {data.isManuallyModified && (
                     <EditIcon
@@ -556,7 +624,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         header: "TOTAL",
         align: "right",
         render: (_: any, row: ExtendedForecastData) =>
-          calculateTotal(row.months).toLocaleString(),
+          Math.round(calculateTotal(row.months)).toLocaleString(),
       },
       {
         key: "budget",
@@ -612,20 +680,78 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     [forecastData]
   );
 
-  const handleSaveClick = () => {
-    setSaveDialogOpen(true);
-  };
+  const handleSaveClick = async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/redi/save-changes`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user?.id }),
+        }
+      );
 
-  const handleSaveConfirm = () => {
-    setSaveDialogOpen(false);
-    setSnackbarOpen(true);
-    setForecastName(""); // Reset the forecast name
+      if (!response.ok) {
+        throw new Error("Failed to save changes");
+      }
+
+      await response.json();
+      setSnackbarOpen(true);
+    } catch (error) {
+      console.error("Error saving changes:", error);
+    }
   };
 
   const handlePublish = () => {
     // Add publish logic here
     console.log("Publishing forecast...");
   };
+
+  // Add handleExport function
+  const handleExport = useCallback(() => {
+    exportToCSV(forecastData);
+  }, [forecastData]);
+
+  // Register export handler
+  useEffect(() => {
+    if (onExport) {
+      onExport(handleExport);
+    }
+  }, [onExport, handleExport]);
+
+  // Add this log near where forecastData is initialized/loaded
+  useEffect(() => {
+    console.log("Initial forecast data:", forecastData);
+  }, [forecastData]);
+
+  // Update handleSidebarForecastChange to properly update both states
+  const handleSidebarForecastChange = async (newLogic: string) => {
+    if (!selectedDataState) return;
+
+    try {
+      const updatedRow = await handleForecastChange(
+        newLogic,
+        selectedDataState,
+        {
+          updateTable: true,
+          userId: user?.id?.toString(),
+        }
+      );
+      setSelectedDataState(updatedRow);
+    } catch (error) {
+      console.error("Error in handleSidebarForecastChange:", error);
+    }
+  };
+
+  // Add this effect instead
+  useEffect(() => {
+    if (!selectedRow) {
+      setSelectedDataState(null);
+      return;
+    }
+    const rowData = forecastData.find((row) => row.id === selectedRow);
+    setSelectedDataState(rowData || null);
+  }, [selectedRow, forecastData]);
 
   return (
     <Box>
@@ -661,8 +787,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       <QuantSidebar
         open={!!selectedRow}
         onClose={() => setSelectedRow(null)}
-        selectedData={selectedData}
+        selectedData={selectedDataState || undefined}
         onSave={handleSidebarSave}
+        onForecastLogicChange={handleSidebarForecastChange}
         forecastOptions={FORECAST_OPTIONS}
       />
 
@@ -684,33 +811,25 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         />
       )}
 
-      <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
-        <DialogTitle>Save Your Progress</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Forecast Name"
-            type="text"
-            fullWidth
-            variant="outlined"
-            value={forecastName}
-            onChange={(e) => setForecastName(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveConfirm} variant="contained">
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
         onClose={() => setSnackbarOpen(false)}
         message="Forecast Saved"
+      />
+
+      <Snackbar
+        open={noMoreActionsSnackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setNoMoreActionsSnackbarOpen(false)}
+        message="No actions left to undo"
+      />
+
+      <Snackbar
+        open={undoSnackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setUndoSnackbarOpen(false)}
+        message={undoMessage}
       />
     </Box>
   );

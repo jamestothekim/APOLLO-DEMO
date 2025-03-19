@@ -1,9 +1,25 @@
 import React, { createContext, useState, useContext, ReactNode } from "react";
 
-interface MarketAccess {
+export interface MarketAccess {
   id: number;
-  state: string;
-  state_code: string;
+  market: string;
+  market_code: string;
+  market_hyperion: string;
+  market_coding: string;
+  market_id: string;
+  customers: {
+    customer_id: string;
+    customer_coding: string;
+    planning_member_id: string;
+    customer_stat_level: string;
+    customer_actual_data: string;
+    customer_stat_level_id: string;
+    planning_member_coding: string;
+    customer_stat_level_coding: string;
+  }[];
+  settings: {
+    managed_by: string;
+  };
 }
 
 interface User {

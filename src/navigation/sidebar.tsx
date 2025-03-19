@@ -8,13 +8,9 @@ import {
 } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
-import AnalyticsIcon from "@mui/icons-material/Analytics";
-import CampaignIcon from "@mui/icons-material/Campaign";
-import GroupIcon from "@mui/icons-material/Group";
 import SettingsIcon from "@mui/icons-material/Settings";
 import PaidIcon from "@mui/icons-material/Paid";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import { useNavigate } from "react-router-dom";
 
 interface SidebarProps {
@@ -34,11 +30,7 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
       path: "/P&LModel",
     },
     { text: "Volume", icon: <ShowChartIcon />, path: "/volume" },
-    { text: "Discounts", icon: <LocalOfferIcon />, path: "/discounts" },
     { text: "Rates", icon: <PaidIcon />, path: "/rates" },
-    { text: "A&P", icon: <CampaignIcon />, path: "/marketing" },
-    { text: "Overhead", icon: <GroupIcon />, path: "/overhead" },
-    { text: "Data Explorer", icon: <AnalyticsIcon />, path: "/data-explorer" },
     { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
   ];
 

@@ -87,9 +87,10 @@ export const InteractiveGraph = ({
     ...dataset,
     data: MONTHS.map((month) => {
       const existingData = dataset.data.find((d) => d.month === month);
+      const value = existingData?.value ?? 0;
       return {
         month,
-        value: existingData?.value ?? 0,
+        value: isNaN(value) ? 0 : value,
       };
     }),
   }));
@@ -154,7 +155,10 @@ export const InteractiveGraph = ({
 
           <LineChart
             series={normalizedData.map((dataset) => ({
-              data: dataset.data.map((d) => d.value),
+              data: dataset.data.map((d) => {
+                const value = Number(d.value);
+                return isNaN(value) ? 0 : value;
+              }),
               label: dataset.id === "forecast" ? primaryLabel : dataset.label,
               color: dataset.color || undefined,
               showMark: true,

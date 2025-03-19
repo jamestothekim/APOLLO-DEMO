@@ -7,11 +7,9 @@ import {
   Chip,
   Switch,
   TextField,
-  Button,
   Typography,
   Autocomplete,
   Stack,
-  Paper,
   Snackbar,
   Alert,
 } from "@mui/material";
@@ -32,8 +30,8 @@ interface User {
     Division?: string;
     Markets?: {
       id: number;
-      state: string;
-      state_code: string;
+      market: string;
+      market_code: string;
     }[];
     Admin?: boolean;
   };
@@ -41,8 +39,8 @@ interface User {
 
 interface MarketOption {
   id: number;
-  state: string;
-  state_code: string;
+  market: string;
+  market_code: string;
 }
 
 // Main component
@@ -82,17 +80,21 @@ const UserMaster = () => {
   const fetchMarkets = async () => {
     try {
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/util/get-states`
+        `${import.meta.env.VITE_API_URL}/admin/get-states`
       );
-      // Transform the market data to match the expected format
-      const formattedMarkets = response.data.map((state: any) => ({
-        id: state.id,
-        state: state.state,
-        state_code: state.state_code,
+      const formattedMarkets = response.data.map((market: any) => ({
+        id: market.id,
+        market: market.market_name,
+        market_code: market.market_code,
       }));
+      // Sort markets alphabetically by market name
+      formattedMarkets.sort((a: MarketOption, b: MarketOption) =>
+        a.market.localeCompare(b.market)
+      );
       setAvailableMarkets(formattedMarkets);
     } catch (error) {
       console.error("Error fetching markets:", error);
+      showSnackbar("Failed to fetch markets", "error");
     }
   };
 
@@ -208,8 +210,8 @@ const UserMaster = () => {
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
           {row.user_access?.Markets?.map((market) => (
             <Chip
-              key={market.state_code}
-              label={market.state_code}
+              key={market.market_code}
+              label={market.market_code}
               size="small"
               sx={{
                 borderRadius: "16px",
@@ -243,133 +245,6 @@ const UserMaster = () => {
     },
   ];
 
-  // Edit form component
-  const EditForm = () => (
-    <Stack spacing={0.5} sx={{ p: 2 }}>
-      {/* Basic Information Section */}
-      <Paper elevation={0} sx={{ p: 1 }}>
-        <Stack spacing={2}>
-          <Typography variant="h6">Basic Information</Typography>
-          <TextField
-            label="First Name"
-            size="small"
-            value={editingUser?.first_name || ""}
-            onChange={(e) => handleEditChange("first_name", e.target.value)}
-            fullWidth
-          />
-          <TextField
-            label="Last Name"
-            size="small"
-            value={editingUser?.last_name || ""}
-            onChange={(e) => handleEditChange("last_name", e.target.value)}
-            fullWidth
-          />
-          <TextField
-            label="Email"
-            size="small"
-            value={editingUser?.email || ""}
-            onChange={(e) => handleEditChange("email", e.target.value)}
-            fullWidth
-          />
-          <Autocomplete
-            options={availableRoles}
-            value={editingUser?.role || ""}
-            onChange={(_, newValue) => handleEditChange("role", newValue)}
-            renderInput={(params) => (
-              <TextField {...params} label="Role" size="small" />
-            )}
-          />
-          <Autocomplete
-            options={availableDivisions}
-            value={editingUser?.user_access?.Division || ""}
-            onChange={(_, newValue) => handleEditChange("Division", newValue)}
-            renderInput={(params) => (
-              <TextField {...params} label="Division" size="small" />
-            )}
-          />
-        </Stack>
-      </Paper>
-
-      {/* Markets Section */}
-      <Paper elevation={0} sx={{ p: 1 }}>
-        <Stack spacing={2}>
-          <Typography variant="h6">Markets</Typography>
-          <Autocomplete
-            multiple
-            options={availableMarkets}
-            getOptionLabel={(option) =>
-              `${option.state} (${option.state_code})`
-            }
-            value={
-              availableMarkets.filter((market) =>
-                editingUser?.user_access?.Markets?.some(
-                  (userMarket) => userMarket.state_code === market.state_code
-                )
-              ) || []
-            }
-            onChange={(_, newValue) => {
-              handleEditChange(
-                "markets",
-                newValue.map((v) => ({
-                  id: v.id,
-                  state: v.state,
-                  state_code: v.state_code,
-                }))
-              );
-            }}
-            renderInput={(params) => (
-              <TextField {...params} label="Select Markets" size="small" />
-            )}
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => {
-                const { key, ...otherProps } = getTagProps({ index });
-                return (
-                  <Chip
-                    key={key}
-                    label={`${option.state} (${option.state_code})`}
-                    {...otherProps}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                );
-              })
-            }
-          />
-        </Stack>
-      </Paper>
-
-      {/* Permissions Section */}
-      <Paper elevation={0} sx={{ p: 1 }}>
-        <Stack spacing={1}>
-          <Typography variant="h6">Permissions</Typography>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <Typography>Admin Access</Typography>
-            <Switch
-              checked={editingUser?.user_access?.Admin === true}
-              onChange={(e) => {
-                setEditingUser({
-                  ...editingUser!,
-                  user_access: {
-                    ...editingUser!.user_access,
-                    Admin: e.target.checked,
-                  },
-                });
-              }}
-              color="primary"
-            />
-          </Box>
-        </Stack>
-      </Paper>
-    </Stack>
-  );
-
   return (
     <Box>
       <DynamicTable data={users} columns={columns} onRowClick={handleEdit} />
@@ -378,28 +253,152 @@ const UserMaster = () => {
         open={sidebarOpen}
         onClose={handleCloseSidebar}
         width="500px"
+        title="Edit User"
+        footerButtons={[
+          {
+            label: "Cancel",
+            onClick: handleCloseSidebar,
+            variant: "outlined",
+          },
+          {
+            label: "Save Changes",
+            onClick: handleSave,
+            variant: "contained",
+          },
+        ]}
       >
-        {editingUser && (
-          <Box
-            sx={{ height: "100%", display: "flex", flexDirection: "column" }}
-          >
-            <Box sx={{ flexGrow: 1, overflow: "auto" }}>
-              <EditForm />
-            </Box>
-            <Box sx={{ p: 2, borderTop: 1, borderColor: "divider" }}>
-              <Stack direction="row" spacing={2} justifyContent="flex-end">
-                <Button onClick={handleCloseSidebar}>Cancel</Button>
-                <Button
-                  onClick={handleSave}
-                  variant="contained"
-                  color="primary"
-                >
-                  Save Changes
-                </Button>
+        <Box sx={{ p: 3 }}>
+          <Stack spacing={4}>
+            {/* Basic Information Section */}
+            <Box>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>
+                Personal Information
+              </Typography>
+              <Stack spacing={2}>
+                <TextField
+                  label="First Name"
+                  size="small"
+                  value={editingUser?.first_name || ""}
+                  onChange={(e) =>
+                    handleEditChange("first_name", e.target.value)
+                  }
+                  fullWidth
+                />
+                <TextField
+                  label="Last Name"
+                  size="small"
+                  value={editingUser?.last_name || ""}
+                  onChange={(e) =>
+                    handleEditChange("last_name", e.target.value)
+                  }
+                  fullWidth
+                />
+                <TextField
+                  label="Email"
+                  size="small"
+                  value={editingUser?.email || ""}
+                  onChange={(e) => handleEditChange("email", e.target.value)}
+                  fullWidth
+                />
+                <Autocomplete
+                  options={availableRoles}
+                  value={editingUser?.role || ""}
+                  onChange={(_, newValue) => handleEditChange("role", newValue)}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Role" size="small" />
+                  )}
+                />
+                <Autocomplete
+                  options={availableDivisions}
+                  value={editingUser?.user_access?.Division || ""}
+                  onChange={(_, newValue) =>
+                    handleEditChange("Division", newValue)
+                  }
+                  renderInput={(params) => (
+                    <TextField {...params} label="Division" size="small" />
+                  )}
+                />
               </Stack>
             </Box>
-          </Box>
-        )}
+
+            {/* Markets Section */}
+            <Box>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>
+                Markets
+              </Typography>
+              <Stack spacing={2}>
+                <Autocomplete
+                  multiple
+                  options={availableMarkets}
+                  getOptionLabel={(option) =>
+                    `${option.market} (${option.market_code})`
+                  }
+                  value={
+                    availableMarkets.filter((market) =>
+                      editingUser?.user_access?.Markets?.some(
+                        (userMarket) =>
+                          userMarket.market_code === market.market_code
+                      )
+                    ) || []
+                  }
+                  onChange={(_, newValue) => {
+                    handleEditChange(
+                      "markets",
+                      newValue.map((v) => ({
+                        id: v.id,
+                        market: v.market,
+                        market_code: v.market_code,
+                      }))
+                    );
+                  }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Select Markets"
+                      size="small"
+                    />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => {
+                      const { key, ...otherProps } = getTagProps({ index });
+                      return (
+                        <Chip
+                          key={key}
+                          label={`${option.market} (${option.market_code})`}
+                          {...otherProps}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      );
+                    })
+                  }
+                />
+              </Stack>
+            </Box>
+
+            {/* Permissions Section */}
+            <Box>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>
+                Permissions
+              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Typography>Admin Access</Typography>
+                <Switch
+                  checked={editingUser?.user_access?.Admin === true}
+                  onChange={(e) => handleEditChange("admin", e.target.checked)}
+                  color="primary"
+                />
+              </Box>
+            </Box>
+          </Stack>
+        </Box>
       </QualSidebar>
 
       <Snackbar

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Box, Tabs, Tab, Typography, Paper } from "@mui/material";
-import { SKUMaster } from "./SKUMaster";
-import { CustomerMaster } from "./customerMaster";
+import { SKUMaster } from "./skuMaster";
 import UserMaster from "./userMaster";
+import { MarketMaster } from "./marketMaster";
 
 export const AdminSettingsContainer = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -20,15 +20,16 @@ export const AdminSettingsContainer = () => {
       <Box>
         <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tabs value={activeTab} onChange={handleTabChange}>
-            <Tab label="User Master" />
-            <Tab label="SKU Master" />
-            <Tab label="Customer Master" />
+            <Tab label="Users" />
+            <Tab label="SKU" />
+
+            <Tab label="Market" />
           </Tabs>
         </Box>
         <Box sx={{ pt: 3 }}>
           {activeTab === 0 && <UserMaster />}
           {activeTab === 1 && <SKUMaster />}
-          {activeTab === 2 && <CustomerMaster />}
+          {activeTab === 2 && <MarketMaster />}
         </Box>
       </Box>
     </Paper>
