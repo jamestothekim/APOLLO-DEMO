@@ -115,6 +115,7 @@ export const VolumeForecast: React.FC = () => {
         );
         if (!response.ok) throw new Error("Failed to fetch market data");
         const markets = await response.json();
+        console.log("Markets:", markets);
         setMarketData(markets);
       } catch (error) {
         console.error("Error loading market data:", error);

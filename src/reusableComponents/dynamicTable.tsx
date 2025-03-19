@@ -93,7 +93,10 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     useState(defaultRowsPerPage);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
-  const tableColumns = columns.filter((column) => !column.detailsOnly);
+  const tableColumns = useMemo(
+    () => columns.filter((column) => !column.detailsOnly),
+    [columns]
+  );
   const page = controlledPage ?? internalPage;
   const rowsPerPage = controlledRowsPerPage ?? internalRowsPerPage;
 

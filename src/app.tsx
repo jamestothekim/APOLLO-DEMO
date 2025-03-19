@@ -5,7 +5,6 @@ import { NavigationAppBar } from "./navigation/appbar";
 import { Sidebar } from "./navigation/sidebar";
 import { VolumeView } from "./volume/volumeView";
 import { Dashboard } from "./dashboard/dashboard";
-import { ForecastProvider } from "./data/data";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import theme from "./theme";
@@ -87,13 +86,11 @@ const AppContent = () => {
 
   // Otherwise show the main app
   return (
-    <ForecastProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/*" element={<AppLayout />} />
-        </Routes>
-      </BrowserRouter>
-    </ForecastProvider>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/*" element={<AppLayout />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 

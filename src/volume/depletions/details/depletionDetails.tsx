@@ -1,17 +1,6 @@
-import {
-  DialogTitle,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
-  Box,
-  Typography,
-  Paper,
-} from "@mui/material";
+import { DialogTitle, Box, Typography } from "@mui/material";
 import { useState } from "react";
+import { DynamicTable } from "../../../reusableComponents/dynamicTable";
 
 interface DepletionDetailsProps {
   market: string;
@@ -24,14 +13,57 @@ interface DepletionDetailsProps {
   accountLevelSalesData: any[];
 }
 
+interface AccountLevelSalesData {
+  account_type: string;
+  outlet_name: string;
+  city: string;
+  state: string;
+  premise_type: string;
+  quantity: number;
+  sales_dollars: number;
+}
+
 export const DepletionDetails = ({
   market,
   item,
-
   accountLevelSalesData,
 }: DepletionDetailsProps) => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  const columns = [
+    {
+      header: "Account",
+      key: "outlet_name",
+      render: (value: string) => value,
+    },
+    {
+      header: "City/State",
+      key: "city",
+      render: (_: any, row: AccountLevelSalesData) =>
+        `${row.city}, ${row.state}`,
+    },
+    {
+      header: "Premise Type",
+      key: "premise_type",
+      render: (value: string) => value,
+    },
+    {
+      header: "Category",
+      key: "account_type",
+      render: (value: string) => value,
+    },
+    {
+      header: "Qty (9L)",
+      key: "quantity",
+      render: (value: number) => value.toString(),
+    },
+    {
+      header: "Sales ($)",
+      key: "sales_dollars",
+      render: (value: number) => value.toString(),
+    },
+  ];
 
   return (
     <>
@@ -45,39 +77,11 @@ export const DepletionDetails = ({
         </Typography>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Account</TableCell>
-              <TableCell>City/State</TableCell>
-              <TableCell>Premise Type</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Qty (9L)</TableCell>
-              <TableCell>Sales ($)</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {accountLevelSalesData.map((data, index) => (
-              <TableRow key={index}>
-                <TableCell>{data.outlet_name}</TableCell>
-                <TableCell>{`${data.city}, ${data.state}`}</TableCell>
-                <TableCell>{data.premise_type}</TableCell>
-                <TableCell>{data.account_type}</TableCell>
-                <TableCell>{data.case_equivalent_quantity}</TableCell>
-                <TableCell>{data.sales_dollars}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <TablePagination
-        rowsPerPageOptions={[10, 20, 30]}
-        component="div"
-        count={accountLevelSalesData.length}
-        rowsPerPage={rowsPerPage}
+      <DynamicTable
+        data={accountLevelSalesData}
+        columns={columns}
         page={page}
+        rowsPerPage={rowsPerPage}
         onPageChange={(_, newPage) => setPage(newPage)}
         onRowsPerPageChange={(event) => {
           setRowsPerPage(parseInt(event.target.value, 10));

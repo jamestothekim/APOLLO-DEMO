@@ -173,6 +173,7 @@ interface RestoredState {
 export const Depletions: React.FC<FilterSelectionProps> = ({
   selectedMarkets,
   selectedBrands,
+  marketMetadata,
   onUndo,
   onExport,
 }) => {
@@ -581,8 +582,17 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   onClick={(event) => {
                     if (data.isActual) {
                       event.stopPropagation();
+                      // Find the market info using market_id
+                      const marketInfo = marketMetadata.find(
+                        (m) => m.market_id === row.market_id
+                      );
+
+                      // Get the first two characters of the market_code (e.g., "NY" from "NYU")
+                      const stateCode =
+                        marketInfo?.market_code?.substring(0, 2) || "";
+
                       setSelectedDetails({
-                        market: row.market_name,
+                        market: stateCode,
                         product: row.product,
                         value: Math.round(data.value),
                         month: MONTH_MAPPING[month],
@@ -720,9 +730,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   }, [onExport, handleExport]);
 
   // Add this log near where forecastData is initialized/loaded
-  useEffect(() => {
-    console.log("Initial forecast data:", forecastData);
-  }, [forecastData]);
+  useEffect(() => {}, [forecastData]);
 
   // Update handleSidebarForecastChange to properly update both states
   const handleSidebarForecastChange = async (newLogic: string) => {

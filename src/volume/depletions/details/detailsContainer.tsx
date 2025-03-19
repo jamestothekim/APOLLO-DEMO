@@ -23,25 +23,24 @@ export const DetailsContainer = ({
   month,
   year,
 }: DetailsContainerProps) => {
-  // Log the props to verify they are coming through
-  console.log("Market:", market);
-  console.log("Product:", product);
-  console.log("Value:", value);
-  console.log("Month:", month);
-  console.log("Year:", year);
-
   const [selectedVipId, setSelectedVipId] = useState<string | null>(null);
   const [selectedPremiseType, setSelectedPremiseType] = useState<string>("");
   const [selectedName, setSelectedName] = useState<string>("");
   const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
 
   useEffect(() => {
+    let isMounted = true;
+    let controller = new AbortController();
+
     const fetchAccountLevelSales = async () => {
+      if (!open || !market || !product) return;
+
       try {
         const response = await fetch(
           `${
             import.meta.env.VITE_API_URL
-          }/volume/account-level-sales?month=${month}&market=${market}&product=${product}`
+          }/volume/account-level-sales?month=${month}&market=${market}&product=${product}`,
+          { signal: controller.signal }
         );
 
         if (!response.ok) {
@@ -49,16 +48,25 @@ export const DetailsContainer = ({
         }
 
         const data = await response.json();
-        console.log("Account Level Sales Data:", data); // Log the returned data
-        setAccountLevelSalesData(data); // Store the data
-      } catch (error) {
-        console.error("Error fetching account level sales:", error);
+        console.log(data);
+
+        if (isMounted) {
+          setAccountLevelSalesData(data);
+        }
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          if (error.name === "AbortError") return;
+          console.error("Error fetching account level sales:", error);
+        }
       }
     };
 
-    if (open) {
-      fetchAccountLevelSales();
-    }
+    fetchAccountLevelSales();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [open, month, market, product]);
 
   const handleRetailerClick = (
