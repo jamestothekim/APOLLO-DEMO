@@ -72,7 +72,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ email: username, password }),
           credentials: "include",
         }
       );

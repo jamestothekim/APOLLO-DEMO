@@ -51,7 +51,7 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Only use the login function from useUser
+      // formData.username is passed as the email parameter
       const success = await login(formData.username, formData.password);
 
       if (success) {
