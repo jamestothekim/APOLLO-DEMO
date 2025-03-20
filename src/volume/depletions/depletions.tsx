@@ -249,8 +249,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     loadForecastData();
   }, [loadForecastData]);
 
-  // Update handleUndo to handle the case when there's no more history
-  const handleUndo = async () => {
+  // Fix: Wrap handleUndo in useCallback with proper dependencies
+  const handleUndo = useCallback(async () => {
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/redi/undo-last-change`,
@@ -260,7 +260,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       );
 
       if (response.status === 404) {
-        // Show the "no more actions" snackbar
         setNoMoreActionsSnackbarOpen(true);
         return;
       }
@@ -294,14 +293,19 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     } catch (error) {
       console.error("Error undoing change:", error);
     }
-  };
+  }, [
+    setForecastData,
+    setNoMoreActionsSnackbarOpen,
+    setUndoMessage,
+    setUndoSnackbarOpen,
+  ]);
 
-  // Make sure handleUndo is registered with the parent component
+  // Now the effect can safely include handleUndo in deps
   useEffect(() => {
     if (onUndo) {
       onUndo(handleUndo);
     }
-  }, [onUndo]); // Remove handleUndo from dependencies to avoid recreation
+  }, [onUndo, handleUndo]);
 
   const handleRowClick = (id: string) => {
     setSelectedRow(id);
@@ -760,8 +764,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         open={commentDialogOpen}
         onClose={() => setCommentDialogOpen(false)}
         initialComment={selectedComment}
-        onSave={(comment) => {
-          setSelectedComment(comment);
+        onSave={() => {
           setCommentDialogOpen(false);
         }}
       />

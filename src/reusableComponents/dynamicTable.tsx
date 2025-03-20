@@ -76,7 +76,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   onRowClick,
   selectedRow,
   rowsPerPageOptions = [10, 25, 50, { value: -1, label: "All" }],
-  defaultRowsPerPage = 20,
+  defaultRowsPerPage = 10,
   page: controlledPage,
   onPageChange: controlledPageChange,
   rowsPerPage: controlledRowsPerPage,

@@ -15,8 +15,8 @@ import {
   Collapse,
 } from "@mui/material";
 import { Depletions } from "./depletions/depletions";
-import RemoveIcon from "@mui/icons-material/Remove";
-import AddIcon from "@mui/icons-material/Add";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { useUser } from "../userContext";
 import { Toolbox } from "./components/toolbox";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
@@ -190,34 +190,43 @@ export const VolumeForecast: React.FC = () => {
     return "raw" in item;
   };
 
+  // Add columns handler
+  const handleColumns = () => {
+    // Will implement later
+    console.log("Columns clicked in volumeForecast");
+  };
+
   return (
     <Paper elevation={3}>
       <Box
         sx={{
-          p: 2,
           display: "flex",
+          justifyContent: "space-between",
           alignItems: "center",
-          gap: 1,
-          cursor: "pointer",
+          p: 2,
+          borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
         }}
-        onClick={() => setExpanded(!expanded)}
       >
-        <IconButton size="small">
-          {expanded ? <RemoveIcon /> : <AddIcon />}
-        </IconButton>
         <Typography
           variant="h6"
           sx={{
             fontWeight: 500,
-            userSelect: "none",
+            color: (theme) => theme.palette.primary.main,
           }}
         >
           VOLUME FORECAST (9L)
         </Typography>
+        <IconButton
+          onClick={() => setExpanded(!expanded)}
+          size="small"
+          sx={{ ml: 2 }}
+        >
+          {expanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+        </IconButton>
       </Box>
 
       <Collapse in={expanded}>
-        <Box sx={{ p: 2, pt: 0 }}>
+        <Box sx={{ p: 2, pt: 2 }}>
           <Box
             sx={{
               mb: 4,
@@ -419,7 +428,9 @@ export const VolumeForecast: React.FC = () => {
           </Box>
 
           <Toolbox
+            tools={["undo", "columns", "export"]}
             onUndo={handleUndo}
+            onColumns={handleColumns}
             onExport={handleExportClick}
             canUndo={!!undoHandler}
           />
