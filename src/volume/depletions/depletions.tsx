@@ -7,12 +7,16 @@ import {
   Button,
   Snackbar,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
 import CommentIcon from "@mui/icons-material/Comment";
 import { DetailsContainer } from "./details/detailsContainer";
-import { CommentDialog } from "../components/commentDialog";
 import type { MarketData } from "../volumeForecast";
 
 import {
@@ -204,6 +208,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   // Add new state for the "no more actions" snackbar
   const [noMoreActionsSnackbarOpen, setNoMoreActionsSnackbarOpen] =
     useState(false);
+
+  const [comment, setComment] = useState(selectedComment || "");
 
   // Update the loadForecastData to include logging
   const loadForecastData = useMemo(
@@ -720,6 +726,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setSelectedDataState(rowData || null);
   }, [selectedRow, forecastData]);
 
+  // Update useEffect to reset comment when selectedComment changes
+  useEffect(() => {
+    setComment(selectedComment || "");
+  }, [selectedComment]);
+
   return (
     <Box>
       <DynamicTable
@@ -760,14 +771,35 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         forecastOptions={FORECAST_OPTIONS}
       />
 
-      <CommentDialog
+      <Dialog
         open={commentDialogOpen}
         onClose={() => setCommentDialogOpen(false)}
-        initialComment={selectedComment}
-        onSave={() => {
-          setCommentDialogOpen(false);
-        }}
-      />
+      >
+        <DialogTitle>Add Comment</DialogTitle>
+        <DialogContent>
+          <TextField
+            multiline
+            rows={4}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCommentDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setCommentDialogOpen(false);
+              // Add your save logic here
+              // For example:
+              // handleSaveComment(comment);
+            }}
+            variant="contained"
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {selectedDetails && (
         <DetailsContainer
