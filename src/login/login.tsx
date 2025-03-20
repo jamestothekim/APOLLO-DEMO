@@ -51,20 +51,51 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const success = await login(formData.username, formData.password);
+      // Add logging to debug the API URL
+      console.log(
+        "Attempting login with API URL:",
+        import.meta.env.VITE_API_URL
+      );
 
-      if (success) {
-        setNotification({
-          open: true,
-          message: "Login successful!",
-          severity: "success",
-        });
-        // Store login state in localStorage
-        localStorage.setItem("isAuthenticated", "true");
+      // Make direct API call first to debug
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/users/login`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include", // Important for cookies
+          body: JSON.stringify({
+            email: formData.username,
+            password: formData.password,
+          }),
+        }
+      );
+
+      // Log the response for debugging
+      console.log("Login response status:", response.status);
+      const data = await response.json();
+      console.log("Login response data:", data);
+
+      if (response.ok) {
+        // If the direct API call succeeds, then call the login function
+        const success = await login(formData.username, formData.password);
+
+        if (success) {
+          setNotification({
+            open: true,
+            message: "Login successful!",
+            severity: "success",
+          });
+          localStorage.setItem("isAuthenticated", "true");
+        } else {
+          throw new Error("Login failed after successful API response");
+        }
       } else {
         setNotification({
           open: true,
-          message: "Invalid email or password",
+          message: data.message || "Invalid email or password",
           severity: "error",
         });
       }
@@ -72,7 +103,8 @@ export const Login: React.FC = () => {
       console.error("Login error:", error);
       setNotification({
         open: true,
-        message: "An error occurred during login",
+        message:
+          "An error occurred during login. Please check your connection and try again.",
         severity: "error",
       });
     } finally {
