@@ -87,10 +87,6 @@ const UserMaster = () => {
         market: market.market_name,
         market_code: market.market_code,
       }));
-      // Sort markets alphabetically by market name
-      formattedMarkets.sort((a: MarketOption, b: MarketOption) =>
-        a.market.localeCompare(b.market)
-      );
       setAvailableMarkets(formattedMarkets);
     } catch (error) {
       console.error("Error fetching markets:", error);

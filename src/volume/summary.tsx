@@ -11,12 +11,16 @@ import {
   IconButton,
 } from "@mui/material";
 import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
-import { FORECAST_OPTIONS } from "./depletions/util/depletionsUtil";
+import {
+  FORECAST_OPTIONS,
+  exportToCSV,
+} from "./depletions/util/depletionsUtil";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { Toolbox } from "./components/toolbox";
 
 interface SummaryData {
+  id: string;
   brand: string;
   jan: number;
   feb: number;
@@ -169,8 +173,33 @@ export const Summary = () => {
     return Promise.resolve();
   };
 
-  const dummyExport = () => {
-    // Empty function since we don't need export functionality
+  const handleExport = () => {
+    const formattedData = data.map((row) => ({
+      id: row.id,
+      market_id: "0",
+      market_name: "",
+      product: "",
+      brand: row.brand,
+      variant: "",
+      variantSize: "",
+      forecastLogic: forecastMethod,
+      months: {
+        JAN: { value: row.jan },
+        FEB: { value: row.feb },
+        MAR: { value: row.mar },
+        APR: { value: row.apr },
+        MAY: { value: row.may },
+        JUN: { value: row.jun },
+        JUL: { value: row.jul },
+        AUG: { value: row.aug },
+        SEP: { value: row.sep },
+        OCT: { value: row.oct },
+        NOV: { value: row.nov },
+        DEC: { value: row.dec },
+      },
+    }));
+
+    exportToCSV(formattedData);
   };
 
   return (
@@ -235,7 +264,7 @@ export const Summary = () => {
               tools={["columns", "export"]}
               onUndo={dummyUndo}
               onColumns={handleColumns}
-              onExport={dummyExport}
+              onExport={handleExport}
               canUndo={false}
             />
           </Box>

@@ -88,19 +88,6 @@ const processRawData = (
   data: any[],
   loggedChanges: any[] = []
 ): ExtendedForecastData[] => {
-  // Group by size_pack first to see what we're working with
-  const groupedByProduct = data.reduce(
-    (acc: { [key: string]: any[] }, item) => {
-      const key = item.size_pack;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(item);
-      return acc;
-    },
-    {}
-  );
-
-  console.log("Data grouped by product:", groupedByProduct);
-
   // Group data by market and size_pack combination
   const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
     const key = `${item.market_id}-${item.size_pack}`;
@@ -120,11 +107,17 @@ const processRawData = (
 
     // Process month data as it comes in
     const monthName = MONTH_NAMES[item.month - 1];
-    acc[key].months[monthName] = {
-      value: Math.round(item.case_equivalent_volume * 100) / 100,
-      isActual: item.data_type?.includes("actual"),
-      isManuallyModified: item.is_manual_input || false,
-    };
+    // If the month already exists, add to its value, otherwise set initial value
+    if (acc[key].months[monthName]) {
+      acc[key].months[monthName].value +=
+        Math.round(item.case_equivalent_volume * 100) / 100;
+    } else {
+      acc[key].months[monthName] = {
+        value: Math.round(item.case_equivalent_volume * 100) / 100,
+        isActual: item.data_type?.includes("actual"),
+        isManuallyModified: item.is_manual_input || false,
+      };
+    }
 
     return acc;
   }, {});
@@ -235,11 +228,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         if (!response.ok) throw new Error("Failed to fetch forecast data");
 
         const rawData = await response.json();
-
+        console.log("Raw data here!:", rawData);
         const processedData = processRawData(rawData, loggedChanges);
-
         const nonZeroData = processedData.filter(hasNonZeroTotal);
-
         setForecastData(nonZeroData);
       } catch (error) {
         console.error("Error loading forecast data:", error);
@@ -602,7 +593,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                       cursor: data.isActual ? "pointer" : "inherit",
                     }}
                   >
-                    {Math.round(data.value).toLocaleString()}
+                    {(Math.round(data.value * 10) / 10).toLocaleString(
+                      undefined,
+                      {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1,
+                      }
+                    )}
                   </Box>
                   {data.isManuallyModified && (
                     <EditIcon
@@ -626,7 +623,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         header: "TOTAL",
         align: "right",
         render: (_: any, row: ExtendedForecastData) =>
-          Math.round(calculateTotal(row.months)).toLocaleString(),
+          (Math.round(calculateTotal(row.months) * 10) / 10).toLocaleString(
+            undefined,
+            {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }
+          ),
       },
       ...(hasAnyComments()
         ? [

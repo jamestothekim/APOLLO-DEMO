@@ -77,7 +77,25 @@ export const processMonthData = (data: any[]) => {
   return months;
 };
 
-export const exportToCSV = (data: ExtendedForecastData[]) => {
+// Add this type to handle both data structures
+export interface ExportableData {
+  market_id: string | number;
+  market_name: string;
+  product: string;
+  brand: string;
+  variant: string;
+  variantSize: string | number;
+  forecastLogic: string;
+  months: {
+    [key: string]: {
+      value: number;
+      isActual?: boolean;
+      isManuallyModified?: boolean;
+    };
+  };
+}
+
+export const exportToCSV = (data: ExportableData[]) => {
   const monthKeys = MONTH_NAMES;
   const headers = [
     "Market",
@@ -121,7 +139,7 @@ export const hasNonZeroTotal = (row: ExtendedForecastData): boolean => {
     const numValue = Number(value);
     return !isNaN(numValue) ? sum + numValue : sum;
   }, 0);
-  return total > 0.0001;
+  return total > 0.0001; // Using small epsilon to handle floating point precision
 };
 
 export const calculateTotal = (
