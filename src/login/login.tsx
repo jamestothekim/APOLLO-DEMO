@@ -20,7 +20,7 @@ export const Login: React.FC = () => {
   const { login, isLoggedIn } = useUser();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    username: "",
+    email: "",
     password: "",
   });
   const [notification, setNotification] = useState({
@@ -51,8 +51,7 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // formData.username is passed as the email parameter
-      const success = await login(formData.username, formData.password);
+      const success = await login(formData.email, formData.password);
 
       if (success) {
         setNotification({
@@ -146,12 +145,12 @@ export const Login: React.FC = () => {
               margin="normal"
               required
               fullWidth
-              id="username"
+              id="email"
               label="Email"
-              name="username"
+              name="email"
               autoComplete="email"
               autoFocus
-              value={formData.username}
+              value={formData.email}
               onChange={handleChange}
               sx={{
                 mb: 1.5,

@@ -46,7 +46,7 @@ interface UserContextType {
   user: User | null;
   updateUser: (user: User) => void;
   isLoggedIn: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -60,10 +60,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
-  const login = async (
-    username: string,
-    password: string
-  ): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/users/login`,
@@ -72,7 +69,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ email: username, password }),
+          body: JSON.stringify({ email, password }),
           credentials: "include",
         }
       );
