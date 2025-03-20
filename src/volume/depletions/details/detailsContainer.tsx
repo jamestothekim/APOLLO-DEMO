@@ -27,6 +27,7 @@ export const DetailsContainer = ({
   const [selectedPremiseType, setSelectedPremiseType] = useState<string>("");
   const [selectedName, setSelectedName] = useState<string>("");
   const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -35,6 +36,7 @@ export const DetailsContainer = ({
     const fetchAccountLevelSales = async () => {
       if (!open || !market || !product) return;
 
+      setIsLoading(true);
       try {
         const response = await fetch(
           `${
@@ -57,6 +59,10 @@ export const DetailsContainer = ({
         if (error instanceof Error) {
           if (error.name === "AbortError") return;
           console.error("Error fetching account level sales:", error);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
         }
       }
     };
@@ -110,6 +116,7 @@ export const DetailsContainer = ({
             variant_size_pack={product}
             onRetailerClick={handleRetailerClick}
             accountLevelSalesData={accountLevelSalesData}
+            isLoading={isLoading}
           />
         )}
         <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>

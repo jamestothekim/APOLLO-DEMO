@@ -1,4 +1,4 @@
-import { DialogTitle, Box, Typography } from "@mui/material";
+import { DialogTitle, Box, Typography, CircularProgress } from "@mui/material";
 import { useState } from "react";
 import { DynamicTable } from "../../../reusableComponents/dynamicTable";
 
@@ -11,6 +11,7 @@ interface DepletionDetailsProps {
   variant_size_pack: string;
   onRetailerClick: (vipId: string, premiseType: string, name: string) => void;
   accountLevelSalesData: any[];
+  isLoading: boolean;
 }
 
 interface AccountLevelSalesData {
@@ -27,9 +28,19 @@ export const DepletionDetails = ({
   market,
   item,
   accountLevelSalesData,
+  isLoading,
 }: DepletionDetailsProps) => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Add IDs to the data
+  const dataWithIds = accountLevelSalesData.map(
+    (row: AccountLevelSalesData) => ({
+      ...row,
+      // Create a unique ID using outlet_name and location
+      id: `${row.outlet_name}-${row.city}-${row.state}`,
+    })
+  );
 
   const columns = [
     {
@@ -77,17 +88,28 @@ export const DepletionDetails = ({
         </Typography>
       </Box>
 
-      <DynamicTable
-        data={accountLevelSalesData}
-        columns={columns}
-        page={page}
-        rowsPerPage={rowsPerPage}
-        onPageChange={(_, newPage) => setPage(newPage)}
-        onRowsPerPageChange={(event) => {
-          setRowsPerPage(parseInt(event.target.value, 10));
-          setPage(0);
-        }}
-      />
+      {isLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : !accountLevelSalesData || accountLevelSalesData.length === 0 ? (
+        <Typography variant="h6" sx={{ textAlign: "center", py: 4 }}>
+          No RAD data available
+        </Typography>
+      ) : (
+        <DynamicTable
+          data={dataWithIds}
+          columns={columns}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(parseInt(event.target.value, 10));
+            setPage(0);
+          }}
+          getRowId={(row) => row.id}
+        />
+      )}
     </>
   );
 };
