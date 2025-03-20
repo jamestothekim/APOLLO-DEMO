@@ -10,7 +10,6 @@ import {
 } from "@mui/material";
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
-import { useForecast } from "../../data/data";
 import CommentIcon from "@mui/icons-material/Comment";
 import { DetailsContainer } from "./details/detailsContainer";
 import { CommentDialog } from "../components/commentDialog";
@@ -178,7 +177,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   onExport,
 }) => {
   const { user } = useUser();
-  const { budgetData } = useForecast();
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
@@ -502,22 +500,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
-  // Add function to calculate budget variance percentage
-  const calculateBudgetVariance = (
-    forecastTotal: number,
-    budgetTotal: number
-  ) => {
-    if (budgetTotal === 0) return 0;
-    return ((forecastTotal - budgetTotal) / budgetTotal) * 100;
-  };
-
-  // Add function to find matching budget row
-  const findBudgetRow = (forecastRow: ExtendedForecastData) => {
-    return budgetData.find(
-      (budget) => budget.id === `budget-${forecastRow.id}`
-    );
-  };
-
   const handleCommentClick = (event: React.MouseEvent, commentary?: string) => {
     event.stopPropagation();
     setSelectedComment(commentary);
@@ -635,33 +617,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         align: "right",
         render: (_: any, row: ExtendedForecastData) =>
           Math.round(calculateTotal(row.months)).toLocaleString(),
-      },
-      {
-        key: "budget",
-        header: "BUDGET",
-        align: "right",
-        render: (_: any, row: ExtendedForecastData) => {
-          const budgetRow = findBudgetRow(row);
-          return budgetRow
-            ? calculateTotal(budgetRow.months).toLocaleString()
-            : "0";
-        },
-      },
-      {
-        key: "variance",
-        header: "% vs BUD",
-        align: "right",
-        render: (_: any, row: ExtendedForecastData) => {
-          const budgetRow = findBudgetRow(row);
-          const forecastTotal = calculateTotal(row.months);
-          const budgetTotal = budgetRow ? calculateTotal(budgetRow.months) : 0;
-          const variance = calculateBudgetVariance(forecastTotal, budgetTotal);
-          return (
-            <Box sx={{ color: variance < 0 ? "error.main" : "success.main" }}>
-              {variance.toFixed(1)}%
-            </Box>
-          );
-        },
       },
       ...(hasAnyComments()
         ? [

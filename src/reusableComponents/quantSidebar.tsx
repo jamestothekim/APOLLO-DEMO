@@ -14,7 +14,6 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { type ExtendedForecastData } from "../volume/depletions/depletions";
-import { useForecast } from "../data/data";
 import { InteractiveGraph } from "./interactiveGraph";
 import { useTheme } from "@mui/material/styles";
 import { MonthlyValues } from "./monthlyValues";
@@ -49,7 +48,6 @@ export const QuantSidebar = ({
   const [selectedTrendLines, setSelectedTrendLines] = useState<string[]>([]);
 
   const theme = useTheme();
-  const { budgetData } = useForecast();
 
   const trendLines = useMemo(() => {
     if (!editedData) return [];
@@ -65,52 +63,29 @@ export const QuantSidebar = ({
       };
     });
 
-    const budgetRow = budgetData.find(
-      (budget) => budget.id === `budget-${editedData.id}`
+    // Replace budget data logic with simplified version
+    const monthlyBudgetData = Object.entries(editedData.months).map(
+      ([month, data]) => ({
+        month,
+        value: Math.round(data.value * 1.05),
+      })
     );
 
-    const trendLines = [
+    return [
       {
         id: "lap",
         label: "LAP",
         data: lapData,
         color: theme.palette.info.main,
       },
-    ];
-
-    if (!budgetRow) {
-      const monthlyBudgetData = Object.entries(editedData.months).map(
-        ([month, data]) => ({
-          month,
-          value: Math.round(data.value * 1.05),
-        })
-      );
-
-      trendLines.push({
+      {
         id: "budget-2025",
         label: "2025 Budget",
         data: monthlyBudgetData,
         color: theme.palette.secondary.main,
-      });
-    } else {
-      trendLines.push({
-        id: "budget-2025",
-        label: "2025 Budget",
-        data: Object.entries(budgetRow.months).map(([month, data]) => ({
-          month,
-          value: data.value,
-        })),
-        color: theme.palette.secondary.main,
-      });
-    }
-
-    return trendLines;
-  }, [
-    editedData,
-    budgetData,
-    theme.palette.secondary.main,
-    theme.palette.info.main,
-  ]);
+      },
+    ];
+  }, [editedData, theme.palette.secondary.main, theme.palette.info.main]);
 
   const graphData = useMemo(() => {
     if (!editedData) return [];
