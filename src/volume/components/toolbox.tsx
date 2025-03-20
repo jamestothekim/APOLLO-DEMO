@@ -3,15 +3,19 @@ import { Box, Button } from "@mui/material";
 import UndoIcon from "@mui/icons-material/Undo";
 import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import BarChartIcon from "@mui/icons-material/BarChart";
+import TableChartIcon from "@mui/icons-material/TableChart";
 
-export type ToolType = "undo" | "columns" | "export";
+export type ToolType = "undo" | "columns" | "export" | "viewToggle";
 
 interface ToolboxProps {
   tools?: ToolType[];
   onUndo: (handler: () => Promise<void>) => void;
   onColumns?: () => void;
   onExport: () => void;
+  onViewToggle?: () => void;
   canUndo: boolean;
+  viewType?: "table" | "graph";
 }
 
 export const Toolbox: React.FC<ToolboxProps> = ({
@@ -19,7 +23,9 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   onUndo,
   onColumns,
   onExport,
+  onViewToggle,
   canUndo,
+  viewType = "table",
 }) => {
   const handleUndo = async () => {
     if (onUndo) {
@@ -46,6 +52,23 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   return (
     <Box sx={{ display: "flex", gap: 1, justifyContent: "space-between" }}>
       <Box sx={{ display: "flex", gap: 1 }}>
+        {tools.includes("viewToggle") && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={
+              viewType === "table" ? <BarChartIcon /> : <TableChartIcon />
+            }
+            onClick={onViewToggle}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            {viewType === "table" ? "Show Graph" : "Show Table"}
+          </Button>
+        )}
+
         {tools.includes("undo") && (
           <Button
             variant="outlined"

@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { NavigationAppBar } from "./navigation/appbar";
 import { Sidebar } from "./navigation/sidebar";
 import { VolumeView } from "./volume/volumeView";
-import { Dashboard } from "./dashboard/dashboard";
+import { DashboardContainer } from "./dashboard/dashboardContainer";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import theme from "./theme";
@@ -62,7 +62,7 @@ const AppLayout = () => {
         <Toolbar /> {/* Spacer for AppBar */}
         <Box sx={{ p: 2 }}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<DashboardContainer />} />
             <Route path="/rates" element={<Rates />} />
             <Route path="/P&LModel" element={<ProfitModel />} />
             <Route path="/volume" element={<VolumeView />} />

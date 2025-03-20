@@ -9,6 +9,7 @@ import {
   SelectChangeEvent,
   Typography,
   IconButton,
+  useTheme,
 } from "@mui/material";
 import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
 import {
@@ -18,6 +19,7 @@ import {
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { Toolbox } from "./components/toolbox";
+import { LineChart } from "@mui/x-charts";
 
 interface SummaryData {
   id: string;
@@ -42,6 +44,8 @@ export const Summary = () => {
   const [data, setData] = useState<SummaryData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [viewType, setViewType] = useState<"table" | "graph">("table");
+  const theme = useTheme();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -202,6 +206,35 @@ export const Summary = () => {
     exportToCSV(formattedData);
   };
 
+  const series = data.map((row, index) => {
+    const colors = [
+      theme.palette.primary.main,
+      theme.palette.secondary.main,
+      theme.palette.info.main,
+      theme.palette.success.main,
+      theme.palette.warning.main,
+    ];
+
+    return {
+      label: row.brand,
+      data: [
+        row.jan,
+        row.feb,
+        row.mar,
+        row.apr,
+        row.may,
+        row.jun,
+        row.jul,
+        row.aug,
+        row.sep,
+        row.oct,
+        row.nov,
+        row.dec,
+      ],
+      color: colors[index % colors.length],
+    };
+  });
+
   return (
     <Paper elevation={3}>
       <Box sx={{ display: "flex", flexDirection: "column" }}>
@@ -261,22 +294,69 @@ export const Summary = () => {
 
           <Box sx={{ px: 2 }}>
             <Toolbox
-              tools={["columns", "export"]}
+              tools={["columns", "export", "viewToggle"]}
               onUndo={dummyUndo}
               onColumns={handleColumns}
               onExport={handleExport}
+              onViewToggle={() =>
+                setViewType(viewType === "table" ? "graph" : "table")
+              }
               canUndo={false}
+              viewType={viewType}
             />
           </Box>
 
-          <DynamicTable
-            data={data}
-            columns={columns}
-            loading={isLoading}
-            rowsPerPageOptions={[10, 20, 25, 50]}
-            getRowId={(row) => row.id}
-            selectedRow={null}
-          />
+          {viewType === "table" ? (
+            <DynamicTable
+              data={data}
+              columns={columns}
+              loading={isLoading}
+              rowsPerPageOptions={[10, 20, 25, 50]}
+              getRowId={(row) => row.id}
+              selectedRow={null}
+            />
+          ) : (
+            <Box sx={{ width: "100%", height: 400, p: 2 }}>
+              <LineChart
+                xAxis={[
+                  {
+                    data: [
+                      "Jan",
+                      "Feb",
+                      "Mar",
+                      "Apr",
+                      "May",
+                      "Jun",
+                      "Jul",
+                      "Aug",
+                      "Sep",
+                      "Oct",
+                      "Nov",
+                      "Dec",
+                    ],
+                    scaleType: "band",
+                    label: "Months",
+                    labelStyle: {
+                      fill: theme.palette.primary.main,
+                    },
+                    tickLabelStyle: {
+                      fill: theme.palette.text.primary,
+                    },
+                  },
+                ]}
+                series={series}
+                height={350}
+                margin={{ left: 90, right: 20, top: 50, bottom: 30 }}
+                slotProps={{
+                  legend: {
+                    direction: "row",
+                    position: { vertical: "top", horizontal: "middle" },
+                    padding: 0,
+                  },
+                }}
+              />
+            </Box>
+          )}
         </Box>
       </Box>
     </Paper>
