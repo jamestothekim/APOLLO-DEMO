@@ -51,51 +51,20 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Add logging to debug the API URL
-      console.log(
-        "Attempting login with API URL:",
-        import.meta.env.VITE_API_URL
-      );
+      // Only use the login function from useUser
+      const success = await login(formData.username, formData.password);
 
-      // Make direct API call first to debug
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include", // Important for cookies
-          body: JSON.stringify({
-            email: formData.username,
-            password: formData.password,
-          }),
-        }
-      );
-
-      // Log the response for debugging
-      console.log("Login response status:", response.status);
-      const data = await response.json();
-      console.log("Login response data:", data);
-
-      if (response.ok) {
-        // If the direct API call succeeds, then call the login function
-        const success = await login(formData.username, formData.password);
-
-        if (success) {
-          setNotification({
-            open: true,
-            message: "Login successful!",
-            severity: "success",
-          });
-          localStorage.setItem("isAuthenticated", "true");
-        } else {
-          throw new Error("Login failed after successful API response");
-        }
+      if (success) {
+        setNotification({
+          open: true,
+          message: "Login successful!",
+          severity: "success",
+        });
+        localStorage.setItem("isAuthenticated", "true");
       } else {
         setNotification({
           open: true,
-          message: data.message || "Invalid email or password",
+          message: "Invalid email or password",
           severity: "error",
         });
       }
