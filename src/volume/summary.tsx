@@ -10,6 +10,8 @@ import {
   Typography,
   IconButton,
   useTheme,
+  OutlinedInput,
+  Chip,
 } from "@mui/material";
 import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
 import {
@@ -39,6 +41,17 @@ interface SummaryData {
   total: number;
 }
 
+const DEFAULT_SELECTED_BRANDS = [
+  "Balvenie",
+  "Glenfiddich",
+  "Leyenda Del Milagro",
+  "Hendricks",
+  "Tullamore Dew",
+  "Reyka",
+  "Clan MacGregor",
+  "Monkey Shoulder",
+];
+
 export const Summary = () => {
   const [forecastMethod, setForecastMethod] = useState("flat");
   const [data, setData] = useState<SummaryData[]>([]);
@@ -46,6 +59,31 @@ export const Summary = () => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [viewType, setViewType] = useState<"table" | "graph">("table");
   const theme = useTheme();
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(
+    DEFAULT_SELECTED_BRANDS
+  );
+  const [isBrandsLoading, setIsBrandsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        setIsBrandsLoading(true);
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/volume/brands`
+        );
+        if (!response.ok) throw new Error("Failed to fetch brands");
+        const data = await response.json();
+        setAvailableBrands(data);
+      } catch (error) {
+        console.error("Error loading brands:", error);
+      } finally {
+        setIsBrandsLoading(false);
+      }
+    };
+
+    fetchBrands();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,10 +97,14 @@ export const Summary = () => {
         if (!response.ok) throw new Error("Failed to fetch data");
         const result = await response.json();
 
-        // Add IDs to the data
-        const dataWithIds = result.map((row: SummaryData) => ({
+        // Filter the data based on selected brands
+        const filteredResult = result.filter((row: SummaryData) =>
+          selectedBrands.includes(row.brand)
+        );
+
+        const dataWithIds = filteredResult.map((row: SummaryData) => ({
           ...row,
-          id: row.brand, // Use brand as unique identifier
+          id: row.brand,
         }));
 
         setData(dataWithIds);
@@ -73,11 +115,18 @@ export const Summary = () => {
       }
     };
 
-    fetchData();
-  }, [forecastMethod]);
+    if (selectedBrands.length > 0) {
+      fetchData();
+    }
+  }, [forecastMethod, selectedBrands]);
 
   const handleMethodChange = (event: SelectChangeEvent) => {
     setForecastMethod(event.target.value);
+  };
+
+  const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
+    const value = event.target.value;
+    setSelectedBrands(typeof value === "string" ? value.split(",") : value);
   };
 
   const columns: Column[] = [
@@ -272,7 +321,7 @@ export const Summary = () => {
             gap: 2,
           }}
         >
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: 2, display: "flex", gap: 2 }}>
             <FormControl sx={{ minWidth: 200 }}>
               <InputLabel id="forecast-method-label">
                 Forecast Method
@@ -286,6 +335,44 @@ export const Summary = () => {
                 {FORECAST_OPTIONS.map((option) => (
                   <MenuItem key={option.id} value={option.value}>
                     {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl sx={{ minWidth: 300 }}>
+              <InputLabel id="brand-select-label">Brands</InputLabel>
+              <Select
+                labelId="brand-select-label"
+                multiple
+                value={selectedBrands}
+                onChange={handleBrandChange}
+                input={<OutlinedInput label="Brands" />}
+                disabled={isBrandsLoading}
+                renderValue={(selected) => (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip
+                        key={value}
+                        label={value}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{
+                          borderRadius: "16px",
+                          backgroundColor: "transparent",
+                          "& .MuiChip-label": {
+                            px: 1,
+                          },
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+              >
+                {availableBrands.map((brand) => (
+                  <MenuItem key={brand} value={brand}>
+                    {brand}
                   </MenuItem>
                 ))}
               </Select>
