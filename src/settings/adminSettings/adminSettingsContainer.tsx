@@ -25,7 +25,7 @@ export const AdminSettingsContainer = () => {
         </Box>
         <Box sx={{ pt: 3 }}>
           {activeTab === 0 && <UserMaster />}
-          {activeTab === 2 && <MarketMaster />}
+          {activeTab === 1 && <MarketMaster />}
         </Box>
       </Box>
     </Paper>
