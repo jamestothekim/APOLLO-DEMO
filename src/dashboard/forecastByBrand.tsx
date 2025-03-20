@@ -8,10 +8,12 @@ import {
   OutlinedInput,
   Typography,
   useTheme,
+  Chip,
 } from "@mui/material";
 import { LineChart } from "@mui/x-charts";
 import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
 import { Toolbox } from "../volume/components/toolbox";
+import { SelectChangeEvent } from "@mui/material/Select";
 
 interface ForecastData {
   brand: string;
@@ -28,6 +30,17 @@ interface ForecastData {
   nov: number;
   dec: number;
 }
+
+const DEFAULT_SELECTED_BRANDS = [
+  "Balvenie",
+  "Glenfiddich",
+  "Leyenda Del Milagro",
+  "Hendricks",
+  "Tullamore Dew",
+  "Reyka",
+  "Clan MacGregor",
+  "Monkey Shoulder",
+];
 
 interface Props {
   data: ForecastData[];
@@ -50,11 +63,17 @@ const MONTHS = [
 
 export const ForecastByBrand = ({ data }: Props) => {
   const theme = useTheme();
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(
+    DEFAULT_SELECTED_BRANDS
+  );
   const [viewType, setViewType] = useState<"table" | "graph">("graph");
 
-  const handleBrandChange = (event: any) => {
-    const { value } = event.target;
+  const filteredData = data.filter((item) =>
+    selectedBrands.includes(item.brand)
+  );
+
+  const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
+    const value = event.target.value;
     setSelectedBrands(typeof value === "string" ? value.split(",") : value);
   };
 
@@ -106,11 +125,6 @@ export const ForecastByBrand = ({ data }: Props) => {
     { key: "dec", header: "Dec", align: "right" },
   ];
 
-  const filteredData =
-    selectedBrands.length > 0
-      ? data.filter((item) => selectedBrands.includes(item.brand))
-      : data;
-
   return (
     <Box sx={{ p: 3 }}>
       <Box
@@ -150,7 +164,26 @@ export const ForecastByBrand = ({ data }: Props) => {
           value={selectedBrands}
           onChange={handleBrandChange}
           input={<OutlinedInput label="Select Brands" />}
-          renderValue={(selected) => (selected as string[]).join(", ")}
+          renderValue={(selected) => (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+              {selected.map((value) => (
+                <Chip
+                  key={value}
+                  label={value}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  sx={{
+                    borderRadius: "16px",
+                    backgroundColor: "transparent",
+                    "& .MuiChip-label": {
+                      px: 1,
+                    },
+                  }}
+                />
+              ))}
+            </Box>
+          )}
         >
           {data.map((item) => (
             <MenuItem key={item.brand} value={item.brand}>
@@ -177,7 +210,24 @@ export const ForecastByBrand = ({ data }: Props) => {
                   },
                 },
               ]}
-              series={series}
+              series={filteredData.map((row, index) => ({
+                label: row.brand,
+                data: [
+                  row.jan,
+                  row.feb,
+                  row.mar,
+                  row.apr,
+                  row.may,
+                  row.jun,
+                  row.jul,
+                  row.aug,
+                  row.sep,
+                  row.oct,
+                  row.nov,
+                  row.dec,
+                ],
+                color: series[index].color,
+              }))}
               height={350}
               margin={{ left: 90, right: 20, top: 50, bottom: 30 }}
               slotProps={{
