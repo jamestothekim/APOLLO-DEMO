@@ -407,7 +407,6 @@ export const Summary = () => {
                 rowsPerPageOptions={[10, 20, 25, 50]}
                 getRowId={(row) => row.id}
                 selectedRow={null}
-                loading={isLoading}
               />
             ) : (
               <Box sx={{ width: "100%", height: 400, p: 2 }}>
