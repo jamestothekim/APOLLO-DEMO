@@ -12,6 +12,7 @@ import {
   useTheme,
   OutlinedInput,
   Chip,
+  CircularProgress,
 } from "@mui/material";
 import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
 import {
@@ -287,7 +288,16 @@ export const Summary = () => {
   return (
     <Paper elevation={3}>
       {isLoading ? (
-        <Typography>Loading...</Typography>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100%",
+          }}
+        >
+          <CircularProgress />
+        </Box>
       ) : (
         <Box sx={{ display: "flex", flexDirection: "column" }}>
           <Box
@@ -404,6 +414,7 @@ export const Summary = () => {
               <DynamicTable
                 data={data}
                 columns={columns}
+                loading={isLoading}
                 rowsPerPageOptions={[10, 20, 25, 50]}
                 getRowId={(row) => row.id}
                 selectedRow={null}

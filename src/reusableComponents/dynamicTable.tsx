@@ -14,6 +14,7 @@ import {
   SxProps,
   Theme,
   TableSortLabel,
+  CircularProgress,
 } from "@mui/material";
 import {
   CustomColumnControls,
@@ -65,6 +66,7 @@ export interface DynamicTableProps {
   expandableRows?: boolean;
   renderExpanded?: (row: any) => React.ReactNode;
   dense?: boolean;
+  loading?: boolean;
 }
 
 export const DynamicTable: React.FC<DynamicTableProps> = ({
@@ -85,6 +87,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   onAddCustomColumn,
   onRemoveCustomColumn,
   showPagination = true,
+  loading = false,
 }) => {
   const [activeSection, setActiveSection] = useState(0);
   const [internalPage, setInternalPage] = useState(0);
@@ -236,112 +239,131 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
 
   return (
     <Box>
-      {(onAddCustomColumn || onRemoveCustomColumn) && (
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-          <CustomColumnControls
-            onAddColumn={onAddCustomColumn!}
-            onRemoveColumn={onRemoveCustomColumn!}
-            customColumns={customColumns.map(({ id, type }) => ({ id, type }))}
-          />
+      {loading ? (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100%",
+          }}
+        >
+          <CircularProgress />
         </Box>
-      )}
+      ) : (
+        <>
+          {(onAddCustomColumn || onRemoveCustomColumn) && (
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+              <CustomColumnControls
+                onAddColumn={onAddCustomColumn!}
+                onRemoveColumn={onRemoveCustomColumn!}
+                customColumns={customColumns.map(({ id, type }) => ({
+                  id,
+                  type,
+                }))}
+              />
+            </Box>
+          )}
 
-      <TableContainer>
-        {sections && (
-          <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
-            <Tabs
-              value={activeSection}
-              onChange={handleChangeSection}
-              aria-label="table sections"
-            >
-              {sections.map((section) => (
-                <Tab key={section.value} label={section.label} />
-              ))}
-            </Tabs>
-          </Box>
-        )}
-
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              {tableColumns.map(renderTableHeader)}
-              {customColumns.map((column) => (
-                <TableCell
-                  key={column.id}
-                  align="right"
-                  sx={{ fontWeight: 700 }}
+          <TableContainer>
+            {sections && (
+              <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+                <Tabs
+                  value={activeSection}
+                  onChange={handleChangeSection}
+                  aria-label="table sections"
                 >
-                  <TableSortLabel
-                    active={sortConfig?.key === column.id}
-                    direction={
-                      sortConfig?.key === column.id
-                        ? sortConfig.direction
-                        : "asc"
-                    }
-                    onClick={() => handleSort(column.id)}
+                  {sections.map((section) => (
+                    <Tab key={section.value} label={section.label} />
+                  ))}
+                </Tabs>
+              </Box>
+            )}
+
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {tableColumns.map(renderTableHeader)}
+                  {customColumns.map((column) => (
+                    <TableCell
+                      key={column.id}
+                      align="right"
+                      sx={{ fontWeight: 700 }}
+                    >
+                      <TableSortLabel
+                        active={sortConfig?.key === column.id}
+                        direction={
+                          sortConfig?.key === column.id
+                            ? sortConfig.direction
+                            : "asc"
+                        }
+                        onClick={() => handleSort(column.id)}
+                      >
+                        {column.label}
+                      </TableSortLabel>
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {displayData.map((row) => (
+                  <TableRow
+                    key={getRowId(row)}
+                    hover={!!onRowClick}
+                    onClick={() => onRowClick?.(row)}
+                    selected={selectedRow === getRowId(row)}
+                    sx={{
+                      cursor: onRowClick ? "pointer" : "default",
+                      "&.Mui-selected, &.Mui-selected:hover": {
+                        backgroundColor: (theme) =>
+                          theme.palette.action.selected,
+                      },
+                    }}
                   >
-                    {column.label}
-                  </TableSortLabel>
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {displayData.map((row) => (
-              <TableRow
-                key={getRowId(row)}
-                hover={!!onRowClick}
-                onClick={() => onRowClick?.(row)}
-                selected={selectedRow === getRowId(row)}
+                    {tableColumns.map((column) => (
+                      <TableCell key={column.key} align={column.align}>
+                        {column.render
+                          ? column.render(row[column.key], row)
+                          : row[column.key]}
+                      </TableCell>
+                    ))}
+                    {customColumns.map((column) => (
+                      <TableCell key={column.id} align="right">
+                        {column.calculate(row).toLocaleString()}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {showPagination && (
+              <TablePagination
+                component="div"
+                count={data.length}
+                page={rowsPerPage === -1 ? 0 : page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={rowsPerPageOptions}
                 sx={{
-                  cursor: onRowClick ? "pointer" : "default",
-                  "&.Mui-selected, &.Mui-selected:hover": {
-                    backgroundColor: (theme) => theme.palette.action.selected,
+                  ".MuiTablePagination-select": {
+                    fontSize: "0.875rem",
+                  },
+                  ".MuiTablePagination-displayedRows": {
+                    fontSize: "0.875rem",
                   },
                 }}
-              >
-                {tableColumns.map((column) => (
-                  <TableCell key={column.key} align={column.align}>
-                    {column.render
-                      ? column.render(row[column.key], row)
-                      : row[column.key]}
-                  </TableCell>
-                ))}
-                {customColumns.map((column) => (
-                  <TableCell key={column.id} align="right">
-                    {column.calculate(row).toLocaleString()}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-
-        {showPagination && (
-          <TablePagination
-            component="div"
-            count={data.length}
-            page={rowsPerPage === -1 ? 0 : page}
-            onPageChange={handleChangePage}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            rowsPerPageOptions={rowsPerPageOptions}
-            sx={{
-              ".MuiTablePagination-select": {
-                fontSize: "0.875rem",
-              },
-              ".MuiTablePagination-displayedRows": {
-                fontSize: "0.875rem",
-              },
-            }}
-            labelDisplayedRows={({ from, to, count }) =>
-              rowsPerPage === -1
-                ? `All ${count} rows`
-                : `${from}–${to} of ${count}`
-            }
-          />
-        )}
-      </TableContainer>
+                labelDisplayedRows={({ from, to, count }) =>
+                  rowsPerPage === -1
+                    ? `All ${count} rows`
+                    : `${from}–${to} of ${count}`
+                }
+              />
+            )}
+          </TableContainer>
+        </>
+      )}
     </Box>
   );
 };

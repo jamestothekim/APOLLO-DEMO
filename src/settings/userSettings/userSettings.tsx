@@ -146,6 +146,11 @@ export const UserSettings = () => {
       last_name: editedValue.name.split(" ")[1],
     };
 
+    // Add logging to track the save process
+    console.log("Attempting to save user settings...");
+    console.log("Current user ID:", user.id);
+    console.log("Updated user data:", updatedUserData);
+
     try {
       await axios.put(
         `${import.meta.env.VITE_API_URL}/users/settings/edit/${user.id}`,
@@ -153,6 +158,7 @@ export const UserSettings = () => {
         { withCredentials: true }
       );
 
+      console.log("User settings saved successfully.");
       await refreshUser();
       showSnackbar("Settings updated successfully", "success");
       setIsEditing(false);
