@@ -11,12 +11,18 @@ import {
   Stack,
   Snackbar,
   Alert,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import {
   CheckCircle as CheckCircleIcon,
   Cancel as XIcon,
+  PersonAdd as PersonAddIcon,
 } from "@mui/icons-material";
-import { useUser } from "../../userContext";
+import axios from "axios";
 
 // Types
 interface User {
@@ -25,6 +31,7 @@ interface User {
   last_name: string;
   email: string;
   role: string;
+  password?: string;
   user_access?: {
     Division?: string;
     Markets?: {
@@ -55,7 +62,7 @@ const UserMaster = () => {
   );
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
-  const { user, updateUser } = useUser();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Fetch users and market data
   useEffect(() => {
@@ -131,43 +138,50 @@ const UserMaster = () => {
     setSidebarOpen(true);
   };
 
+  const handleAdd = () => {
+    setEditingUser({
+      id: 0, // Temporary ID for new user
+      first_name: "",
+      last_name: "",
+      email: "",
+      role: "",
+      user_access: {
+        Division: "",
+        Markets: [],
+        Admin: false,
+      },
+    });
+    setSidebarOpen(true);
+  };
+
   const handleSave = async () => {
     if (!editingUser) return;
+    const isNewUser = editingUser.id === 0;
 
     try {
-      const { user_access, ...basicInfo } = editingUser;
-      const userData = { basicInfo, user_access };
+      const url = isNewUser
+        ? `${import.meta.env.VITE_API_URL}/users/create`
+        : `${import.meta.env.VITE_API_URL}/users/admin/edit/${editingUser.id}`;
 
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/admin/edit/${editingUser.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify(userData),
-        }
+      await axios({
+        method: isNewUser ? "post" : "put",
+        url,
+        data: editingUser,
+        withCredentials: true,
+      });
+
+      await fetchUsers();
+      showSnackbar(
+        `User ${isNewUser ? "created" : "updated"} successfully`,
+        "success"
       );
-
-      if (!response.ok) {
-        throw new Error("Failed to update user");
-      }
-
-      const updatedUser = await response.json();
-      setUsers(
-        users.map((user) => (user.id === editingUser.id ? updatedUser : user))
-      );
-
-      if (editingUser.id === user?.id) {
-        updateUser(updatedUser);
-      }
-
-      showSnackbar("User updated successfully", "success");
-      handleCloseSidebar();
+      setSidebarOpen(false);
     } catch (error) {
-      console.error("Error updating user:", error);
-      showSnackbar("Failed to update user", "error");
+      console.error("Error saving user:", error);
+      showSnackbar(
+        `Failed to ${isNewUser ? "create" : "update"} user`,
+        "error"
+      );
     }
   };
 
@@ -210,6 +224,17 @@ const UserMaster = () => {
         [field]: value,
       });
     }
+  };
+
+  const generatePassword = () => {
+    const length = 12;
+    const charset =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return password;
   };
 
   const columns = [
@@ -273,25 +298,71 @@ const UserMaster = () => {
     },
   ];
 
+  const handleDelete = async () => {
+    if (!editingUser) return;
+
+    try {
+      await axios.delete(
+        `${import.meta.env.VITE_API_URL}/users/delete/${editingUser.id}`,
+        { withCredentials: true }
+      );
+
+      await fetchUsers();
+      showSnackbar("User deleted successfully", "success");
+      setDeleteConfirmOpen(false);
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      showSnackbar("Failed to delete user", "error");
+    }
+  };
+
   return (
     <Box>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<PersonAddIcon />}
+          onClick={handleAdd}
+          sx={{
+            textTransform: "none",
+            borderRadius: "8px",
+          }}
+        >
+          Add User
+        </Button>
+      </Box>
+
       <DynamicTable data={users} columns={columns} onRowClick={handleEdit} />
 
       <QualSidebar
         open={sidebarOpen}
         onClose={handleCloseSidebar}
         width="500px"
-        title="Edit User"
+        title={editingUser?.id === 0 ? "Add New User" : "Edit User"}
         footerButtons={[
+          // Delete button (for existing users)
+          ...(editingUser?.id !== 0
+            ? [
+                {
+                  label: "Delete",
+                  onClick: () => setDeleteConfirmOpen(true),
+                  variant: "outlined" as const,
+                  color: "error" as const,
+                },
+              ]
+            : []),
+          // Standard buttons
           {
             label: "Cancel",
             onClick: handleCloseSidebar,
-            variant: "outlined",
+            variant: "outlined" as const,
           },
           {
-            label: "Save Changes",
+            label: editingUser?.id === 0 ? "Create User" : "Save Changes",
             onClick: handleSave,
-            variant: "contained",
+            variant: "contained" as const,
           },
         ]}
       >
@@ -328,6 +399,29 @@ const UserMaster = () => {
                   onChange={(e) => handleEditChange("email", e.target.value)}
                   fullWidth
                 />
+                {editingUser?.id === 0 && (
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <TextField
+                      label="Generated Password"
+                      size="small"
+                      value={editingUser?.password || ""}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                      fullWidth
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() =>
+                        handleEditChange("password", generatePassword())
+                      }
+                      sx={{ whiteSpace: "nowrap" }}
+                    >
+                      Generate
+                    </Button>
+                  </Box>
+                )}
                 <Autocomplete
                   options={availableRoles}
                   value={editingUser?.role || ""}
@@ -441,6 +535,24 @@ const UserMaster = () => {
           {snackbarMessage}
         </Alert>
       </Snackbar>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete {editingUser?.first_name}{" "}
+          {editingUser?.last_name}? This action cannot be undone.
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleDelete} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

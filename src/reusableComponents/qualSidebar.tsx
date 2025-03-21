@@ -52,9 +52,16 @@ export interface TabConfig {
 export interface FooterButton {
   label: string;
   onClick: () => void;
-  variant?: "text" | "outlined" | "contained";
+  variant: "text" | "outlined" | "contained";
   disabled?: boolean;
-  color?: "inherit" | "primary" | "secondary" | "error";
+  color?:
+    | "inherit"
+    | "primary"
+    | "secondary"
+    | "error"
+    | "info"
+    | "success"
+    | "warning";
 }
 
 export interface SidebarSection {
@@ -206,7 +213,7 @@ const QualSidebar: React.FC<QualSidebarProps> = ({
           {footerButtons.map((button, index) => (
             <Button
               key={index}
-              variant={button.variant || "contained"}
+              variant={button.variant}
               onClick={button.onClick}
               disabled={button.disabled}
               color={button.color || "primary"}

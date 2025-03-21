@@ -146,11 +146,6 @@ export const UserSettings = () => {
       last_name: editedValue.name.split(" ")[1],
     };
 
-    // Add logging to track the save process
-    console.log("Attempting to save user settings...");
-    console.log("Current user ID:", user.id);
-    console.log("Updated user data:", updatedUserData);
-
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/users/settings/edit/${user.id}`,
@@ -167,10 +162,6 @@ export const UserSettings = () => {
         }
       );
       if (!response.ok) throw new Error("Failed to update settings");
-
-      // Add this to see what's being returned
-      const updatedData = await response.json();
-      console.log("Response from server:", updatedData);
 
       await refreshUser();
       showSnackbar("Settings updated successfully", "success");
