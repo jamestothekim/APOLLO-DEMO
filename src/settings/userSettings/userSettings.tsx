@@ -168,7 +168,10 @@ export const UserSettings = () => {
       );
       if (!response.ok) throw new Error("Failed to update settings");
 
-      console.log("User settings saved successfully.");
+      // Add this to see what's being returned
+      const updatedData = await response.json();
+      console.log("Response from server:", updatedData);
+
       await refreshUser();
       showSnackbar("Settings updated successfully", "success");
       setIsEditing(false);

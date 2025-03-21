@@ -115,6 +115,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
         `${import.meta.env.VITE_API_URL}/users/check-session`,
         { withCredentials: true }
       );
+      console.log("Refresh user response:", response.data);
       setUser(response.data.user);
     } catch (error) {
       console.error("Failed to refresh user:", error);
