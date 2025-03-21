@@ -175,7 +175,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 }) => {
   const { user } = useUser();
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
@@ -204,7 +203,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   const [comment, setComment] = useState(selectedComment || "");
 
-  // Update the loadForecastData to include logging
+  // Update the loadForecastData function
   const loadForecastData = useMemo(
     () => async () => {
       if (selectedMarkets.length === 0 || selectedBrands.length === 0) {
@@ -213,8 +212,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       }
 
       try {
-        setIsLoading(true);
-
         const [response, loggedChanges] = await Promise.all([
           fetch(
             `${import.meta.env.VITE_API_URL}/volume/depletions-forecast?` +
@@ -234,8 +231,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         setForecastData(nonZeroData);
       } catch (error) {
         console.error("Error loading forecast data:", error);
-      } finally {
-        setIsLoading(false);
       }
     },
     [selectedMarkets, selectedBrands]
@@ -746,7 +741,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         rowsPerPage={rowsPerPage}
         onRowsPerPageChange={handleChangeRowsPerPage}
         rowsPerPageOptions={[10, 15, 25, 50, { value: -1, label: "All" }]}
-        loading={isLoading}
       />
 
       <Box

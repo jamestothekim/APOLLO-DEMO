@@ -14,10 +14,13 @@ import {
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { useUser } from "../userContext";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export const Login: React.FC = () => {
   const theme = useTheme();
   const { login, isLoggedIn } = useUser();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -59,7 +62,10 @@ export const Login: React.FC = () => {
           message: "Login successful!",
           severity: "success",
         });
-        localStorage.setItem("isAuthenticated", "true");
+
+        // Get the intended destination or default to "/"
+        const from = (location.state as any)?.from?.pathname || "/";
+        navigate(from, { replace: true });
       } else {
         setNotification({
           open: true,
@@ -71,8 +77,7 @@ export const Login: React.FC = () => {
       console.error("Login error:", error);
       setNotification({
         open: true,
-        message:
-          "An error occurred during login. Please check your connection and try again.",
+        message: "An error occurred during login",
         severity: "error",
       });
     } finally {

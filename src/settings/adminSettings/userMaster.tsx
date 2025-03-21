@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 import { DynamicTable } from "../../reusableComponents/dynamicTable";
 import QualSidebar from "../../reusableComponents/qualSidebar";
 import {
@@ -67,10 +66,17 @@ const UserMaster = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/users/users`
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/users/users`,
+        {
+          credentials: "include",
+        }
       );
-      setUsers(response.data);
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      const data = await response.json();
+      setUsers(data);
     } catch (error) {
       console.error("Error fetching users:", error);
       showSnackbar("Failed to fetch users", "error");
@@ -79,10 +85,17 @@ const UserMaster = () => {
 
   const fetchMarkets = async () => {
     try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/admin/get-states`
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/admin/get-states`,
+        {
+          credentials: "include",
+        }
       );
-      const formattedMarkets = response.data.map((market: any) => ({
+      if (!response.ok) {
+        throw new Error("Failed to fetch markets");
+      }
+      const data = await response.json();
+      const formattedMarkets = data.map((market: any) => ({
         id: market.id,
         market: market.market_name,
         market_code: market.market_code,
@@ -96,11 +109,18 @@ const UserMaster = () => {
 
   const fetchAccessRoles = async () => {
     try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/util/get-access-roles`
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/util/get-access-roles`,
+        {
+          credentials: "include",
+        }
       );
-      setAvailableRoles(response.data.roles);
-      setAvailableDivisions(response.data.divisions);
+      if (!response.ok) {
+        throw new Error("Failed to fetch access roles");
+      }
+      const data = await response.json();
+      setAvailableRoles(data.roles);
+      setAvailableDivisions(data.divisions);
     } catch (error) {
       console.error("Error fetching access roles:", error);
     }
@@ -118,17 +138,29 @@ const UserMaster = () => {
       const { user_access, ...basicInfo } = editingUser;
       const userData = { basicInfo, user_access };
 
-      const response = await axios.put(
+      const response = await fetch(
         `${import.meta.env.VITE_API_URL}/users/admin/edit/${editingUser.id}`,
-        userData
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(userData),
+        }
       );
 
+      if (!response.ok) {
+        throw new Error("Failed to update user");
+      }
+
+      const updatedUser = await response.json();
       setUsers(
-        users.map((user) => (user.id === editingUser.id ? editingUser : user))
+        users.map((user) => (user.id === editingUser.id ? updatedUser : user))
       );
 
       if (editingUser.id === user?.id) {
-        updateUser(response.data);
+        updateUser(updatedUser);
       }
 
       showSnackbar("User updated successfully", "success");

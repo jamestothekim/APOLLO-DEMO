@@ -26,7 +26,10 @@ export const MarketMaster = () => {
     const fetchData = async () => {
       try {
         const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/admin/market-master`
+          `${import.meta.env.VITE_API_URL}/admin/market-master`,
+          {
+            withCredentials: true,
+          }
         );
         const processedData = response.data.map((row: MarketData) => ({
           ...row,
@@ -65,6 +68,9 @@ export const MarketMaster = () => {
         {
           market_code: editedMarket.market_code,
           managed_by: editedMarket.settings?.managed_by,
+        },
+        {
+          withCredentials: true,
         }
       );
 

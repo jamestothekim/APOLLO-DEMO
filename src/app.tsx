@@ -12,7 +12,7 @@ import { Rates } from "./rates/rates";
 import ProfitModel from "./profitModel/profitModel";
 import { SettingsContainer } from "./settings/settingsContainer";
 import { Login } from "./login/login";
-import { UserProvider, useUser } from "./userContext";
+import { UserProvider, ProtectedRoute } from "./userContext";
 
 const drawerWidth = 240;
 
@@ -75,20 +75,18 @@ const AppLayout = () => {
 };
 
 const AppContent = () => {
-  const { isLoggedIn } = useUser();
-  // We'll still check localStorage for initial state on page refresh
-  const storedAuthState = localStorage.getItem("isAuthenticated") === "true";
-
-  // Show login if not logged in
-  if (!isLoggedIn && !storedAuthState) {
-    return <Login />;
-  }
-
-  // Otherwise show the main app
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/*" element={<AppLayout />} />
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

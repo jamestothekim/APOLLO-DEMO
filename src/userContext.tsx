@@ -1,4 +1,13 @@
-import React, { createContext, useState, useContext, ReactNode } from "react";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  ReactNode,
+  useEffect,
+} from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { CircularProgress, Box } from "@mui/material";
+import axios from "axios";
 
 export interface MarketAccess {
   id: number;
@@ -48,17 +57,76 @@ interface UserContextType {
   isLoggedIn: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  checkSession: () => Promise<boolean>;
+  isCheckingSession: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 export const UserContext = createContext<UserContextType | undefined>(
   undefined
 );
 
+const SESSION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+
+interface ProtectedRouteProps {
+  children: ReactNode;
+}
+
 export const UserProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+
+  const checkSession = async (): Promise<boolean> => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/users/check-session`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+        setIsLoggedIn(true);
+        return true;
+      } else {
+        setUser(null);
+        setIsLoggedIn(false);
+        localStorage.removeItem("isAuthenticated");
+        return false;
+      }
+    } catch (error) {
+      console.error("Session check error:", error);
+      alert("Failed to check session. Please ensure the server is running.");
+      // Don't update state on network errors to prevent logout on temporary issues
+      return false;
+    } finally {
+      setIsCheckingSession(false);
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/users/check-session`,
+        { withCredentials: true }
+      );
+      setUser(response.data.user);
+    } catch (error) {
+      console.error("Failed to refresh user:", error);
+    }
+  };
+
+  // Initial session check and periodic checks
+  useEffect(() => {
+    checkSession();
+    const intervalId = setInterval(checkSession, SESSION_CHECK_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -76,10 +144,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
 
       if (response.ok) {
         const data = await response.json();
-        console.log("Login response data:", data);
-        console.log("User access markets:", data.user.user_access.Markets);
         setUser(data.user);
         setIsLoggedIn(true);
+        localStorage.setItem("isAuthenticated", "true");
         return true;
       } else {
         return false;
@@ -90,10 +157,24 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setIsLoggedIn(false);
-    console.log("User logged out");
+  const logout = async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/users/logout`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+
+      if (response.ok) {
+        setUser(null);
+        setIsLoggedIn(false);
+        localStorage.removeItem("isAuthenticated");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
   const value = {
@@ -102,9 +183,40 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
     isLoggedIn,
     login,
     logout,
+    checkSession,
+    isCheckingSession,
+    refreshUser,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+};
+
+// Protected Route component integrated into the same file
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { isLoggedIn, isCheckingSession } = useUser();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isCheckingSession && !isLoggedIn) {
+      navigate("/login", { state: { from: location }, replace: true });
+    }
+  }, [isCheckingSession, isLoggedIn, navigate, location]);
+
+  if (isCheckingSession) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return isLoggedIn ? <>{children}</> : null;
 };
 
 export const useUser = (): UserContextType => {

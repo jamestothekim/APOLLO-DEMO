@@ -62,7 +62,6 @@ export interface DynamicTableProps {
   onAddCustomColumn?: (type: CustomColumnType) => void;
   onRemoveCustomColumn?: (columnId: string) => void;
   showPagination?: boolean;
-  loading?: boolean;
   expandableRows?: boolean;
   renderExpanded?: (row: any) => React.ReactNode;
   dense?: boolean;

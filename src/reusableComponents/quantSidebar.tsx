@@ -139,7 +139,7 @@ export const QuantSidebar = ({
           ...prev.months,
           [month]: {
             ...prev.months[month],
-            value: numValue,
+            value: Math.round(numValue * 10) / 10,
             isManuallyModified: true,
           },
         },
@@ -161,7 +161,6 @@ export const QuantSidebar = ({
       try {
         onSave(editedData);
         setHasChanges(false);
-        console.log("Changes saved successfully");
       } catch (error) {
         console.error("Error saving changes:", error);
       }

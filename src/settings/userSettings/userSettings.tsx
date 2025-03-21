@@ -31,7 +31,7 @@ interface UserDataType {
 }
 
 export const UserSettings = () => {
-  const { user } = useUser();
+  const { user, refreshUser } = useUser();
   const [isEditing, setIsEditing] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -132,12 +132,6 @@ export const UserSettings = () => {
     },
   ];
 
-  // Log the data being passed to DynamicForm
-  console.log("DynamicForm Props:", {
-    fields: userFields,
-    data: userData,
-  });
-
   const handleEdit = () => {
     setEditedValue({ ...userData });
     setIsEditing(true);
@@ -146,13 +140,22 @@ export const UserSettings = () => {
   const handleSave = async () => {
     if (!user) return;
 
+    const updatedUserData = {
+      ...editedValue,
+      first_name: editedValue.name.split(" ")[0],
+      last_name: editedValue.name.split(" ")[1],
+    };
+
     try {
       await axios.put(
         `${import.meta.env.VITE_API_URL}/users/settings/edit/${user.id}`,
-        user
+        updatedUserData,
+        { withCredentials: true }
       );
 
+      await refreshUser();
       showSnackbar("Settings updated successfully", "success");
+      setIsEditing(false);
     } catch (error) {
       console.error("Error updating settings:", error);
       showSnackbar("Failed to update settings", "error");
@@ -168,7 +171,8 @@ export const UserSettings = () => {
           userId: user.id,
           currentPassword,
           newPassword,
-        }
+        },
+        { withCredentials: true }
       );
 
       setPasswordDialogOpen(false);

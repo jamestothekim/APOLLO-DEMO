@@ -32,7 +32,6 @@ export const DashboardContainer = () => {
         );
         if (!response.ok) throw new Error("Failed to fetch dashboard data");
         const result = await response.json();
-        console.log("Dashboard Data:", result);
         setData(result);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);

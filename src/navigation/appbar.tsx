@@ -1,15 +1,20 @@
 import { AppBar, IconButton, Toolbar, Typography, Box } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import LogoutIcon from "@mui/icons-material/Logout";
+import { useUser } from "../userContext";
+import { useNavigate } from "react-router-dom";
 
 interface AppBarProps {
   toggleSidebar: () => void;
 }
 
 export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
-  const handleLogout = () => {
-    localStorage.removeItem("isAuthenticated");
-    window.location.reload();
+  const { logout } = useUser();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
   };
 
   return (
