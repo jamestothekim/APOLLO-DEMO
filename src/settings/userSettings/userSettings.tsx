@@ -152,11 +152,21 @@ export const UserSettings = () => {
     console.log("Updated user data:", updatedUserData);
 
     try {
-      await axios.put(
+      const response = await fetch(
         `${import.meta.env.VITE_API_URL}/users/settings/edit/${user.id}`,
-        updatedUserData,
-        { withCredentials: true }
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            ...updatedUserData,
+            currentUser: user,
+          }),
+        }
       );
+      if (!response.ok) throw new Error("Failed to update settings");
 
       console.log("User settings saved successfully.");
       await refreshUser();
