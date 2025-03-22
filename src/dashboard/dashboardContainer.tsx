@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Box, Paper, CircularProgress } from "@mui/material";
+import { Box, Paper } from "@mui/material";
 import { ForecastByBrand } from "./forecastByBrand";
+import { LoadingProgress } from "../reusableComponents/loadingProgress";
 
 interface DashboardData {
   brand: string;
@@ -21,11 +22,10 @@ interface DashboardData {
 
 export const DashboardContainer = () => {
   const [data, setData] = useState<DashboardData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      setIsLoading(true);
       try {
         const response = await fetch(
           `${import.meta.env.VITE_API_URL}/analytics/dashboard`
@@ -35,8 +35,6 @@ export const DashboardContainer = () => {
         setData(result);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -44,26 +42,22 @@ export const DashboardContainer = () => {
   }, []);
 
   return (
-    <Paper elevation={3}>
-      <Box sx={{ p: 4 }}>
-        {isLoading ? (
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              minHeight: "200px",
-            }}
-          >
-            <CircularProgress />
+    <Box sx={{ position: "relative" }}>
+      {isLoading && (
+        <Box sx={{ height: "80vh" }}>
+          <LoadingProgress onComplete={() => setIsLoading(false)} />
+        </Box>
+      )}
+      <Box sx={{ visibility: isLoading ? "hidden" : "visible" }}>
+        <Paper elevation={3}>
+          <Box sx={{ p: 4 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <ForecastByBrand data={data} />
+              {/* Add more dashboard components here as needed */}
+            </Box>
           </Box>
-        ) : (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <ForecastByBrand data={data} />
-            {/* Add more dashboard components here as needed */}
-          </Box>
-        )}
+        </Paper>
       </Box>
-    </Paper>
+    </Box>
   );
 };

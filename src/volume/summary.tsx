@@ -12,7 +12,6 @@ import {
   useTheme,
   OutlinedInput,
   Chip,
-  CircularProgress,
 } from "@mui/material";
 import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
 import {
@@ -53,7 +52,11 @@ const DEFAULT_SELECTED_BRANDS = [
   "Monkey Shoulder",
 ];
 
-export const Summary = () => {
+interface SummaryProps {
+  onLoadingComplete?: () => void;
+}
+
+export const Summary = ({ onLoadingComplete }: SummaryProps) => {
   const [forecastMethod, setForecastMethod] = useState("flat");
   const [data, setData] = useState<SummaryData[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -64,7 +67,6 @@ export const Summary = () => {
     DEFAULT_SELECTED_BRANDS
   );
   const [isBrandsLoading, setIsBrandsLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -83,13 +85,44 @@ export const Summary = () => {
       }
     };
 
-    fetchBrands();
-  }, []);
-
-  useEffect(() => {
     const fetchData = async () => {
       try {
-        setIsLoading(true);
+        const response = await fetch(
+          `${
+            import.meta.env.VITE_API_URL
+          }/volume/summary-forecast?forecastMethod=${forecastMethod}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch data");
+        const result = await response.json();
+        console.log(result);
+
+        const filteredResult = result.filter((row: SummaryData) =>
+          DEFAULT_SELECTED_BRANDS.includes(row.brand)
+        );
+
+        const dataWithIds = filteredResult.map((row: SummaryData) => ({
+          ...row,
+          id: row.brand,
+        }));
+
+        setData(dataWithIds);
+      } catch (error) {
+        console.error("Error fetching summary data:", error);
+      }
+    };
+
+    // Run both fetches in parallel when component mounts
+    Promise.all([fetchBrands(), fetchData()]).finally(() => {
+      onLoadingComplete?.();
+    });
+  }, []); // Only run on mount
+
+  // Separate effect for handling forecast method changes
+  useEffect(() => {
+    if (!forecastMethod) return;
+
+    const fetchData = async () => {
+      try {
         const response = await fetch(
           `${
             import.meta.env.VITE_API_URL
@@ -98,7 +131,6 @@ export const Summary = () => {
         if (!response.ok) throw new Error("Failed to fetch data");
         const result = await response.json();
 
-        // Filter the data based on selected brands
         const filteredResult = result.filter((row: SummaryData) =>
           selectedBrands.includes(row.brand)
         );
@@ -111,14 +143,10 @@ export const Summary = () => {
         setData(dataWithIds);
       } catch (error) {
         console.error("Error fetching summary data:", error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    if (selectedBrands.length > 0) {
-      fetchData();
-    }
+    fetchData();
   }, [forecastMethod, selectedBrands]);
 
   const handleMethodChange = (event: SelectChangeEvent) => {
@@ -287,183 +315,166 @@ export const Summary = () => {
 
   return (
     <Paper elevation={3}>
-      {isLoading ? (
+      <Box sx={{ display: "flex", flexDirection: "column" }}>
         <Box
           sx={{
             display: "flex",
-            justifyContent: "center",
+            justifyContent: "space-between",
             alignItems: "center",
-            height: "100%",
+            p: 2,
+            borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
           }}
         >
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Box sx={{ display: "flex", flexDirection: "column" }}>
-          <Box
+          <Typography
+            variant="h6"
             sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              p: 2,
-              borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
+              fontWeight: 500,
+              color: (theme) => theme.palette.primary.main,
             }}
           >
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 500,
-                color: (theme) => theme.palette.primary.main,
-              }}
-            >
-              SUMMARY FORECAST
-            </Typography>
-            <IconButton
-              onClick={() => setIsMinimized(!isMinimized)}
-              size="small"
-              sx={{ ml: 2 }}
-            >
-              {isMinimized ? (
-                <KeyboardArrowDownIcon />
-              ) : (
-                <KeyboardArrowUpIcon />
-              )}
-            </IconButton>
-          </Box>
-
-          <Box
-            sx={{
-              display: isMinimized ? "none" : "flex",
-              flexDirection: "column",
-              gap: 2,
-            }}
+            SUMMARY FORECAST
+          </Typography>
+          <IconButton
+            onClick={() => setIsMinimized(!isMinimized)}
+            size="small"
+            sx={{ ml: 2 }}
           >
-            <Box sx={{ p: 2, display: "flex", gap: 2 }}>
-              <FormControl sx={{ minWidth: 200 }}>
-                <InputLabel id="forecast-method-label">
-                  Forecast Method
-                </InputLabel>
-                <Select
-                  labelId="forecast-method-label"
-                  value={forecastMethod}
-                  label="Forecast Method"
-                  onChange={handleMethodChange}
-                >
-                  {FORECAST_OPTIONS.map((option) => (
-                    <MenuItem key={option.id} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl sx={{ minWidth: 300 }}>
-                <InputLabel id="brand-select-label">Brands</InputLabel>
-                <Select
-                  labelId="brand-select-label"
-                  multiple
-                  value={selectedBrands}
-                  onChange={handleBrandChange}
-                  input={<OutlinedInput label="Brands" />}
-                  disabled={isBrandsLoading}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => (
-                        <Chip
-                          key={value}
-                          label={value}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          sx={{
-                            borderRadius: "16px",
-                            backgroundColor: "transparent",
-                            "& .MuiChip-label": {
-                              px: 1,
-                            },
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  )}
-                >
-                  {availableBrands.map((brand) => (
-                    <MenuItem key={brand} value={brand}>
-                      {brand}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-
-            <Box sx={{ px: 2 }}>
-              <Toolbox
-                tools={["columns", "export", "viewToggle"]}
-                onUndo={dummyUndo}
-                onColumns={handleColumns}
-                onExport={handleExport}
-                onViewToggle={() =>
-                  setViewType(viewType === "table" ? "graph" : "table")
-                }
-                canUndo={false}
-                viewType={viewType}
-              />
-            </Box>
-
-            {viewType === "table" ? (
-              <DynamicTable
-                data={data}
-                columns={columns}
-                loading={isLoading}
-                rowsPerPageOptions={[10, 20, 25, 50]}
-                getRowId={(row) => row.id}
-                selectedRow={null}
-              />
-            ) : (
-              <Box sx={{ width: "100%", height: 400, p: 2 }}>
-                <LineChart
-                  xAxis={[
-                    {
-                      data: [
-                        "Jan",
-                        "Feb",
-                        "Mar",
-                        "Apr",
-                        "May",
-                        "Jun",
-                        "Jul",
-                        "Aug",
-                        "Sep",
-                        "Oct",
-                        "Nov",
-                        "Dec",
-                      ],
-                      scaleType: "band",
-                      label: "Months",
-                      labelStyle: {
-                        fill: theme.palette.primary.main,
-                      },
-                      tickLabelStyle: {
-                        fill: theme.palette.text.primary,
-                      },
-                    },
-                  ]}
-                  series={series}
-                  height={350}
-                  margin={{ left: 90, right: 20, top: 50, bottom: 30 }}
-                  slotProps={{
-                    legend: {
-                      direction: "row",
-                      position: { vertical: "top", horizontal: "middle" },
-                      padding: 0,
-                    },
-                  }}
-                />
-              </Box>
-            )}
-          </Box>
+            {isMinimized ? <KeyboardArrowDownIcon /> : <KeyboardArrowUpIcon />}
+          </IconButton>
         </Box>
-      )}
+
+        <Box
+          sx={{
+            display: isMinimized ? "none" : "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
+          <Box sx={{ p: 2, display: "flex", gap: 2 }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel id="forecast-method-label">
+                Forecast Method
+              </InputLabel>
+              <Select
+                labelId="forecast-method-label"
+                value={forecastMethod}
+                label="Forecast Method"
+                onChange={handleMethodChange}
+              >
+                {FORECAST_OPTIONS.map((option) => (
+                  <MenuItem key={option.id} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl sx={{ minWidth: 300 }}>
+              <InputLabel id="brand-select-label">Brands</InputLabel>
+              <Select
+                labelId="brand-select-label"
+                multiple
+                value={selectedBrands}
+                onChange={handleBrandChange}
+                input={<OutlinedInput label="Brands" />}
+                disabled={isBrandsLoading}
+                renderValue={(selected) => (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {selected.map((value) => (
+                      <Chip
+                        key={value}
+                        label={value}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{
+                          borderRadius: "16px",
+                          backgroundColor: "transparent",
+                          "& .MuiChip-label": {
+                            px: 1,
+                          },
+                        }}
+                      />
+                    ))}
+                  </Box>
+                )}
+              >
+                {availableBrands.map((brand) => (
+                  <MenuItem key={brand} value={brand}>
+                    {brand}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          <Box sx={{ px: 2 }}>
+            <Toolbox
+              tools={["columns", "export", "viewToggle"]}
+              onUndo={dummyUndo}
+              onColumns={handleColumns}
+              onExport={handleExport}
+              onViewToggle={() =>
+                setViewType(viewType === "table" ? "graph" : "table")
+              }
+              canUndo={false}
+              viewType={viewType}
+            />
+          </Box>
+
+          {viewType === "table" ? (
+            <DynamicTable
+              data={data}
+              columns={columns}
+              loading={false}
+              rowsPerPageOptions={[10, 20, 25, 50]}
+              getRowId={(row) => row.id}
+              selectedRow={null}
+            />
+          ) : (
+            <Box sx={{ width: "100%", height: 400, p: 2 }}>
+              <LineChart
+                xAxis={[
+                  {
+                    data: [
+                      "Jan",
+                      "Feb",
+                      "Mar",
+                      "Apr",
+                      "May",
+                      "Jun",
+                      "Jul",
+                      "Aug",
+                      "Sep",
+                      "Oct",
+                      "Nov",
+                      "Dec",
+                    ],
+                    scaleType: "band",
+                    label: "Months",
+                    labelStyle: {
+                      fill: theme.palette.primary.main,
+                    },
+                    tickLabelStyle: {
+                      fill: theme.palette.text.primary,
+                    },
+                  },
+                ]}
+                series={series}
+                height={350}
+                margin={{ left: 90, right: 20, top: 50, bottom: 30 }}
+                slotProps={{
+                  legend: {
+                    direction: "row",
+                    position: { vertical: "top", horizontal: "middle" },
+                    padding: 0,
+                  },
+                }}
+              />
+            </Box>
+          )}
+        </Box>
+      </Box>
     </Paper>
   );
 };
