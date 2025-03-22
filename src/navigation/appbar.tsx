@@ -67,7 +67,7 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
           }}
         />
         <Tooltip
-          title={`Pre-release 1 includes personal and admin settings, volume forecasting, undo, and saving your work. Initial work on dashboarding and visualizations has commenced but will be further developed.`}
+          title={`Pre-release 1 includes personal and admin settings, volume forecasting by market and customer, undo changes, and saving your work. Initial work on dashboarding and visualizations has commenced but will be further developed.`}
           arrow
         >
           <IconButton size="small" sx={{ ml: 0.5 }}>
