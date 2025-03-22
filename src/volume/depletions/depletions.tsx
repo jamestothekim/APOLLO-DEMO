@@ -38,6 +38,8 @@ export interface ExtendedForecastData {
   id: string;
   market_id: string;
   market_name: string;
+  customer_id?: string;
+  customer_name?: string;
   product: string;
   brand: string;
   variant: string;
@@ -65,6 +67,7 @@ export interface FilterSelectionProps {
   selectedMarkets: string[];
   selectedBrands: string[];
   marketMetadata: MarketData[];
+  isCustomerView?: boolean;
   onUndo?: (handler: () => Promise<void>) => void;
   onExport?: (handler: () => void) => void;
 }
@@ -83,20 +86,25 @@ const fetchLoggedForecastChanges = async () => {
   }
 };
 
-// Update the processRawData function to better handle Redis data
+// Update the processRawData function to include customer info
 const processRawData = (
   data: any[],
-  loggedChanges: any[] = []
+  loggedChanges: any[] = [],
+  isCustomerView: boolean
 ): ExtendedForecastData[] => {
-  // Group data by market and size_pack combination
+  // Group data by market/customer and size_pack combination
   const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
-    const key = `${item.market_id}-${item.size_pack}`;
+    const key = isCustomerView
+      ? `${item.customer_id}-${item.size_pack}`
+      : `${item.market_id}-${item.size_pack}`;
 
     if (!acc[key]) {
       acc[key] = {
         id: key,
         market_id: item.market_id,
         market_name: item.market,
+        customer_id: item.customer_id,
+        customer_name: item.customer, // Use the customer field from raw data
         product: item.size_pack,
         brand: item.brand,
         variant: item.variant,
@@ -170,6 +178,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   selectedMarkets,
   selectedBrands,
   marketMetadata,
+  isCustomerView,
   onUndo,
   onExport,
 }) => {
@@ -217,7 +226,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             `${import.meta.env.VITE_API_URL}/volume/depletions-forecast?` +
               `markets=${JSON.stringify(selectedMarkets)}` +
               `&brands=${JSON.stringify(selectedBrands)}` +
-              `&method=flat`
+              `&method=flat` +
+              `&isMarketView=${!isCustomerView}` +
+              `&customers=${
+                isCustomerView
+                  ? JSON.stringify(
+                      selectedMarkets.map((id) => id.replace("C.", ""))
+                    )
+                  : "[]"
+              }`
           ),
           fetchLoggedForecastChanges(),
         ]);
@@ -225,15 +242,19 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         if (!response.ok) throw new Error("Failed to fetch forecast data");
 
         const rawData = await response.json();
-        console.log("Raw data here!:", rawData);
-        const processedData = processRawData(rawData, loggedChanges);
+
+        const processedData = processRawData(
+          rawData,
+          loggedChanges,
+          isCustomerView ?? false
+        );
         const nonZeroData = processedData.filter(hasNonZeroTotal);
         setForecastData(nonZeroData);
       } catch (error) {
         console.error("Error loading forecast data:", error);
       }
     },
-    [selectedMarkets, selectedBrands]
+    [selectedMarkets, selectedBrands, isCustomerView]
   );
 
   // Use loadForecastData in useEffect
@@ -512,7 +533,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       {
         key: "market",
         header: "MARKET",
-        align: "left",
+        align: "left" as const,
         render: (_: any, row: ExtendedForecastData) => {
           const { user } = useUser();
           const marketInfo = user?.user_access?.Markets?.find(
@@ -521,15 +542,27 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           return marketInfo?.market || row.market_name;
         },
       },
+      // Add customer column when in customer view
+      ...(isCustomerView
+        ? [
+            {
+              key: "customer",
+              header: "CUSTOMER",
+              align: "left" as const,
+              render: (_: any, row: ExtendedForecastData) =>
+                row.customer_name || "-",
+            },
+          ]
+        : []),
       {
         key: "product",
         header: "PRODUCT",
-        align: "left",
+        align: "left" as const,
       },
       {
         key: "forecastLogic",
         header: "LOGIC",
-        align: "left",
+        align: "left" as const,
         render: (value: string, row: ExtendedForecastData) => (
           <Select
             value={value}
@@ -616,7 +649,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       {
         key: "total",
         header: "TOTAL",
-        align: "right",
+        align: "right" as const,
         render: (_: any, row: ExtendedForecastData) =>
           (Math.round(calculateTotal(row.months) * 10) / 10).toLocaleString(
             undefined,
@@ -650,7 +683,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           ]
         : []),
     ],
-    [forecastData]
+    [forecastData, isCustomerView]
   );
 
   const handleSaveClick = async () => {
@@ -766,6 +799,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         onSave={handleSidebarSave}
         onForecastLogicChange={handleSidebarForecastChange}
         forecastOptions={FORECAST_OPTIONS}
+        isCustomerView={isCustomerView}
       />
 
       <Dialog

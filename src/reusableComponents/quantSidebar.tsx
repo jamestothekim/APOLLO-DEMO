@@ -31,6 +31,7 @@ interface QuantSidebarProps {
   onSave: (data: ExtendedForecastData) => void;
   onForecastLogicChange: (newLogic: string) => Promise<void>;
   forecastOptions: Array<{ id: number; label: string; value: string }>;
+  isCustomerView?: boolean;
 }
 
 export const QuantSidebar = ({
@@ -40,6 +41,7 @@ export const QuantSidebar = ({
   onSave,
   onForecastLogicChange,
   forecastOptions,
+  isCustomerView,
 }: QuantSidebarProps) => {
   const [editedData, setEditedData] = useState<ExtendedForecastData | null>(
     null
@@ -93,7 +95,9 @@ export const QuantSidebar = ({
     const baseData = [
       {
         id: "forecast",
-        label: `${editedData.market_name} - ${editedData.product}`,
+        label: `${
+          isCustomerView ? editedData.customer_name : editedData.market_name
+        } - ${editedData.product}`,
         data: Object.entries(editedData.months).map(([month, data]) => ({
           month,
           value: data.value,
@@ -112,7 +116,13 @@ export const QuantSidebar = ({
       }));
 
     return [...baseData, ...selectedTrendLineData];
-  }, [editedData, trendLines, selectedTrendLines, theme.palette.primary.main]);
+  }, [
+    editedData,
+    trendLines,
+    selectedTrendLines,
+    theme.palette.primary.main,
+    isCustomerView,
+  ]);
 
   useEffect(() => {
     setEditedData(selectedData || null);
@@ -207,8 +217,14 @@ export const QuantSidebar = ({
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-              <Typography sx={{ fontWeight: 700 }}>Market:</Typography>
-              <Typography>{editedData?.market_name}</Typography>
+              <Typography sx={{ fontWeight: 700 }}>
+                {isCustomerView ? "Customer:" : "Market:"}
+              </Typography>
+              <Typography>
+                {isCustomerView
+                  ? editedData?.customer_name
+                  : editedData?.market_name}
+              </Typography>
             </Box>
           </Grid>
 

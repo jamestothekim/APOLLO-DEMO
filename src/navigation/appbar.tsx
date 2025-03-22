@@ -1,6 +1,15 @@
-import { AppBar, IconButton, Toolbar, Typography, Box } from "@mui/material";
+import {
+  AppBar,
+  IconButton,
+  Toolbar,
+  Typography,
+  Box,
+  Chip,
+  Tooltip,
+} from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import LogoutIcon from "@mui/icons-material/Logout";
+import InfoIcon from "@mui/icons-material/Info";
 import { useUser } from "../userContext";
 import { useNavigate } from "react-router-dom";
 
@@ -42,19 +51,37 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
           variant="h6"
           noWrap
           component="div"
-          sx={{ color: (theme) => theme.palette.text.primary, flexGrow: 1 }}
+          sx={{ color: (theme) => theme.palette.text.primary }}
         >
           APOLLO
         </Typography>
-        <Box sx={{ flexGrow: 0 }}>
-          <IconButton
-            aria-label="logout"
-            onClick={handleLogout}
-            sx={{ color: (theme) => theme.palette.text.primary }}
-          >
-            <LogoutIcon />
+        <Chip
+          label="PRE-RELEASE"
+          size="small"
+          sx={{
+            ml: 1,
+            border: (theme) => `1px solid ${theme.palette.primary.main}`,
+            borderRadius: "16px",
+            backgroundColor: "transparent",
+            color: (theme) => theme.palette.primary.main,
+          }}
+        />
+        <Tooltip
+          title={`Pre-release 1 includes personal and admin settings, volume forecasting, undo, and saving your work. Initial work on dashboarding and visualizations has commenced but will be further developed.`}
+          arrow
+        >
+          <IconButton size="small" sx={{ ml: 0.5 }}>
+            <InfoIcon fontSize="small" color="primary" />
           </IconButton>
-        </Box>
+        </Tooltip>
+        <Box sx={{ flexGrow: 1 }} />
+        <IconButton
+          aria-label="logout"
+          onClick={handleLogout}
+          sx={{ color: (theme) => theme.palette.text.primary }}
+        >
+          <LogoutIcon />
+        </IconButton>
       </Toolbar>
     </AppBar>
   );

@@ -58,7 +58,7 @@ export interface MarketData {
 }
 
 // Add after MarketData interface
-interface DistributorData {
+interface CustomerData {
   id: string;
   code: string;
   display: string;
@@ -80,7 +80,7 @@ export const VolumeForecast: React.FC = () => {
 
   // Add new state for market data
   const [marketData, setMarketData] = useState<MarketData[]>([]);
-  const [isDistributorView, setIsDistributorView] = useState(false);
+  const [isCustomerView, setIsCustomerView] = useState(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -165,7 +165,7 @@ export const VolumeForecast: React.FC = () => {
   };
 
   // Update the filteredData mapping
-  const filteredData: (MarketData | DistributorData)[] = isDistributorView
+  const filteredData: (MarketData | CustomerData)[] = isCustomerView
     ? marketData
         .filter((market) => market.settings?.managed_by === "Customer")
         .flatMap((market) =>
@@ -179,13 +179,13 @@ export const VolumeForecast: React.FC = () => {
     : marketData.filter((market) => market.settings?.managed_by === "Market");
 
   const handleViewToggle = () => {
-    setIsDistributorView(!isDistributorView);
+    setIsCustomerView(!isCustomerView);
     setSelectedMarkets([]);
   };
 
-  const isDistributorData = (
-    item: MarketData | DistributorData
-  ): item is DistributorData => {
+  const isCustomerData = (
+    item: MarketData | CustomerData
+  ): item is CustomerData => {
     return "raw" in item;
   };
 
@@ -268,7 +268,7 @@ export const VolumeForecast: React.FC = () => {
                   fontSize: "0.875rem",
                 }}
               >
-                {isDistributorView ? "Distributor:" : "Market:"}
+                {isCustomerView ? "Customer:" : "Market:"}
               </Typography>
               <FormControl sx={{ minWidth: "300px", flex: 1 }}>
                 <Select
@@ -294,30 +294,30 @@ export const VolumeForecast: React.FC = () => {
                           <Chip
                             key={value}
                             label={
-                              isDistributorView
+                              isCustomerView
                                 ? getCleanCustomerName(
                                     filteredData.find(
                                       (item) =>
-                                        isDistributorData(item) &&
+                                        isCustomerData(item) &&
                                         item.code === value
                                     )?.raw || value
                                   )
                                 : filteredData.find(
                                     (item) =>
-                                      !isDistributorData(item) &&
+                                      !isCustomerData(item) &&
                                       (item as MarketData).market_id === value
                                   ) &&
-                                  !isDistributorData(
+                                  !isCustomerData(
                                     filteredData.find(
                                       (item) =>
-                                        !isDistributorData(item) &&
+                                        !isCustomerData(item) &&
                                         (item as MarketData).market_id === value
                                     )!
                                   )
                                 ? (
                                     filteredData.find(
                                       (item) =>
-                                        !isDistributorData(item) &&
+                                        !isCustomerData(item) &&
                                         (item as MarketData).market_id === value
                                     ) as MarketData
                                   ).market_code
@@ -348,13 +348,13 @@ export const VolumeForecast: React.FC = () => {
                     <MenuItem
                       key={item.id}
                       value={
-                        isDistributorView
-                          ? (item as DistributorData).code
+                        isCustomerView
+                          ? (item as CustomerData).code
                           : (item as MarketData).market_id
                       }
                     >
-                      {isDistributorView
-                        ? (item as DistributorData).display
+                      {isCustomerView
+                        ? (item as CustomerData).display
                         : (item as MarketData).market_name}
                     </MenuItem>
                   ))}
@@ -445,6 +445,7 @@ export const VolumeForecast: React.FC = () => {
               selectedMarkets={selectedMarkets}
               selectedBrands={selectedBrands}
               marketMetadata={marketData}
+              isCustomerView={isCustomerView}
               onUndo={(handler) => setUndoHandler(() => handler)}
               onExport={(handler) => setExportHandler(() => handler)}
             />
