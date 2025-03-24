@@ -10,12 +10,12 @@ const LOADING_MESSAGES = [
 
 interface LoadingProgressProps {
   onComplete: () => void;
-  dataReady: boolean;
+  dataReady?: boolean;
 }
 
 export const LoadingProgress = ({
   onComplete,
-  dataReady,
+  dataReady = true,
 }: LoadingProgressProps) => {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
