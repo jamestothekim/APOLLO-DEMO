@@ -256,12 +256,12 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       align: "left" as const,
     },
     {
-      header: "Quantity",
+      header: "Cases (Phys)",
       key: "quantity",
       align: "right" as const,
     },
     {
-      header: "Cases",
+      header: "Cases (9L)",
       key: "case_equivalent_quantity",
       align: "right" as const,
     },

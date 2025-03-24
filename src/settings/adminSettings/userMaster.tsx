@@ -32,6 +32,10 @@ interface User {
   email: string;
   role: string;
   password?: string;
+  address?: string;
+  city?: string;
+  state_code?: string;
+  zip?: string;
   user_access?: {
     Division?: string;
     Markets?: {
@@ -140,7 +144,7 @@ const UserMaster = () => {
 
   const handleAdd = () => {
     setEditingUser({
-      id: 0, // Temporary ID for new user
+      id: 0,
       first_name: "",
       last_name: "",
       email: "",
@@ -154,6 +158,17 @@ const UserMaster = () => {
     setSidebarOpen(true);
   };
 
+  const handleAdminSwitchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editingUser) return;
+    setEditingUser({
+      ...editingUser,
+      user_access: {
+        ...editingUser.user_access,
+        Admin: e.target.checked,
+      },
+    });
+  };
+
   const handleSave = async () => {
     if (!editingUser) return;
     const isNewUser = editingUser.id === 0;
@@ -163,10 +178,26 @@ const UserMaster = () => {
         ? `${import.meta.env.VITE_API_URL}/users/create`
         : `${import.meta.env.VITE_API_URL}/users/admin/edit/${editingUser.id}`;
 
+      // Restructure the data to match what the backend expects
+      const userData = {
+        first_name: editingUser.first_name,
+        last_name: editingUser.last_name,
+        email: editingUser.email,
+        role: editingUser.role,
+        address: editingUser.address || "",
+        city: editingUser.city || "",
+        state_code: editingUser.state_code || "",
+        zip: editingUser.zip || "",
+        user_access: editingUser.user_access,
+        ...(isNewUser && editingUser.password
+          ? { password: editingUser.password }
+          : {}),
+      };
+
       await axios({
         method: isNewUser ? "post" : "put",
         url,
-        data: editingUser,
+        data: userData,
         withCredentials: true,
       });
 
@@ -514,7 +545,7 @@ const UserMaster = () => {
                 <Typography>Admin Access</Typography>
                 <Switch
                   checked={editingUser?.user_access?.Admin === true}
-                  onChange={(e) => handleEditChange("admin", e.target.checked)}
+                  onChange={handleAdminSwitchChange}
                   color="primary"
                 />
               </Box>
