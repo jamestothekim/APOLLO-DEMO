@@ -25,6 +25,19 @@ declare module '@mui/material/styles' {
     }
   }
   
+  const removeFocusHighlight = {
+    '&:focus': {
+      outline: 'none',
+    },
+    '&:focus-visible': {
+      outline: 'none',
+    },
+    '&.Mui-focusVisible': {
+      outline: 'none',
+      boxShadow: 'none',
+    },
+  };
+
   const theme = createTheme({
     palette: {
       primary: {
@@ -115,6 +128,7 @@ declare module '@mui/material/styles' {
         styleOverrides: {
           root: {
             textTransform: 'none',
+            ...removeFocusHighlight,
           },
         },
       },
@@ -150,13 +164,7 @@ declare module '@mui/material/styles' {
             },
             border: 'none',
             borderRadius: 0,
-            outline: 'none',
-            '&:focus': {
-              outline: 'none',
-            },
-            '&:focus-visible': {
-              outline: 'none',
-            },
+            ...removeFocusHighlight,
           },
         },
       },
@@ -183,6 +191,13 @@ declare module '@mui/material/styles' {
           },
           scroller: {
             boxShadow: 'none',
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            ...removeFocusHighlight,
           },
         },
       },
