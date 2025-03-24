@@ -1,6 +1,13 @@
-import { DialogTitle, Box, Typography, CircularProgress } from "@mui/material";
+import {
+  DialogTitle,
+  Box,
+  Typography,
+  CircularProgress,
+  Dialog,
+} from "@mui/material";
 import { useState } from "react";
 import { DynamicTable } from "../../../reusableComponents/dynamicTable";
+import { AccountDetails } from "./accountDetails";
 
 interface DepletionDetailsProps {
   market: string;
@@ -32,6 +39,11 @@ export const DepletionDetails = ({
 }: DepletionDetailsProps) => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [selectedOutletId, setSelectedOutletId] = useState<string | null>(null);
+  const [accountDetailsOpen, setAccountDetailsOpen] = useState(false);
+  const [accountDetailsCache, setAccountDetailsCache] = useState<
+    Record<string, any>
+  >({});
 
   // Add IDs to the data
   const dataWithIds = accountLevelSalesData.map(
@@ -41,6 +53,16 @@ export const DepletionDetails = ({
       id: `${row.outlet_name}-${row.city}-${row.state}`,
     })
   );
+
+  const handleRowClick = (row: any) => {
+    console.log("Selected outlet:", row);
+    setSelectedOutletId(row.outlet_id);
+    setAccountDetailsOpen(true);
+  };
+
+  const handleClose = () => {
+    setAccountDetailsOpen(false);
+  };
 
   const columns = [
     {
@@ -66,7 +88,7 @@ export const DepletionDetails = ({
     },
     {
       header: "Qty (9L)",
-      key: "quantity",
+      key: "case_equivalent_quantity",
       render: (value: number) => value.toString(),
     },
     {
@@ -108,8 +130,30 @@ export const DepletionDetails = ({
             setPage(0);
           }}
           getRowId={(row) => row.id}
+          onRowClick={handleRowClick}
         />
       )}
+
+      <Dialog
+        open={accountDetailsOpen}
+        onClose={handleClose}
+        maxWidth="lg"
+        fullWidth
+      >
+        {selectedOutletId && (
+          <AccountDetails
+            outletId={selectedOutletId}
+            onClose={handleClose}
+            cachedData={accountDetailsCache[selectedOutletId]}
+            onDataFetched={(data) => {
+              setAccountDetailsCache((prev) => ({
+                ...prev,
+                [selectedOutletId]: data,
+              }));
+            }}
+          />
+        )}
+      </Dialog>
     </>
   );
 };

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, IconButton, Box, Button } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { DepletionDetails } from "./depletionDetails";
-import { PremiseDetails } from "./premiseDetails";
+import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
 
 interface DetailsContainerProps {
   open: boolean;
@@ -23,11 +23,10 @@ export const DetailsContainer = ({
   month,
   year,
 }: DetailsContainerProps) => {
-  const [selectedVipId, setSelectedVipId] = useState<string | null>(null);
-  const [selectedPremiseType, setSelectedPremiseType] = useState<string>("");
-  const [selectedName, setSelectedName] = useState<string>("");
   const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
+  const [showContent, setShowContent] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -37,6 +36,8 @@ export const DetailsContainer = ({
       if (!open || !market || !product) return;
 
       setIsLoading(true);
+      setDataReady(false);
+      setShowContent(false);
       try {
         const response = await fetch(
           `${
@@ -50,18 +51,18 @@ export const DetailsContainer = ({
         }
 
         const data = await response.json();
-        console.log(data);
 
         if (isMounted) {
           setAccountLevelSalesData(data);
+          setDataReady(true);
         }
       } catch (error: unknown) {
         if (error instanceof Error) {
           if (error.name === "AbortError") return;
           console.error("Error fetching account level sales:", error);
         }
-      } finally {
         if (isMounted) {
+          setShowContent(true); // Show error state
           setIsLoading(false);
         }
       }
@@ -75,20 +76,11 @@ export const DetailsContainer = ({
     };
   }, [open, month, market, product]);
 
-  const handleRetailerClick = (
-    vipId: string,
-    premiseType: string,
-    name: string
-  ) => {
-    setSelectedVipId(vipId);
-    setSelectedPremiseType(premiseType);
-    setSelectedName(name);
-  };
-
-  const handleBackToList = () => {
-    setSelectedVipId(null);
-    setSelectedPremiseType("");
-    setSelectedName("");
+  const handleLoadingComplete = () => {
+    if (dataReady) {
+      setShowContent(true);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -99,31 +91,40 @@ export const DetailsContainer = ({
         </IconButton>
       </Box>
       <DialogContent>
-        {selectedVipId ? (
-          <PremiseDetails
-            vipId={selectedVipId}
-            premiseType={selectedPremiseType}
-            name={selectedName}
-            onBack={handleBackToList}
-          />
-        ) : (
-          <DepletionDetails
-            market={market}
-            item={product}
-            value={value}
-            month={Number(month)}
-            year={year}
-            variant_size_pack={product}
-            onRetailerClick={handleRetailerClick}
-            accountLevelSalesData={accountLevelSalesData}
-            isLoading={isLoading}
-          />
-        )}
-        <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-          <Button onClick={onClose} variant="contained">
-            Close
-          </Button>
-        </Box>
+        {isLoading ? (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              minHeight: "400px",
+            }}
+          >
+            <LoadingProgress
+              onComplete={handleLoadingComplete}
+              dataReady={dataReady}
+            />
+          </Box>
+        ) : showContent ? (
+          <>
+            <DepletionDetails
+              market={market}
+              item={product}
+              value={value}
+              month={Number(month)}
+              year={year}
+              variant_size_pack={product}
+              onRetailerClick={() => {}}
+              accountLevelSalesData={accountLevelSalesData}
+              isLoading={isLoading}
+            />
+            <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
+              <Button onClick={onClose} variant="contained">
+                Close
+              </Button>
+            </Box>
+          </>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

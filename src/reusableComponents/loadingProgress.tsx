@@ -3,23 +3,32 @@ import { useEffect, useState } from "react";
 
 const LOADING_MESSAGES = [
   "Pulling your data...",
-  "Configuring the model...",
+  "Loading the model...",
   "And making it look pretty...",
   "APOLLO",
 ];
 
 interface LoadingProgressProps {
   onComplete: () => void;
+  dataReady: boolean;
 }
 
-export const LoadingProgress = ({ onComplete }: LoadingProgressProps) => {
+export const LoadingProgress = ({
+  onComplete,
+  dataReady,
+}: LoadingProgressProps) => {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setProgress((oldProgress) => {
-        const newProgress = Math.min(oldProgress + 2, 100);
+        // Progress moves steadily to 95%, then waits for data
+        if (oldProgress >= 95 && !dataReady) {
+          return oldProgress;
+        }
+
+        const newProgress = Math.min(oldProgress + 1.5, 100);
 
         // Update message based on progress
         const newIndex = Math.floor(
@@ -29,20 +38,20 @@ export const LoadingProgress = ({ onComplete }: LoadingProgressProps) => {
           setMessageIndex(newIndex);
         }
 
-        // Complete when done
-        if (newProgress === 100) {
+        // Only complete when data is ready and we've reached 100%
+        if (dataReady && newProgress === 100) {
           clearInterval(timer);
-          setTimeout(onComplete, 500);
+          setTimeout(onComplete, 300);
         }
 
         return newProgress;
       });
-    }, 100);
+    }, 50);
 
     return () => {
       clearInterval(timer);
     };
-  }, [onComplete]);
+  }, [onComplete, messageIndex, dataReady]);
 
   return (
     <Box

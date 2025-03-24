@@ -621,13 +621,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                       cursor: data.isActual ? "pointer" : "inherit",
                     }}
                   >
-                    {(Math.round(data.value * 10) / 10).toLocaleString(
-                      undefined,
-                      {
-                        minimumFractionDigits: 1,
-                        maximumFractionDigits: 1,
-                      }
-                    )}
+                    {((data.value * 10) / 10).toLocaleString(undefined, {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1,
+                    })}
                   </Box>
                   {data.isManuallyModified && (
                     <EditIcon

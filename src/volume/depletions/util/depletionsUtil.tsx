@@ -65,7 +65,7 @@ export const processMonthData = (data: any[]) => {
         return;
       }
 
-      const value = Math.round(Number(item.case_equivalent_volume));
+      const value = Math.round(Number(item.case_equivalent_volume) * 10) / 10;
       months[monthName] = {
         value: isNaN(value) ? 0 : value,
         isActual: Boolean(item.data_type?.includes("actual")),
