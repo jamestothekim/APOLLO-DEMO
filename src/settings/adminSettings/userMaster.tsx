@@ -77,17 +77,10 @@ const UserMaster = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/users`,
-        {
-          credentials: "include",
-        }
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/users/users`
       );
-      if (!response.ok) {
-        throw new Error("Failed to fetch users");
-      }
-      const data = await response.json();
-      setUsers(data);
+      setUsers(response.data);
     } catch (error) {
       console.error("Error fetching users:", error);
       showSnackbar("Failed to fetch users", "error");
@@ -96,17 +89,10 @@ const UserMaster = () => {
 
   const fetchMarkets = async () => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/admin/get-states`,
-        {
-          credentials: "include",
-        }
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/admin/get-states`
       );
-      if (!response.ok) {
-        throw new Error("Failed to fetch markets");
-      }
-      const data = await response.json();
-      const formattedMarkets = data.map((market: any) => ({
+      const formattedMarkets = response.data.map((market: any) => ({
         id: market.id,
         market: market.market_name,
         market_code: market.market_code,
@@ -120,18 +106,11 @@ const UserMaster = () => {
 
   const fetchAccessRoles = async () => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/util/get-access-roles`,
-        {
-          credentials: "include",
-        }
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/util/get-access-roles`
       );
-      if (!response.ok) {
-        throw new Error("Failed to fetch access roles");
-      }
-      const data = await response.json();
-      setAvailableRoles(data.roles);
-      setAvailableDivisions(data.divisions);
+      setAvailableRoles(response.data.roles);
+      setAvailableDivisions(response.data.divisions);
     } catch (error) {
       console.error("Error fetching access roles:", error);
     }
@@ -194,12 +173,11 @@ const UserMaster = () => {
           : {}),
       };
 
-      await axios({
-        method: isNewUser ? "post" : "put",
-        url,
-        data: userData,
-        withCredentials: true,
-      });
+      if (isNewUser) {
+        await axios.post(url, userData);
+      } else {
+        await axios.put(url, userData);
+      }
 
       await fetchUsers();
       showSnackbar(
@@ -322,7 +300,7 @@ const UserMaster = () => {
           {row.user_access?.Admin === true ? (
             <CheckCircleIcon color="primary" />
           ) : (
-            <XIcon sx={{ color: "text.disabled" }} />
+            <XIcon color="error" />
           )}
         </Box>
       ),
@@ -334,13 +312,10 @@ const UserMaster = () => {
 
     try {
       await axios.delete(
-        `${import.meta.env.VITE_API_URL}/users/delete/${editingUser.id}`,
-        { withCredentials: true }
+        `${import.meta.env.VITE_API_URL}/users/delete/${editingUser.id}`
       );
-
       await fetchUsers();
       showSnackbar("User deleted successfully", "success");
-      setDeleteConfirmOpen(false);
       setSidebarOpen(false);
     } catch (error) {
       console.error("Error deleting user:", error);

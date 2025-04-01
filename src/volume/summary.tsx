@@ -22,6 +22,7 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { Toolbox } from "./components/toolbox";
 import { LineChart } from "@mui/x-charts";
+import axios from "axios";
 
 interface SummaryData {
   id: string;
@@ -72,12 +73,10 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
     const fetchBrands = async () => {
       try {
         setIsBrandsLoading(true);
-        const response = await fetch(
+        const response = await axios.get(
           `${import.meta.env.VITE_API_URL}/volume/brands`
         );
-        if (!response.ok) throw new Error("Failed to fetch brands");
-        const data = await response.json();
-        setAvailableBrands(data);
+        setAvailableBrands(response.data);
       } catch (error) {
         console.error("Error loading brands:", error);
       } finally {
@@ -87,16 +86,13 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
 
     const fetchData = async () => {
       try {
-        const response = await fetch(
+        const response = await axios.get(
           `${
             import.meta.env.VITE_API_URL
           }/volume/summary-forecast?forecastMethod=${forecastMethod}`
         );
-        if (!response.ok) throw new Error("Failed to fetch data");
-        const result = await response.json();
-        console.log(result);
 
-        const filteredResult = result.filter((row: SummaryData) =>
+        const filteredResult = response.data.filter((row: SummaryData) =>
           DEFAULT_SELECTED_BRANDS.includes(row.brand)
         );
 
@@ -123,15 +119,13 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
 
     const fetchData = async () => {
       try {
-        const response = await fetch(
+        const response = await axios.get(
           `${
             import.meta.env.VITE_API_URL
           }/volume/summary-forecast?forecastMethod=${forecastMethod}`
         );
-        if (!response.ok) throw new Error("Failed to fetch data");
-        const result = await response.json();
 
-        const filteredResult = result.filter((row: SummaryData) =>
+        const filteredResult = response.data.filter((row: SummaryData) =>
           selectedBrands.includes(row.brand)
         );
 
@@ -263,7 +257,9 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
       product: "",
       brand: row.brand,
       variant: "",
-      variantSize: "",
+      variant_id: "",
+      variant_size_pack_id: "",
+      variant_size_pack_desc: "",
       forecastLogic: forecastMethod,
       months: {
         JAN: { value: row.jan },
@@ -419,6 +415,7 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
               }
               canUndo={false}
               viewType={viewType}
+              isDepletionsView={false}
             />
           </Box>
 

@@ -31,7 +31,7 @@ interface UserDataType {
 }
 
 export const UserSettings = () => {
-  const { user, refreshUser } = useUser();
+  const { user, checkAuth } = useUser();
   const [isEditing, setIsEditing] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -147,23 +147,15 @@ export const UserSettings = () => {
     };
 
     try {
-      const response = await fetch(
+      await axios.put(
         `${import.meta.env.VITE_API_URL}/users/settings/edit/${user.id}`,
         {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            ...updatedUserData,
-            currentUser: user,
-          }),
+          ...updatedUserData,
+          currentUser: user,
         }
       );
-      if (!response.ok) throw new Error("Failed to update settings");
 
-      await refreshUser();
+      await checkAuth(); // Refresh user context
       showSnackbar("Settings updated successfully", "success");
       setIsEditing(false);
     } catch (error) {
@@ -181,18 +173,19 @@ export const UserSettings = () => {
           userId: user.id,
           currentPassword,
           newPassword,
-        },
-        { withCredentials: true }
+        }
       );
 
       setPasswordDialogOpen(false);
       setCurrentPassword("");
       setNewPassword("");
+      showSnackbar("Password updated successfully", "success");
     } catch (error: any) {
       // Type the error
       setPasswordError(
         error.response?.data?.message || "Failed to update password"
       );
+      showSnackbar("Failed to update password", "error");
     }
   };
 

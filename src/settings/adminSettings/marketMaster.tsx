@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Box, TextField, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  TextField,
+  Stack,
+  Typography,
+  Snackbar,
+  Alert,
+} from "@mui/material";
 import axios from "axios";
 import { DynamicTable, Column } from "../../reusableComponents/dynamicTable";
 import QualSidebar from "../../reusableComponents/qualSidebar";
@@ -21,6 +28,11 @@ export const MarketMaster = () => {
   const [selectedMarket, setSelectedMarket] = useState<MarketData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editedMarket, setEditedMarket] = useState<MarketData | null>(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
+    "success"
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -28,7 +40,9 @@ export const MarketMaster = () => {
         const response = await axios.get(
           `${import.meta.env.VITE_API_URL}/admin/market-master`,
           {
-            withCredentials: true,
+            headers: {
+              "Content-Type": "application/json",
+            },
           }
         );
         const processedData = response.data.map((row: MarketData) => ({
@@ -70,7 +84,9 @@ export const MarketMaster = () => {
           managed_by: editedMarket.settings?.managed_by,
         },
         {
-          withCredentials: true,
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
       );
 
@@ -81,8 +97,10 @@ export const MarketMaster = () => {
       setData(updatedData);
       setSelectedMarket(editedMarket);
       setSidebarOpen(false);
+      showSnackbar("Market settings updated successfully", "success");
     } catch (error) {
       console.error("Error updating managed by:", error);
+      showSnackbar("Failed to update market settings", "error");
     }
   };
 
@@ -134,6 +152,12 @@ export const MarketMaster = () => {
       render: (_value, row) => row.settings?.managed_by || "Not Set",
     },
   ];
+
+  const showSnackbar = (message: string, severity: "success" | "error") => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  };
 
   return (
     <Box sx={{ position: "relative", minHeight: "400px" }}>
@@ -202,6 +226,19 @@ export const MarketMaster = () => {
           </Stack>
         </Box>
       </QualSidebar>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarOpen(false)}
+      >
+        <Alert
+          severity={snackbarSeverity}
+          onClose={() => setSnackbarOpen(false)}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

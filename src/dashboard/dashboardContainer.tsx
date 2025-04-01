@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Box, Paper } from "@mui/material";
 import { ForecastByBrand } from "./forecastByBrand";
 import { LoadingProgress } from "../reusableComponents/loadingProgress";
+import axios from "axios";
 
 interface DashboardData {
   brand: string;
@@ -27,12 +28,15 @@ export const DashboardContainer = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/analytics/dashboard`
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/analytics/dashboard`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
         );
-        if (!response.ok) throw new Error("Failed to fetch dashboard data");
-        const result = await response.json();
-        setData(result);
+        setData(response.data);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       }

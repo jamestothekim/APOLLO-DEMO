@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Box, Toolbar } from "@mui/material";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useLocation,
+  Navigate,
+} from "react-router-dom";
 import { NavigationAppBar } from "./navigation/appbar";
 import { Sidebar } from "./navigation/sidebar";
 import { VolumeView } from "./volume/volumeView";
@@ -12,7 +18,7 @@ import { Rates } from "./rates/rates";
 import ProfitModel from "./profitModel/profitModel";
 import { SettingsContainer } from "./settings/settingsContainer";
 import { Login } from "./login/login";
-import { UserProvider, ProtectedRoute } from "./userContext";
+import { UserProvider, useUser } from "./userContext";
 
 const drawerWidth = 240;
 
@@ -77,29 +83,51 @@ const AppLayout = () => {
 const AppContent = () => {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
+      <UserProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/*"
+            element={
+              <RequireAuth>
+                <AppLayout />
+              </RequireAuth>
+            }
+          />
+        </Routes>
+      </UserProvider>
     </BrowserRouter>
   );
 };
 
+// Simple auth check component
+const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+  const { isLoggedIn, isCheckingAuth } = useUser();
+  const location = useLocation();
+
+  if (isCheckingAuth) {
+    return null; // Or a loading spinner
+  }
+
+  if (!isLoggedIn) {
+    // Redirect to login and save the attempted location
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If logged in and trying to access login page, redirect to home
+  if (location.pathname === "/login") {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 export const App = () => {
   return (
-    <UserProvider>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <AppContent />
-      </ThemeProvider>
-    </UserProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AppContent />
+    </ThemeProvider>
   );
 };
 

@@ -30,23 +30,22 @@ interface AccountDetailsProps {
 }
 
 interface AccountData {
-  account_id: string;
   outlet_id: string;
-  account_name: string;
-  address: string;
+  outlet_name: string;
+  address_line_1: string;
   city: string;
   state: string;
-  county: string;
-  region: string;
-  premise_type: string;
-  account_type: string;
-  year: number;
-  month: number;
+  vip_cot_premise_type_code: string;
+  vip_cot_premise_type_desc: string;
+  year: string;
+  month: string;
   month_name: string;
   brand: string;
   variant: string;
-  size_pack: string;
-  case_equivalent_quantity: number;
+  variant_id: string;
+  variant_size_pack_id: string;
+  variant_size_pack_desc: string;
+  case_equivalent_quantity: string;
   sales_dollars: number;
 }
 
@@ -61,7 +60,9 @@ interface InvoiceData {
   invoice_number: string;
   brand: string;
   variant: string;
-  size_pack: string;
+  variant_id: string;
+  variant_size_pack_id: string;
+  variant_size_pack_desc: string;
   quantity: number;
   case_equivalent_quantity: number;
   sales_dollars: number;
@@ -100,6 +101,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
 
   useEffect(() => {
     if (cachedData) {
+      console.log("Using cached account data:", cachedData);
       setAccountData(cachedData);
       setIsLoading(false);
       return;
@@ -108,11 +110,13 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
     const fetchAccountDetails = async () => {
       try {
         setIsLoading(true);
+        console.log("Fetching account details for outletId:", outletId);
         const response = await axios.get<AccountData[]>(
           `${import.meta.env.VITE_API_URL}/volume/account-details`,
           { params: { outletId } }
         );
         const data = response.data;
+        console.log("Fetched account details:", data);
         setAccountData(data);
         onDataFetched(data); // Cache the fetched data
         // Set initial brand selection
@@ -141,7 +145,9 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
           `${import.meta.env.VITE_API_URL}/volume/account-invoices`,
           { params: { outletId } }
         );
-        setInvoiceData(response.data);
+        const data = response.data;
+        console.log("Fetched invoice data:", data);
+        setInvoiceData(data);
       } catch (err) {
         console.error("Error fetching invoice data:", err);
       } finally {
@@ -189,56 +195,81 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       data: brandMap.get(brand) || new Array(12).fill(0),
       color: colors[index % colors.length],
       valueFormatter: (value: number | null) => {
-        if (value === null) return "";
+        if (value === null || isNaN(value)) return "";
         const brand_data = accountData.filter((d) => d.brand === brand);
         const month_data = brand_data.filter(
-          (d) => d.case_equivalent_quantity > 0
+          (d) => Number(d.case_equivalent_quantity) > 0
         );
-        const size_pack_summary = [
-          ...new Set(month_data.map((d) => d.size_pack)),
-        ]
-          .map((pack) => {
-            const cases = month_data
-              .filter((d) => d.size_pack === pack)
-              .reduce((sum, d) => sum + d.case_equivalent_quantity, 0);
-            return `${pack} (${cases.toFixed(0)} cases)`;
-          })
-          .join(", ");
-        return `${value.toFixed(0)} total cases\n${size_pack_summary}`;
+        const variant_size_pack_summary: string[] = [
+          ...new Set(month_data.map((d) => d.variant_size_pack_desc)),
+        ];
+
+        const summary = variant_size_pack_summary.map((pack) => {
+          const value = month_data
+            .filter((d) => d.variant_size_pack_desc === pack)
+            .reduce((sum, d) => sum + Number(d.case_equivalent_quantity), 0);
+          return `${pack} (${value.toFixed(0)} cases)`;
+        });
+        return summary.join("\n");
       },
     };
   });
 
   const tableColumns = [
-    { key: "size_pack", header: "Size Pack", align: "left" as const },
+    {
+      key: "variant_size_pack_desc",
+      header: "Size Pack",
+      align: "left" as const,
+    },
     ...MONTHS.map((month, index) => ({
       key: (index + 1).toString(),
       header: month,
       align: "right" as const,
+      render: (value: number) => {
+        return value ? value.toFixed(2) : "0.00";
+      },
     })),
   ];
 
-  const tableData = [...new Set(accountData.map((item) => item.size_pack))].map(
-    (sizePack) => {
-      const row: any = { size_pack: sizePack };
-      MONTHS.forEach((_, index) => {
-        const monthNum = index + 1;
-        const monthData = accountData
-          .filter(
-            (d) => d.size_pack === sizePack && Number(d.month) === monthNum
-          )
-          .reduce((sum, d) => sum + d.case_equivalent_quantity, 0);
-        row[monthNum.toString()] = monthData || 0;
-      });
-      return row;
-    }
-  );
+  const tableData = [
+    ...new Set(
+      accountData
+        .filter((d) => selectedBrands.includes(d.brand))
+        .map((item) => item.variant_size_pack_desc)
+    ),
+  ].map((sizePack) => {
+    const row: any = { variant_size_pack_desc: sizePack };
+    MONTHS.forEach((_, index) => {
+      const monthNum = index + 1;
+      const monthData = accountData.filter(
+        (d) =>
+          d.variant_size_pack_desc === sizePack &&
+          Number(d.month) === monthNum &&
+          selectedBrands.includes(d.brand)
+      );
+
+      // Sum up all case_equivalent_quantity values for this month
+      const value = monthData.reduce((sum, d) => {
+        const qty = Number(d.case_equivalent_quantity);
+        return sum + (isNaN(qty) ? 0 : qty);
+      }, 0);
+
+      row[monthNum] = value;
+    });
+    return row;
+  });
 
   const invoiceColumns = [
     {
       header: "Invoice Date",
       key: "invoice_date",
       align: "left" as const,
+      render: (value: string) => {
+        // Format YYYYMMDD to YYYY-MM-DD
+        return value
+          ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
+          : "";
+      },
     },
     {
       header: "Invoice #",
@@ -252,23 +283,34 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
     },
     {
       header: "Size Pack",
-      key: "size_pack",
+      key: "variant_size_pack_desc",
       align: "left" as const,
     },
     {
       header: "Cases (Phys)",
       key: "quantity",
       align: "right" as const,
+      render: (value: string) => {
+        const num = Number(value);
+        return isNaN(num) ? "0.00" : num.toFixed(2);
+      },
     },
     {
       header: "Cases (9L)",
       key: "case_equivalent_quantity",
       align: "right" as const,
+      render: (value: string) => {
+        const num = Number(value);
+        return isNaN(num) ? "0.00" : num.toFixed(2);
+      },
     },
     {
       header: "Sales ($)",
       key: "sales_dollars",
       align: "right" as const,
+      render: (value: number) => {
+        return value ? value.toFixed(2) : "0.00";
+      },
     },
   ];
 
@@ -299,7 +341,9 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
         <Box sx={{ display: "flex", alignItems: "center" }}>
           {accountData.length > 0 && (
             <Box sx={{ mr: 1.5, display: "flex", alignItems: "center" }}>
-              {accountData[0].premise_type?.toLowerCase().includes("on") ? (
+              {accountData[0].vip_cot_premise_type_code
+                ?.toLowerCase()
+                .includes("on") ? (
                 <RestaurantIcon sx={{ color: theme.palette.primary.main }} />
               ) : (
                 <StorefrontIcon sx={{ color: theme.palette.primary.main }} />
@@ -314,7 +358,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
                 color: theme.palette.primary.main,
               }}
             >
-              {accountData.length > 0 && accountData[0].account_name}
+              {accountData.length > 0 && accountData[0].outlet_name}
             </Typography>
             <Typography
               variant="body2"
@@ -324,7 +368,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
               }}
             >
               {accountData.length > 0 &&
-                `${accountData[0].address}, ${accountData[0].city}, ${accountData[0].state}`}
+                `${accountData[0].address_line_1}, ${accountData[0].city}, ${accountData[0].state}`}
             </Typography>
           </Box>
         </Box>
@@ -439,7 +483,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
               <DynamicTable
                 data={tableData}
                 columns={tableColumns}
-                getRowId={(row) => row.size_pack}
+                getRowId={(row) => row.variant_size_pack_desc}
               />
             )}
           </Box>
@@ -463,7 +507,9 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
             <DynamicTable
               data={invoiceData}
               columns={invoiceColumns}
-              getRowId={(row) => `${row.invoice_number}-${row.size_pack}`}
+              getRowId={(row) =>
+                `${row.invoice_number}-${row.variant_size_pack_desc}`
+              }
             />
           )}
         </Box>
@@ -472,7 +518,6 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
   );
 };
 
-// Add this helper function to aggregate data by brand
 const aggregateByBrand = (data: AccountData[]) => {
   const brandMap = new Map<string, number[]>();
 
@@ -480,8 +525,11 @@ const aggregateByBrand = (data: AccountData[]) => {
     if (!brandMap.has(item.brand)) {
       brandMap.set(item.brand, new Array(12).fill(0));
     }
-    const monthIndex = item.month - 1;
-    brandMap.get(item.brand)![monthIndex] += item.case_equivalent_quantity;
+    const monthIndex = Number(item.month) - 1;
+    const quantity = Number(item.case_equivalent_quantity);
+    if (!isNaN(quantity)) {
+      brandMap.get(item.brand)![monthIndex] += quantity;
+    }
   });
 
   return { brandMap };

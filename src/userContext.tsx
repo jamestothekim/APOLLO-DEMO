@@ -1,14 +1,8 @@
-import React, {
-  createContext,
-  useState,
-  useContext,
-  ReactNode,
-  useEffect,
-} from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { CircularProgress, Box } from "@mui/material";
+import React, { createContext, useContext, useReducer, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
+// Types
 export interface MarketAccess {
   id: number;
   market: string;
@@ -51,175 +45,321 @@ interface User {
   };
 }
 
+interface AuthState {
+  user: User | null;
+  isLoggedIn: boolean;
+  isCheckingAuth: boolean;
+}
+
+type AuthAction =
+  | { type: "LOGIN"; payload: { user: User; token: string } }
+  | { type: "LOGOUT" }
+  | { type: "SET_CHECKING"; payload: boolean }
+  | { type: "UPDATE_USER"; payload: User };
+
+// Token service
+const tokenService = {
+  getToken() {
+    const token = localStorage.getItem("token");
+
+    return token;
+  },
+  setToken(token: string) {
+    localStorage.setItem("token", token);
+    // Verify token was set correctly
+    const verifyToken = localStorage.getItem("token");
+    if (verifyToken) {
+      this.setAuthHeader(verifyToken);
+    }
+  },
+  removeToken() {
+    localStorage.removeItem("token");
+    this.removeAuthHeader();
+  },
+  setAuthHeader(token: string) {
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  },
+  removeAuthHeader() {
+    delete axios.defaults.headers.common["Authorization"];
+  },
+  verifyTokenPresence() {
+    const token = localStorage.getItem("token");
+    const hasAuthHeader = !!axios.defaults.headers.common["Authorization"];
+    return token && hasAuthHeader;
+  },
+  syncToken() {
+    const token = localStorage.getItem("token");
+    const authHeader = axios.defaults.headers.common["Authorization"];
+    const headerToken =
+      typeof authHeader === "string" ? authHeader.replace("Bearer ", "") : null;
+
+    if (token && !headerToken) {
+      this.setAuthHeader(token);
+    } else if (!token && headerToken) {
+      localStorage.setItem("token", headerToken);
+    }
+  },
+};
+
+// Context
 interface UserContextType {
   user: User | null;
-  updateUser: (user: User) => void;
   isLoggedIn: boolean;
+  isCheckingAuth: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  checkSession: () => Promise<boolean>;
-  isCheckingSession: boolean;
-  refreshUser: () => Promise<void>;
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<boolean>;
 }
 
-export const UserContext = createContext<UserContextType | undefined>(
-  undefined
-);
+const UserContext = createContext<UserContextType | undefined>(undefined);
 
-const SESSION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes
+// Reducer
+const initialState: AuthState = {
+  user: null,
+  isLoggedIn: false,
+  isCheckingAuth: true,
+};
 
-interface ProtectedRouteProps {
-  children: ReactNode;
-}
+const authReducer = (state: AuthState, action: AuthAction): AuthState => {
+  switch (action.type) {
+    case "LOGIN":
+      tokenService.setToken(action.payload.token);
+      tokenService.setAuthHeader(action.payload.token);
+      return {
+        user: action.payload.user,
+        isLoggedIn: true,
+        isCheckingAuth: false,
+      };
+    case "LOGOUT":
+      tokenService.removeToken();
+      tokenService.removeAuthHeader();
+      return {
+        user: null,
+        isLoggedIn: false,
+        isCheckingAuth: false,
+      };
+    case "SET_CHECKING":
+      return {
+        ...state,
+        isCheckingAuth: action.payload,
+      };
+    case "UPDATE_USER":
+      return {
+        ...state,
+        user: action.payload,
+      };
+    default:
+      return state;
+  }
+};
 
-export const UserProvider: React.FC<{ children: ReactNode }> = ({
+// Provider
+export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [state, dispatch] = useReducer(authReducer, initialState);
+  const navigate = useNavigate();
 
-  const checkSession = async (): Promise<boolean> => {
+  const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/check-session`,
-        {
-          credentials: "include",
-        }
-      );
+      const token = tokenService.getToken();
 
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        setIsLoggedIn(true);
-        return true;
-      } else {
-        setUser(null);
-        setIsLoggedIn(false);
-        localStorage.removeItem("isAuthenticated");
+      if (!token) {
+        dispatch({ type: "LOGOUT" });
         return false;
       }
+
+      // Verify token is properly set in axios headers
+      if (!axios.defaults.headers.common["Authorization"]) {
+        tokenService.setAuthHeader(token);
+      }
+
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/users/verify-token`
+      );
+
+      if (response.data.user) {
+        dispatch({ type: "UPDATE_USER", payload: response.data.user });
+        return true;
+      }
+      dispatch({ type: "LOGOUT" });
+      return false;
     } catch (error) {
-      console.error("Session check error:", error);
-      alert("Failed to check session. Please ensure the server is running.");
-      // Don't update state on network errors to prevent logout on temporary issues
+      if (axios.isAxiosError(error)) {
+        // Keep error handling logic but remove logging
+      }
+      dispatch({ type: "LOGOUT" });
       return false;
     } finally {
-      setIsCheckingSession(false);
+      dispatch({ type: "SET_CHECKING", payload: false });
     }
   };
-
-  const refreshUser = async () => {
-    try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/users/check-session`,
-        { withCredentials: true }
-      );
-      console.log("Refresh user response:", response.data);
-      setUser(response.data.user);
-    } catch (error) {
-      console.error("Failed to refresh user:", error);
-    }
-  };
-
-  // Initial session check and periodic checks
-  useEffect(() => {
-    checkSession();
-    const intervalId = setInterval(checkSession, SESSION_CHECK_INTERVAL);
-    return () => clearInterval(intervalId);
-  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch(
+      const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/users/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email, password }),
-          credentials: "include",
-        }
+        { email, password }
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        setIsLoggedIn(true);
-        localStorage.setItem("isAuthenticated", "true");
+      if (response.data.user && response.data.token) {
+        dispatch({
+          type: "LOGIN",
+          payload: {
+            user: response.data.user,
+            token: response.data.token,
+          },
+        });
         return true;
-      } else {
-        return false;
       }
+
+      return false;
     } catch (error) {
-      console.error("Login error:", error);
       return false;
     }
   };
 
   const logout = async () => {
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/logout`,
-        {
-          method: "POST",
-          credentials: "include",
-        }
-      );
-
-      if (response.ok) {
-        setUser(null);
-        setIsLoggedIn(false);
-        localStorage.removeItem("isAuthenticated");
-      }
+      await axios.post(`${import.meta.env.VITE_API_URL}/users/logout`);
     } catch (error) {
-      console.error("Logout error:", error);
+      // Still logout even if the server call fails
+    } finally {
+      dispatch({ type: "LOGOUT" });
+      navigate("/login");
     }
   };
 
+  // Initial auth check and periodic checks
+  useEffect(() => {
+    checkAuth();
+
+    let removalAttempts = 0;
+    let lastKnownToken = localStorage.getItem("token");
+
+    // Add storage event listener to detect localStorage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "token") {
+        const currentToken = e.newValue;
+
+        if (!currentToken && e.oldValue) {
+          // Token removal detected
+          removalAttempts++;
+
+          if (removalAttempts > 3) {
+            // Store token in a session variable as backup
+            if (lastKnownToken) {
+              sessionStorage.setItem("token_backup", lastKnownToken);
+            }
+            setTimeout(() => {
+              // Try to recover from session storage first
+              const backupToken = sessionStorage.getItem("token_backup");
+              if (backupToken) {
+                localStorage.setItem("token", backupToken);
+              } else {
+                tokenService.syncToken();
+              }
+              removalAttempts = 0;
+            }, 1000);
+            return;
+          }
+
+          tokenService.syncToken();
+        } else if (currentToken) {
+          // Token set detected
+          lastKnownToken = currentToken;
+          removalAttempts = 0;
+          // Clear backup if it exists
+          sessionStorage.removeItem("token_backup");
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    // Add a more frequent check specifically for token presence
+    const tokenCheckInterval = setInterval(() => {
+      const token = localStorage.getItem("token");
+      const authHeader = axios.defaults.headers.common["Authorization"];
+      const backupToken = sessionStorage.getItem("token_backup");
+
+      // If token is missing but we have a backup or header, try to recover
+      if (!token && (authHeader || backupToken)) {
+        if (backupToken) {
+          localStorage.setItem("token", backupToken);
+        } else {
+          tokenService.syncToken();
+        }
+      }
+    }, 60000); // Check every minute
+
+    const authCheckInterval = setInterval(() => {
+      tokenService.syncToken(); // Sync before checking
+
+      if (!tokenService.verifyTokenPresence()) {
+        const token = tokenService.getToken();
+        if (token) {
+          tokenService.setAuthHeader(token);
+        } else {
+          dispatch({ type: "LOGOUT" });
+        }
+      }
+      checkAuth();
+    }, 2 * 60 * 60 * 1000); // 2 hours
+
+    return () => {
+      clearInterval(authCheckInterval);
+      clearInterval(tokenCheckInterval);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
+  // Add mutation observer to detect localStorage changes
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      tokenService.syncToken();
+    });
+
+    observer.observe(document, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Axios interceptor for 401 errors
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          if (!tokenService.verifyTokenPresence()) {
+            dispatch({ type: "LOGOUT" });
+            navigate("/login");
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => axios.interceptors.response.eject(interceptor);
+  }, [navigate]);
+
   const value = {
-    user,
-    updateUser: setUser,
-    isLoggedIn,
+    user: state.user,
+    isLoggedIn: state.isLoggedIn,
+    isCheckingAuth: state.isCheckingAuth,
     login,
     logout,
-    checkSession,
-    isCheckingSession,
-    refreshUser,
+    checkAuth,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 };
 
-// Protected Route component integrated into the same file
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isLoggedIn, isCheckingSession } = useUser();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    if (!isCheckingSession && !isLoggedIn) {
-      navigate("/login", { state: { from: location }, replace: true });
-    }
-  }, [isCheckingSession, isLoggedIn, navigate, location]);
-
-  if (isCheckingSession) {
-    return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="100vh"
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  return isLoggedIn ? <>{children}</> : null;
-};
-
+// Hook
 export const useUser = (): UserContextType => {
   const context = useContext(UserContext);
   if (context === undefined) {

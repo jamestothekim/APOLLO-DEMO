@@ -89,6 +89,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   showPagination = true,
   loading = false,
 }) => {
+  // All hooks must be at the top level and in the same order every time
   const [activeSection, setActiveSection] = useState(0);
   const [internalPage, setInternalPage] = useState(0);
   const [internalRowsPerPage, setInternalRowsPerPage] =
@@ -99,6 +100,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     () => columns.filter((column) => !column.detailsOnly),
     [columns]
   );
+
   const page = controlledPage ?? internalPage;
   const rowsPerPage = controlledRowsPerPage ?? internalRowsPerPage;
 
@@ -163,9 +165,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
           aValue = (column as any).calculate(a);
           bValue = (column as any).calculate(b);
         }
-
-        // If the column has a render function, we still want to sort by the raw value
-        // not the rendered value, so we don't modify aValue/bValue here
 
         // Handle null/undefined values
         if (aValue == null) return sortConfig.direction === "asc" ? -1 : 1;
@@ -252,18 +251,26 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
         </Box>
       ) : (
         <>
-          {(onAddCustomColumn || onRemoveCustomColumn) && (
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
-              <CustomColumnControls
-                onAddColumn={onAddCustomColumn!}
-                onRemoveColumn={onRemoveCustomColumn!}
-                customColumns={customColumns.map(({ id, type }) => ({
-                  id,
-                  type,
-                }))}
-              />
-            </Box>
-          )}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "flex-end",
+              mb: 1,
+              visibility:
+                onAddCustomColumn || onRemoveCustomColumn
+                  ? "visible"
+                  : "hidden",
+            }}
+          >
+            <CustomColumnControls
+              onAddColumn={onAddCustomColumn || (() => {})}
+              onRemoveColumn={onRemoveCustomColumn || (() => {})}
+              customColumns={customColumns.map(({ id, type }) => ({
+                id,
+                type,
+              }))}
+            />
+          </Box>
 
           <TableContainer>
             {sections && (

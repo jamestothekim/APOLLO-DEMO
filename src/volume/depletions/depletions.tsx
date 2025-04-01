@@ -12,12 +12,17 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Alert,
+  Typography,
+  Chip,
+  useTheme,
 } from "@mui/material";
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
 import CommentIcon from "@mui/icons-material/Comment";
 import { DetailsContainer } from "./details/detailsContainer";
 import type { MarketData } from "../volumeForecast";
+import axios from "axios";
 
 import {
   DynamicTable,
@@ -43,7 +48,9 @@ export interface ExtendedForecastData {
   product: string;
   brand: string;
   variant: string;
-  variantSize: string;
+  variant_id: string;
+  variant_size_pack_id: string;
+  variant_size_pack_desc: string;
   forecastLogic: string;
   months: {
     [key: string]: {
@@ -70,18 +77,23 @@ export interface FilterSelectionProps {
   isCustomerView?: boolean;
   onUndo?: (handler: () => Promise<void>) => void;
   onExport?: (handler: () => void) => void;
+  onAvailableBrandsChange?: (brands: string[]) => void;
+  onAvailableMarketsChange?: (markets: string[]) => void;
 }
 
 // Add this helper function near the top with other utility functions
 const fetchLoggedForecastChanges = async () => {
   try {
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/redi/log-forecast-changes`
+    const response = await axios.get(
+      `${import.meta.env.VITE_API_URL}/redi/log-forecast-changes`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      }
     );
-    if (!response.ok) return [];
-    return await response.json();
+    return response.data;
   } catch (error) {
-    console.error("Error fetching logged forecast changes:", error);
     return [];
   }
 };
@@ -92,22 +104,26 @@ const processRawData = (
   loggedChanges: any[] = [],
   isCustomerView: boolean
 ): ExtendedForecastData[] => {
-  // Group data by market/customer and size_pack combination
+  // Group data by market/customer and variant_size_pack_id combination
   const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
+    // Construct the key consistently with how it's done in Redis
     const key = isCustomerView
-      ? `${item.customer_id}-${item.size_pack}`
-      : `${item.market_id}-${item.size_pack}`;
+      ? `forecast:${item.customer_id}:${item.variant_size_pack_desc}:${item.customer_id}`
+      : `forecast:${item.market_id}:${item.variant_size_pack_desc}`;
 
     if (!acc[key]) {
       acc[key] = {
-        id: key,
+        id: key, // Use the same key format as Redis
         market_id: item.market_id,
         market_name: item.market,
         customer_id: item.customer_id,
-        customer_name: item.customer, // Use the customer field from raw data
-        product: item.size_pack,
+        customer_name: item.customer,
+        product: item.variant_size_pack_desc,
         brand: item.brand,
         variant: item.variant,
+        variant_id: item.variant_id,
+        variant_size_pack_id: item.variant_size_pack_id,
+        variant_size_pack_desc: item.variant_size_pack_desc,
         forecastLogic: item.forecast_method || "flat",
         months: {},
       };
@@ -145,7 +161,9 @@ const processRawData = (
 
   // Apply any logged changes
   loggedChanges.forEach((change) => {
-    const key = `${change.market}-${change.variantSize}`;
+    const key = isCustomerView
+      ? `forecast:${change.customer_id}:${change.variant_size_pack_desc}:${change.customer_id}`
+      : `forecast:${change.market_id}:${change.variant_size_pack_desc}`;
     if (groupedData[key]) {
       groupedData[key].forecastLogic = change.forecastType;
       groupedData[key].months = change.months;
@@ -159,19 +177,36 @@ const processRawData = (
 interface UndoResponse {
   success: boolean;
   changedKey: string;
-  restoredState: (ExtendedForecastData & { forecastType: string }) | null;
+  restoredState: RestoredState | null;
   hasMoreHistory: boolean;
 }
 
-// Add interface for restored state
+// Update interface for restored state
 interface RestoredState {
+  userId?: string;
+  state?: string;
   market_id: string;
   market_name: string;
-  variantSize: string;
+  market_code?: string;
+  customer_id?: string;
+  customer_name?: string;
   brand?: string;
   variant?: string;
+  variant_id?: string;
+  variant_size_pack_id?: string;
+  variant_size_pack_desc: string;
   forecastType: string;
-  months: any;
+  timestamp: number;
+  isManualEdit: boolean;
+  comment?: string;
+  key?: string;
+  months: {
+    [key: string]: {
+      value: number;
+      isActual: boolean;
+      isManuallyModified?: boolean;
+    };
+  };
 }
 
 export const Depletions: React.FC<FilterSelectionProps> = ({
@@ -181,17 +216,29 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   isCustomerView,
   onUndo,
   onExport,
+  onAvailableBrandsChange,
+  onAvailableMarketsChange,
 }) => {
   const { user } = useUser();
+  const theme = useTheme();
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [availableMarkets, setAvailableMarkets] = useState<string[]>([]);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
-
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [selectedComment, setSelectedComment] = useState<string | undefined>();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [undoSnackbarOpen, setUndoSnackbarOpen] = useState(false);
+  const [undoMessage, setUndoMessage] = useState("");
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
+    "success"
+  );
+  const [noMoreActionsSnackbarOpen, setNoMoreActionsSnackbarOpen] =
+    useState(false);
   const [selectedDetails, setSelectedDetails] = useState<{
     market: string;
     product: string;
@@ -199,62 +246,129 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     month: number;
     year: number;
   } | null>(null);
-  const [undoSnackbarOpen, setUndoSnackbarOpen] = useState(false);
-  const [undoMessage, setUndoMessage] = useState("");
-
-  // Add state for selectedData
   const [selectedDataState, setSelectedDataState] =
     useState<ExtendedForecastData | null>(null);
+  const [initialSidebarState, setInitialSidebarState] =
+    useState<ExtendedForecastData | null>(null);
+  const [comment, setComment] = useState("");
+  const [undoHistory, setUndoHistory] = useState<
+    Array<{
+      timestamp: number;
+      timestampFormatted: string;
+      market_name: string;
+      variant_size_pack_desc: string;
+      forecastType: string;
+      userId: string;
+      distributor_name?: string;
+      key: string;
+      isNextUndo: boolean;
+    }>
+  >([]);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  // Add new state for the "no more actions" snackbar
-  const [noMoreActionsSnackbarOpen, setNoMoreActionsSnackbarOpen] =
-    useState(false);
+  const showSnackbar = (message: string, severity: "success" | "error") => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  };
 
-  const [comment, setComment] = useState(selectedComment || "");
+  // Update useEffect to reset comment when selectedComment changes
+  useEffect(() => {
+    setComment(selectedComment || "");
+  }, [selectedComment]);
 
-  // Update the loadForecastData function
+  // Update the filtered data logic
+  const filteredData = useMemo(() => {
+    return forecastData.filter((row) => {
+      const marketMatch =
+        selectedMarkets.length === 0 ||
+        (isCustomerView
+          ? selectedMarkets.includes(row.customer_id || "") // Use customer_id directly
+          : selectedMarkets.includes(row.market_id));
+      const brandMatch =
+        selectedBrands.length === 0 || selectedBrands.includes(row.brand);
+      return marketMatch && brandMatch;
+    });
+  }, [forecastData, selectedMarkets, selectedBrands, isCustomerView]);
+
+  // Update useEffect to set available markets based on view type
+  useEffect(() => {
+    if (isCustomerView) {
+      const customerIds = marketMetadata
+        .filter((market) => market.settings?.managed_by === "Customer")
+        .flatMap((market) => market.customers || [])
+        .map((customer) => customer.customer_coding);
+      setAvailableMarkets(customerIds);
+    } else {
+      const marketIds = marketMetadata
+        .filter((market) => market.settings?.managed_by === "Market")
+        .map((market) => market.market_id);
+      setAvailableMarkets(marketIds);
+    }
+  }, [isCustomerView, marketMetadata]);
+
+  // Update loadForecastData to handle customer view
   const loadForecastData = useMemo(
     () => async () => {
-      if (selectedMarkets.length === 0 || selectedBrands.length === 0) {
-        setForecastData([]);
-        return;
-      }
-
       try {
-        const [response, loggedChanges] = await Promise.all([
-          fetch(
+        const allIds = isCustomerView
+          ? marketMetadata
+              .filter((market) => market.settings?.managed_by === "Customer")
+              .flatMap((market) => market.customers || [])
+              .map((customer) => customer.customer_id)
+          : marketMetadata
+              .filter((market) => market.settings?.managed_by === "Market")
+              .map((market) => market.market_id);
+
+        const [forecastResponse, loggedChanges] = await Promise.all([
+          axios.get(
             `${import.meta.env.VITE_API_URL}/volume/depletions-forecast?` +
-              `markets=${JSON.stringify(selectedMarkets)}` +
-              `&brands=${JSON.stringify(selectedBrands)}` +
-              `&method=flat` +
-              `&isMarketView=${!isCustomerView}` +
-              `&customers=${
+              `isMarketView=${!isCustomerView}` +
+              `&markets=${JSON.stringify(
                 isCustomerView
-                  ? JSON.stringify(
-                      selectedMarkets.map((id) => id.replace("C.", ""))
-                    )
-                  : "[]"
-              }`
+                  ? []
+                  : selectedMarkets.length > 0
+                  ? selectedMarkets
+                  : allIds
+              )}` +
+              `&customers=${JSON.stringify(
+                isCustomerView
+                  ? selectedMarkets.length > 0
+                    ? selectedMarkets
+                    : allIds
+                  : []
+              )}`,
+            {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+              },
+            }
           ),
           fetchLoggedForecastChanges(),
         ]);
 
-        if (!response.ok) throw new Error("Failed to fetch forecast data");
-
-        const rawData = await response.json();
+        if (!forecastResponse.data) {
+          throw new Error("Failed to fetch forecast data");
+        }
 
         const processedData = processRawData(
-          rawData,
+          forecastResponse.data,
           loggedChanges,
           isCustomerView ?? false
         );
         const nonZeroData = processedData.filter(hasNonZeroTotal);
         setForecastData(nonZeroData);
+
+        const brands = Array.from(
+          new Set(nonZeroData.map((row) => row.brand))
+        ).sort();
+        setAvailableBrands(brands);
       } catch (error) {
         console.error("Error loading forecast data:", error);
       }
     },
-    [selectedMarkets, selectedBrands, isCustomerView]
+    [marketMetadata, isCustomerView, selectedMarkets]
   );
 
   // Use loadForecastData in useEffect
@@ -262,56 +376,67 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     loadForecastData();
   }, [loadForecastData]);
 
-  // Fix: Wrap handleUndo in useCallback with proper dependencies
+  // Update handleUndo to handle the new history information
   const handleUndo = useCallback(async () => {
     try {
-      const response = await fetch(
+      const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/redi/undo-last-change`,
+        {},
         {
-          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         }
       );
 
       if (response.status === 404) {
-        setNoMoreActionsSnackbarOpen(true);
+        setUndoMessage("No more actions to undo");
+        setUndoSnackbarOpen(true);
         return;
       }
 
-      const data: UndoResponse = await response.json();
+      const undoResponse: UndoResponse & { history: typeof undoHistory } =
+        response.data;
 
-      if (data.success && data.restoredState) {
-        const restored = data.restoredState as RestoredState;
+      if (undoResponse.success && undoResponse.restoredState) {
+        const restored = undoResponse.restoredState;
+
+        if (undoResponse.history) {
+          setUndoHistory(undoResponse.history);
+        }
+
         setForecastData((prevData) => {
-          return prevData.map((item) => {
-            if (item.id === `${restored.market_id}-${restored.variantSize}`) {
+          const expectedKey = isCustomerView
+            ? restored.key
+            : `forecast:${restored.market_id}:${restored.variant_size_pack_desc}`;
+
+          const updatedData = prevData.map((item) => {
+            if (item.id === expectedKey) {
               return {
-                id: item.id,
-                market_id: restored.market_id,
-                market_name: restored.market_name,
-                product: restored.variantSize,
-                brand: restored.brand || item.brand,
-                variant: restored.variant || item.variant,
-                variantSize: restored.variantSize,
+                ...item,
                 forecastLogic: restored.forecastType,
                 months: restored.months,
               };
             }
             return item;
           });
+
+          return updatedData;
         });
 
-        setUndoMessage(`Undo successful`);
+        setUndoMessage(
+          undoResponse.hasMoreHistory
+            ? "Undo successful"
+            : "No more actions to undo"
+        );
         setUndoSnackbarOpen(true);
       }
     } catch (error) {
-      console.error("Error undoing change:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Error undoing change:", error.message);
+      }
     }
-  }, [
-    setForecastData,
-    setNoMoreActionsSnackbarOpen,
-    setUndoMessage,
-    setUndoSnackbarOpen,
-  ]);
+  }, [setForecastData, setUndoMessage, setUndoSnackbarOpen, isCustomerView]);
 
   // Now the effect can safely include handleUndo in deps
   useEffect(() => {
@@ -320,11 +445,18 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   }, [onUndo, handleUndo]);
 
+  // Update handleRowClick to use filteredData
   const handleRowClick = (id: string) => {
     setSelectedRow(id);
+    const selectedData = filteredData.find((row) => row.id === id);
+    if (selectedData) {
+      // Store the initial state before any modifications
+      setInitialSidebarState(JSON.parse(JSON.stringify(selectedData)));
+      setSelectedDataState(selectedData);
+    }
   };
 
-  // Update handleForecastChange to properly update selectedDataState
+  // Update handleForecastChange to use variant_size_pack_desc
   const handleForecastChange = async (
     newLogic: string,
     rowData: ExtendedForecastData,
@@ -341,29 +473,39 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         userId,
         market_id: rowData.market_id,
         market_name: rowData.market_name,
-        variantSize: rowData.product,
+        variant_size_pack_desc: rowData.variant_size_pack_desc,
+        variant_size_pack_id: rowData.variant_size_pack_id,
+        brand: rowData.brand,
+        variant: rowData.variant,
+        variant_id: rowData.variant_id,
+        customer_id: rowData.customer_id,
+        customer_name: rowData.customer_name,
         forecastType: rowData.forecastLogic,
-        months: rowData.months,
+        months: JSON.parse(JSON.stringify(rowData.months)),
       };
 
       const requestBody = {
         forecastMethod: newLogic,
-        market_id: rowData.market_id,
-        variantSizePack: rowData.product,
+        market_id: isCustomerView ? rowData.customer_id : rowData.market_id,
+        variant_size_pack_desc: rowData.variant_size_pack_desc,
+        isCustomerView: isCustomerView,
       };
 
-      const forecastResponse = await fetch(
+      const forecastResponse = await axios.post(
         `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
+        requestBody,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         }
       );
 
-      if (!forecastResponse.ok) throw new Error("Failed to update forecast");
-      const forecastResponseData = await forecastResponse.json();
+      if (!forecastResponse.data) {
+        throw new Error("No data received from forecast update");
+      }
 
+      const forecastResponseData = forecastResponse.data;
       const updatedMonths = processMonthData(forecastResponseData);
       const updatedRow = {
         ...rowData,
@@ -386,22 +528,30 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       // Only log to Redis if we have a userId
       if (userId) {
-        await fetch(
+        await axios.post(
           `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
           {
-            method: "POST",
+            userId,
+            market_id: isCustomerView ? rowData.customer_id : rowData.market_id,
+            market_name: isCustomerView
+              ? rowData.customer_name
+              : rowData.market_name,
+            variant_size_pack_desc: rowData.variant_size_pack_desc,
+            variant_size_pack_id: rowData.variant_size_pack_id,
+            brand: rowData.brand,
+            variant: rowData.variant,
+            variant_id: rowData.variant_id,
+            customer_id: isCustomerView ? rowData.customer_id : null,
+            customer_name: isCustomerView ? rowData.customer_name : null,
+            forecastType: newLogic,
+            months: updatedMonths,
+            initialState,
+            isManualEdit: false,
+          },
+          {
             headers: {
-              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
-            body: JSON.stringify({
-              userId,
-              market_id: rowData.market_id,
-              market_name: rowData.market_name,
-              variantSize: rowData.product,
-              forecastType: newLogic,
-              months: updatedMonths,
-              initialState, // Include the initial state
-            }),
           }
         );
       }
@@ -409,6 +559,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       return updatedRow;
     } catch (error) {
       console.error("Error updating forecast:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:", {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message,
+        });
+      }
       throw error;
     }
   };
@@ -447,64 +604,84 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setPage(0);
   };
 
-  // Update the filtered data logic
-  const filteredData = forecastData.filter((row) => {
-    const marketMatch =
-      selectedMarkets.length === 0 || selectedMarkets.includes(row.market_id);
-    const productMatch =
-      selectedBrands.length === 0 || selectedBrands.includes(row.product);
-    return marketMatch && productMatch;
-  });
-
+  // Update handleSidebarSave to use initialSidebarState
   const handleSidebarSave = async (editedData: ExtendedForecastData) => {
-    if (!user) return;
+    if (!user || !initialSidebarState) return;
 
     try {
-      // Store the initial state before making changes
-      const initialState = selectedDataState
-        ? {
-            userId: user.id,
-            market_id: selectedDataState.market_id,
-            market_name: selectedDataState.market_name,
-            variantSize: selectedDataState.product,
-            forecastType: selectedDataState.forecastLogic,
-            months: selectedDataState.months,
-          }
-        : null;
+      // Use the initial state we captured when the sidebar was opened
+      const initialState = {
+        userId: user.id,
+        market_id: isCustomerView
+          ? initialSidebarState.customer_id
+          : initialSidebarState.market_id,
+        market_name: isCustomerView
+          ? initialSidebarState.customer_name
+          : initialSidebarState.market_name,
+        variant_size_pack_desc: initialSidebarState.variant_size_pack_desc,
+        variant_size_pack_id: initialSidebarState.variant_size_pack_id,
+        brand: initialSidebarState.brand,
+        variant: initialSidebarState.variant,
+        variant_id: initialSidebarState.variant_id,
+        customer_id: isCustomerView ? initialSidebarState.customer_id : null,
+        customer_name: isCustomerView
+          ? initialSidebarState.customer_name
+          : null,
+        forecastType: initialSidebarState.forecastLogic,
+        months: JSON.parse(JSON.stringify(initialSidebarState.months)),
+      };
 
       // First update the forecast
-      const forecastResponse = await fetch(
+      const forecastResponse = await axios.post(
         `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            forecastMethod: editedData.forecastLogic,
-            market_id: editedData.market_id,
-            variantSizePack: editedData.product,
-          }),
+          forecastMethod: editedData.forecastLogic,
+          market_id: isCustomerView
+            ? editedData.customer_id
+            : editedData.market_id,
+          variant_size_pack_desc: editedData.variant_size_pack_desc,
+          isCustomerView: isCustomerView,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         }
       );
 
-      if (!forecastResponse.ok) {
+      if (!forecastResponse.data) {
         throw new Error("Failed to update forecast");
       }
 
-      // Then log to Redis with the initial state
-      await fetch(`${import.meta.env.VITE_API_URL}/redi/log-forecast-change`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
+      // Then log to Redis with the complete state
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
+        {
           userId: user.id,
-          market_id: editedData.market_id,
-          market_name: editedData.market_name,
-          variantSize: editedData.product,
+          market_id: isCustomerView
+            ? editedData.customer_id
+            : editedData.market_id,
+          market_name: isCustomerView
+            ? editedData.customer_name
+            : editedData.market_name,
+          variant_size_pack_desc: editedData.variant_size_pack_desc,
+          variant_size_pack_id: editedData.variant_size_pack_id,
+          brand: editedData.brand,
+          variant: editedData.variant,
+          variant_id: editedData.variant_id,
+          customer_id: isCustomerView ? editedData.customer_id : null,
+          customer_name: isCustomerView ? editedData.customer_name : null,
           forecastType: editedData.forecastLogic,
-          months: editedData.months,
+          months: JSON.parse(JSON.stringify(editedData.months)),
           initialState,
-        }),
-      });
+          isManualEdit: false,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
 
       // Update local state
       setForecastData((prevData) =>
@@ -558,6 +735,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         key: "product",
         header: "PRODUCT",
         align: "left" as const,
+        render: (_: any, row: ExtendedForecastData) => {
+          if (!row.product) return "-";
+          const parts = row.product.split(" - ");
+          return parts.length > 1 ? parts[1] : row.product;
+        },
       },
       {
         key: "forecastLogic",
@@ -580,13 +762,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         ),
       },
       // Only generate month columns if we have data
-      ...(forecastData.length > 0
+      ...(forecastData.length > 0 && forecastData[0]?.months
         ? Object.keys(forecastData[0].months).map((month) => ({
             key: `months.${month}`,
             header: month,
-            subHeader: forecastData[0].months[month].isActual ? "ACT" : "FCST",
+            subHeader: forecastData[0].months[month]?.isActual ? "ACT" : "FCST",
             align: "right" as const,
             render: (_: any, row: ExtendedForecastData) => {
+              if (!row?.months?.[month]) return "-";
               const data = row.months[month];
               return (
                 <div
@@ -642,7 +825,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               );
             },
           }))
-        : []),
+        : MONTH_NAMES.map((month) => ({
+            key: `months.${month}`,
+            header: month,
+            subHeader: "FCST",
+            align: "right" as const,
+            render: () => "-",
+          }))),
       {
         key: "total",
         header: "TOTAL",
@@ -680,34 +869,34 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           ]
         : []),
     ],
-    [forecastData, isCustomerView]
+    [forecastData, isCustomerView, handleLogicChange, marketMetadata]
   );
 
   const handleSaveClick = async () => {
     try {
-      const response = await fetch(
+      const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/redi/save-changes`,
+        { userId: user?.id },
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: user?.id }),
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         }
       );
 
-      if (!response.ok) {
+      if (!response.data.success) {
         throw new Error("Failed to save changes");
       }
 
-      await response.json();
-      setSnackbarOpen(true);
+      showSnackbar("Changes saved successfully", "success");
     } catch (error) {
       console.error("Error saving changes:", error);
+      showSnackbar("Failed to save changes", "error");
     }
   };
 
   const handlePublish = () => {
-    // Add publish logic here
-    console.log("Publishing forecast...");
+    // TODO: Implement publish functionality
   };
 
   // Add handleExport function
@@ -722,10 +911,19 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   }, [onExport, handleExport]);
 
-  // Add this log near where forecastData is initialized/loaded
-  useEffect(() => {}, [forecastData]);
+  // Add this effect to track changes
+  useEffect(() => {
+    if (selectedDataState) {
+      const hasDataChanged =
+        JSON.stringify(selectedDataState) !==
+        JSON.stringify(
+          forecastData.find((row) => row.id === selectedDataState.id)
+        );
+      setHasChanges(hasDataChanged);
+    }
+  }, [selectedDataState, forecastData]);
 
-  // Update handleSidebarForecastChange to properly update both states
+  // Add handlers for QuantSidebar
   const handleSidebarForecastChange = async (newLogic: string) => {
     if (!selectedDataState) return;
 
@@ -739,30 +937,71 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         }
       );
       setSelectedDataState(updatedRow);
+      setHasChanges(true);
     } catch (error) {
       console.error("Error in handleSidebarForecastChange:", error);
     }
   };
 
-  // Add this effect instead
-  useEffect(() => {
-    if (!selectedRow) {
-      setSelectedDataState(null);
-      return;
-    }
-    const rowData = forecastData.find((row) => row.id === selectedRow);
-    setSelectedDataState(rowData || null);
-  }, [selectedRow, forecastData]);
+  const handleMonthValueChange = (month: string, value: string) => {
+    if (!selectedDataState) return;
 
-  // Update useEffect to reset comment when selectedComment changes
+    const numValue = value === "" ? 0 : Number(value);
+    if (isNaN(numValue)) return;
+
+    setSelectedDataState((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        months: {
+          ...prev.months,
+          [month]: {
+            ...prev.months[month],
+            value: Math.round(numValue * 10) / 10,
+            isManuallyModified: true,
+          },
+        },
+      };
+    });
+    setHasChanges(true);
+  };
+
+  const handleCommentaryChange = (value: string) => {
+    if (!selectedDataState) return;
+
+    setSelectedDataState((prev) =>
+      prev ? { ...prev, commentary: value } : prev
+    );
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    if (!selectedDataState) return;
+
+    try {
+      await handleSidebarSave(selectedDataState);
+      setHasChanges(false);
+    } catch (error) {
+      console.error("Error saving changes:", error);
+    }
+  };
+
   useEffect(() => {
-    setComment(selectedComment || "");
-  }, [selectedComment]);
+    if (onAvailableBrandsChange) {
+      onAvailableBrandsChange(availableBrands);
+    }
+  }, [availableBrands, onAvailableBrandsChange]);
+
+  useEffect(() => {
+    if (onAvailableMarketsChange) {
+      onAvailableMarketsChange(availableMarkets);
+    }
+  }, [availableMarkets, onAvailableMarketsChange]);
 
   return (
     <Box>
       <DynamicTable
-        data={forecastData}
+        data={filteredData}
         columns={columns}
         onRowClick={(row) => handleRowClick(row.id)}
         selectedRow={selectedRow}
@@ -792,11 +1031,51 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       <QuantSidebar
         open={!!selectedRow}
         onClose={() => setSelectedRow(null)}
-        selectedData={selectedDataState || undefined}
-        onSave={handleSidebarSave}
-        onForecastLogicChange={handleSidebarForecastChange}
+        title="Forecast Details"
+        marketName={selectedDataState?.market_name}
+        customerName={selectedDataState?.customer_name}
+        productName={selectedDataState?.product}
+        forecastLogic={selectedDataState?.forecastLogic}
         forecastOptions={FORECAST_OPTIONS}
-        isCustomerView={isCustomerView}
+        onForecastLogicChange={handleSidebarForecastChange}
+        graphData={
+          selectedDataState
+            ? [
+                {
+                  id: "forecast",
+                  label: `${
+                    isCustomerView
+                      ? selectedDataState.customer_name
+                      : selectedDataState.market_name
+                  } - ${selectedDataState.product}`,
+                  data: Object.entries(selectedDataState.months).map(
+                    ([month, data]) => ({
+                      month,
+                      value: data.value,
+                    })
+                  ),
+                  color: theme.palette.primary.main,
+                },
+              ]
+            : []
+        }
+        months={selectedDataState?.months || {}}
+        onMonthValueChange={handleMonthValueChange}
+        commentary={selectedDataState?.commentary}
+        onCommentaryChange={handleCommentaryChange}
+        footerButtons={[
+          {
+            label: "Close",
+            onClick: () => setSelectedRow(null),
+            variant: "outlined",
+          },
+          {
+            label: "Save Changes",
+            onClick: handleSave,
+            variant: "contained",
+            disabled: !hasChanges,
+          },
+        ]}
       />
 
       <Dialog
@@ -845,8 +1124,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         open={snackbarOpen}
         autoHideDuration={3000}
         onClose={() => setSnackbarOpen(false)}
-        message="Forecast Saved"
-      />
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={snackbarSeverity}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
 
       <Snackbar
         open={noMoreActionsSnackbarOpen}
@@ -861,6 +1146,68 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         onClose={() => setUndoSnackbarOpen(false)}
         message={undoMessage}
       />
+
+      <Dialog
+        open={historyDialogOpen}
+        onClose={() => setHistoryDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Forecast Change History</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            {undoHistory.map((entry) => (
+              <Box
+                key={entry.timestamp}
+                sx={{
+                  p: 2,
+                  mb: 1,
+                  border: "1px solid",
+                  borderColor: entry.isNextUndo ? "primary.main" : "divider",
+                  borderRadius: 1,
+                  bgcolor: entry.isNextUndo
+                    ? "primary.light"
+                    : "background.paper",
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Typography variant="subtitle1">
+                    {entry.market_name} - {entry.variant_size_pack_desc}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </Typography>
+                </Box>
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2">
+                    Forecast Type: {entry.forecastType}
+                  </Typography>
+                  {entry.distributor_name && (
+                    <Typography variant="body2">
+                      Customer: {entry.distributor_name}
+                    </Typography>
+                  )}
+                  <Typography variant="body2">User: {entry.userId}</Typography>
+                </Box>
+                {entry.isNextUndo && (
+                  <Box sx={{ mt: 1 }}>
+                    <Chip label="Next Undo" color="primary" size="small" />
+                  </Box>
+                )}
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHistoryDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

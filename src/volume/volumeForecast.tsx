@@ -13,13 +13,15 @@ import {
   Tab,
   IconButton,
   Collapse,
+  InputLabel,
 } from "@mui/material";
 import { Depletions } from "./depletions/depletions";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { useUser } from "../userContext";
 import { Toolbox } from "./components/toolbox";
-import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import type { ToolType } from "./components/toolbox";
+import axios from "axios";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -70,32 +72,24 @@ export const VolumeForecast: React.FC = () => {
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
-  const [tabValue, setTabValue] = useState(0);
-  const [expanded, setExpanded] = useState(true);
-  const [isBrandsLoading, setIsBrandsLoading] = useState(false);
-  const [undoHandler, setUndoHandler] = useState<
-    (() => Promise<void>) | undefined
-  >();
-  const [exportHandler, setExportHandler] = useState<(() => void) | null>(null);
-
-  // Add new state for market data
   const [marketData, setMarketData] = useState<MarketData[]>([]);
+  const [tabValue, setTabValue] = useState(0);
+  const [undoHandler, setUndoHandler] = useState<(() => Promise<void>) | null>(
+    null
+  );
+  const [exportHandler, setExportHandler] = useState<(() => void) | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
       try {
-        setIsBrandsLoading(true);
-        const response = await fetch(
+        const response = await axios.get(
           `${import.meta.env.VITE_API_URL}/volume/brands`
         );
-        if (!response.ok) throw new Error("Failed to fetch brands");
-        const data = await response.json();
-        setAvailableBrands(data);
+        setAvailableBrands(response.data);
       } catch (error) {
         console.error("Error loading brands:", error);
-      } finally {
-        setIsBrandsLoading(false);
       }
     };
 
@@ -108,14 +102,12 @@ export const VolumeForecast: React.FC = () => {
         const userMarketIds = (user?.user_access?.Markets || []).map(
           (m) => m.id
         );
-        const response = await fetch(
+        const response = await axios.get(
           `${
             import.meta.env.VITE_API_URL
           }/volume/get-markets?ids=${userMarketIds.join(",")}`
         );
-        if (!response.ok) throw new Error("Failed to fetch market data");
-        const markets = await response.json();
-        setMarketData(markets);
+        setMarketData(response.data);
       } catch (error) {
         console.error("Error loading market data:", error);
       }
@@ -153,13 +145,9 @@ export const VolumeForecast: React.FC = () => {
     }
   };
 
-  const hasCustomerManagedMarkets = marketData.some(
-    (market) => market.settings?.managed_by === "Customer"
-  );
-
   // Add this function inside the component
-  const getCleanCustomerName = (customerData: string) => {
-    // Example: "17009 - BELLBOY CORP - USD" -> "BELLBOY CORP"
+  const getCleanCustomerName = (customerData: string | undefined) => {
+    if (!customerData) return "";
     const parts = customerData.split(" - ");
     return parts.length > 1 ? parts[1] : customerData;
   };
@@ -171,17 +159,20 @@ export const VolumeForecast: React.FC = () => {
         .flatMap((market) =>
           (market.customers || []).map((customer) => ({
             id: customer.customer_id,
-            code: customer.customer_coding,
+            code: customer.customer_id,
             display: getCleanCustomerName(customer.customer_actual_data),
             raw: customer.customer_actual_data,
           }))
         )
     : marketData.filter((market) => market.settings?.managed_by === "Market");
 
-  const handleViewToggle = () => {
-    setIsCustomerView(!isCustomerView);
-    setSelectedMarkets([]);
-  };
+  // When marketData changes, set default selected markets
+  useEffect(() => {
+    if (!isCustomerView && marketData.length > 0) {
+      // Initialize with no markets selected
+      setSelectedMarkets([]);
+    }
+  }, [marketData, isCustomerView]);
 
   const isCustomerData = (
     item: MarketData | CustomerData
@@ -195,224 +186,127 @@ export const VolumeForecast: React.FC = () => {
     console.log("Columns clicked in volumeForecast");
   };
 
+  // Add this function to handle view toggle
+  const handleViewToggle = () => {
+    setIsCustomerView(!isCustomerView);
+    setSelectedMarkets([]); // Clear selected markets when switching views
+    setSelectedBrands([]); // Also clear selected brands when switching views
+  };
+
   return (
-    <Paper elevation={3}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          p: 2,
-          borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
-        }}
-      >
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 500,
-            color: (theme) => theme.palette.primary.main,
-          }}
-        >
-          VOLUME FORECAST (9L)
+    <Paper sx={{ p: 2, mb: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+        <Typography variant="h6" sx={{ flexGrow: 1 }}>
+          Volume Forecast
         </Typography>
-        <IconButton
-          onClick={() => setExpanded(!expanded)}
-          size="small"
-          sx={{ ml: 2 }}
-        >
-          {expanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-        </IconButton>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <IconButton onClick={() => setIsCollapsed(!isCollapsed)}>
+            {isCollapsed ? <KeyboardArrowDownIcon /> : <KeyboardArrowUpIcon />}
+          </IconButton>
+        </Box>
       </Box>
 
-      <Collapse in={expanded}>
-        <Box sx={{ p: 2, pt: 2 }}>
-          <Box
-            sx={{
-              mb: 4,
-              display: "flex",
-              gap: 4,
-              alignItems: "center",
-            }}
-          >
-            <Box
-              sx={{
-                display: "flex",
-                gap: 2,
-                alignItems: "center",
-              }}
-            >
-              {hasCustomerManagedMarkets && (
-                <IconButton
-                  size="small"
-                  onClick={handleViewToggle}
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "primary.main",
-                    p: "4px",
-                    "&:hover": {
-                      backgroundColor: "primary.main",
-                      color: "white",
-                    },
-                  }}
-                  color="primary"
-                >
-                  <CompareArrowsIcon sx={{ fontSize: "1.2rem" }} />
-                </IconButton>
-              )}
-              <Typography
-                variant="body2"
-                component="span"
-                sx={{
-                  fontWeight: "500",
-                  textTransform: "uppercase",
-                  fontSize: "0.875rem",
-                }}
-              >
-                {isCustomerView ? "Customer:" : "Market:"}
-              </Typography>
-              <FormControl sx={{ minWidth: "300px", flex: 1 }}>
+      <Collapse in={!isCollapsed}>
+        <Box>
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <Box sx={{ flex: 1 }}>
+              <FormControl fullWidth>
+                <InputLabel>
+                  Filter {isCustomerView ? "Customers" : "Markets"}
+                </InputLabel>
                 <Select
                   multiple
                   value={selectedMarkets}
                   onChange={handleMarketChange}
-                  input={<OutlinedInput />}
-                  size="small"
-                  renderValue={(selected) => {
-                    if (selected.length === 0) {
-                      return "Please select market";
-                    }
-                    return (
-                      <Box
-                        sx={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 0.5,
-                          maxWidth: "100%", // Ensure chips wrap within container
-                        }}
-                      >
-                        {selected.map((value) => (
-                          <Chip
-                            key={value}
-                            label={
-                              isCustomerView
-                                ? getCleanCustomerName(
-                                    filteredData.find(
-                                      (item) =>
-                                        isCustomerData(item) &&
-                                        item.code === value
-                                    )?.raw || value
-                                  )
-                                : filteredData.find(
-                                    (item) =>
-                                      !isCustomerData(item) &&
-                                      (item as MarketData).market_id === value
-                                  ) &&
-                                  !isCustomerData(
-                                    filteredData.find(
-                                      (item) =>
-                                        !isCustomerData(item) &&
-                                        (item as MarketData).market_id === value
-                                    )!
-                                  )
-                                ? (
-                                    filteredData.find(
-                                      (item) =>
-                                        !isCustomerData(item) &&
-                                        (item as MarketData).market_id === value
-                                    ) as MarketData
-                                  ).market_code
-                                : value
+                  input={
+                    <OutlinedInput
+                      label={`Select ${
+                        isCustomerView ? "Customers" : "Markets"
+                      }`}
+                    />
+                  }
+                  renderValue={(selected) => (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {selected.map((value) => (
+                        <Chip
+                          key={value}
+                          label={(() => {
+                            if (isCustomerView) {
+                              const item = filteredData.find(
+                                (item) =>
+                                  isCustomerData(item) && item.code === value
+                              );
+                              return item && isCustomerData(item)
+                                ? getCleanCustomerName(item.raw)
+                                : value;
+                            } else {
+                              const market = filteredData.find(
+                                (item) =>
+                                  !isCustomerData(item) &&
+                                  item.market_id === value
+                              ) as MarketData | undefined;
+                              return market ? market.market_name : value;
                             }
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            sx={{
-                              borderRadius: "16px",
-                              backgroundColor: "transparent",
-                              "& .MuiChip-label": {
-                                px: 1,
-                              },
-                            }}
-                            onDelete={() =>
-                              setSelectedMarkets((prev) =>
-                                prev.filter((market) => market !== value)
-                              )
-                            }
-                          />
-                        ))}
-                      </Box>
-                    );
-                  }}
+                          })()}
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          sx={{
+                            borderRadius: "16px",
+                            backgroundColor: "transparent",
+                            "& .MuiChip-label": { px: 1 },
+                          }}
+                          onDelete={() =>
+                            setSelectedMarkets((prev) =>
+                              prev.filter((market) => market !== value)
+                            )
+                          }
+                        />
+                      ))}
+                    </Box>
+                  )}
                 >
                   {filteredData.map((item) => (
                     <MenuItem
-                      key={item.id}
-                      value={
-                        isCustomerView
-                          ? (item as CustomerData).code
-                          : (item as MarketData).market_id
-                      }
+                      key={isCustomerData(item) ? item.code : item.market_id}
+                      value={isCustomerData(item) ? item.code : item.market_id}
                     >
-                      {isCustomerView
-                        ? (item as CustomerData).display
-                        : (item as MarketData).market_name}
+                      {isCustomerData(item) ? item.display : item.market_name}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Box>
 
-            <Box
-              sx={{
-                display: "flex",
-                gap: 2,
-                alignItems: "center",
-              }}
-            >
-              <Typography
-                variant="body2"
-                component="span"
-                sx={{
-                  fontWeight: "500",
-                  textTransform: "uppercase",
-                  fontSize: "0.875rem",
-                }}
-              >
-                Brand:
-              </Typography>
-              <FormControl sx={{ width: "300px" }}>
+            <Box sx={{ flex: 1 }}>
+              <FormControl fullWidth>
+                <InputLabel>Filter Brands</InputLabel>
                 <Select
                   multiple
                   value={selectedBrands}
                   onChange={handleBrandChange}
-                  input={<OutlinedInput />}
-                  disabled={isBrandsLoading}
-                  size="small"
+                  input={<OutlinedInput label="Select Brands" />}
                   renderValue={(selected) => (
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {isBrandsLoading
-                        ? "Loading..."
-                        : selected.map((value) => (
-                            <Chip
-                              key={value}
-                              label={value}
-                              size="small"
-                              variant="outlined"
-                              color="primary"
-                              sx={{
-                                borderRadius: "16px",
-                                backgroundColor: "transparent",
-                                "& .MuiChip-label": {
-                                  px: 1,
-                                },
-                              }}
-                              onDelete={() =>
-                                setSelectedBrands((prev) =>
-                                  prev.filter((brand) => brand !== value)
-                                )
-                              }
-                            />
-                          ))}
+                      {selected.map((value) => (
+                        <Chip
+                          key={value}
+                          label={value}
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          sx={{
+                            borderRadius: "16px",
+                            backgroundColor: "transparent",
+                            "& .MuiChip-label": { px: 1 },
+                          }}
+                          onDelete={() =>
+                            setSelectedBrands((prev) =>
+                              prev.filter((brand) => brand !== value)
+                            )
+                          }
+                        />
+                      ))}
                     </Box>
                   )}
                 >
@@ -427,11 +321,20 @@ export const VolumeForecast: React.FC = () => {
           </Box>
 
           <Toolbox
-            tools={["undo", "columns", "export"]}
+            tools={[
+              "undo" as ToolType,
+              "columns" as ToolType,
+              "export" as ToolType,
+              ...(marketData.some((m) => m.settings?.managed_by === "Customer")
+                ? ["customerToggle" as ToolType]
+                : []),
+            ]}
             onUndo={handleUndo}
             onColumns={handleColumns}
             onExport={handleExportClick}
-            canUndo={!!undoHandler}
+            onCustomerToggle={handleViewToggle}
+            canUndo={true}
+            isDepletionsView={true}
           />
 
           <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -448,6 +351,7 @@ export const VolumeForecast: React.FC = () => {
               isCustomerView={isCustomerView}
               onUndo={(handler) => setUndoHandler(() => handler)}
               onExport={(handler) => setExportHandler(() => handler)}
+              onAvailableBrandsChange={setAvailableBrands}
             />
           </TabPanel>
         </Box>

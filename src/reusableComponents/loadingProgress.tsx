@@ -11,16 +11,26 @@ const LOADING_MESSAGES = [
 interface LoadingProgressProps {
   onComplete: () => void;
   dataReady?: boolean;
+  skipAnimation?: boolean;
 }
 
 export const LoadingProgress = ({
   onComplete,
   dataReady = true,
+  skipAnimation = false,
 }: LoadingProgressProps) => {
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(skipAnimation ? 100 : 0);
   const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
+    // If skipAnimation is true, complete immediately
+    if (skipAnimation) {
+      setProgress(100);
+      setMessageIndex(LOADING_MESSAGES.length - 1);
+      setTimeout(onComplete, 300);
+      return;
+    }
+
     const timer = setInterval(() => {
       setProgress((oldProgress) => {
         // Progress moves steadily to 95%, then waits for data
@@ -51,7 +61,7 @@ export const LoadingProgress = ({
     return () => {
       clearInterval(timer);
     };
-  }, [onComplete, messageIndex, dataReady]);
+  }, [onComplete, messageIndex, dataReady, skipAnimation]);
 
   return (
     <Box

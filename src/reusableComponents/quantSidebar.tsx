@@ -12,8 +12,7 @@ import {
 } from "@mui/material";
 
 import CloseIcon from "@mui/icons-material/Close";
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { type ExtendedForecastData } from "../volume/depletions/depletions";
+import { useState, useMemo } from "react";
 import { InteractiveGraph } from "./interactiveGraph";
 import { useTheme } from "@mui/material/styles";
 import { MonthlyValues } from "./monthlyValues";
@@ -24,54 +23,93 @@ interface MonthData {
   isManuallyModified?: boolean;
 }
 
+interface MonthGroup {
+  label: string;
+  months: string[];
+}
+
 interface QuantSidebarProps {
   open: boolean;
   onClose: () => void;
-  selectedData?: ExtendedForecastData;
-  onSave: (data: ExtendedForecastData) => void;
-  onForecastLogicChange: (newLogic: string) => Promise<void>;
-  forecastOptions: Array<{ id: number; label: string; value: string }>;
-  isCustomerView?: boolean;
+  title?: string;
+  width?: string | number;
+  // Data props
+  marketName?: string;
+  customerName?: string;
+  productName?: string;
+  forecastLogic?: string;
+  forecastOptions?: Array<{ id: number; label: string; value: string }>;
+  onForecastLogicChange?: (newLogic: string) => void;
+  // Graph props
+  graphData?: Array<{
+    id: string;
+    label: string;
+    data: Array<{ month: string; value: number }>;
+    color: string;
+  }>;
+  // Monthly values props
+  months: {
+    [key: string]: MonthData;
+  };
+  onMonthValueChange: (month: string, value: string) => void;
+  // Commentary
+  commentary?: string;
+  onCommentaryChange?: (value: string) => void;
+  // Footer buttons
+  footerButtons?: Array<{
+    label: string;
+    onClick: () => void;
+    variant: "text" | "outlined" | "contained";
+    disabled?: boolean;
+  }>;
 }
+
+// Fixed quarter groups for the sidebar
+const QUARTER_GROUPS: MonthGroup[] = [
+  { label: "Q1", months: ["JAN", "FEB", "MAR"] },
+  { label: "Q2", months: ["APR", "MAY", "JUN"] },
+  { label: "Q3", months: ["JUL", "AUG", "SEP"] },
+  { label: "Q4", months: ["OCT", "NOV", "DEC"] },
+];
 
 export const QuantSidebar = ({
   open,
   onClose,
-  selectedData,
-  onSave,
-  onForecastLogicChange,
+  title = "Forecast Details",
+  width = "600px",
+  marketName,
+  customerName,
+  productName,
+  forecastLogic,
   forecastOptions,
-  isCustomerView,
+  onForecastLogicChange,
+  graphData = [],
+  months,
+  onMonthValueChange,
+  commentary,
+  onCommentaryChange,
+  footerButtons = [],
 }: QuantSidebarProps) => {
-  const [editedData, setEditedData] = useState<ExtendedForecastData | null>(
-    null
-  );
-  const [hasChanges, setHasChanges] = useState(false);
+  const theme = useTheme();
   const [selectedTrendLines, setSelectedTrendLines] = useState<string[]>([]);
 
-  const theme = useTheme();
-
+  // Generate trend lines based on the current data
   const trendLines = useMemo(() => {
-    if (!editedData) return [];
+    if (!graphData.length) return [];
+
+    const baseData = graphData[0].data;
 
     // Create LAP data
-    const lapData = Object.entries(editedData.months).map(([month, data]) => {
-      const baseValue = data.value;
-      // Random value between -20% and +20% of the forecast
-      const randomFactor = 0.8 + Math.random() * 0.4; // generates number between 0.8 and 1.2
-      return {
-        month,
-        value: Math.round(baseValue * randomFactor),
-      };
-    });
+    const lapData = baseData.map(({ month, value }) => ({
+      month,
+      value: Math.round(value * (0.8 + Math.random() * 0.4)), // Random value between -20% and +20%
+    }));
 
-    // Replace budget data logic with simplified version
-    const monthlyBudgetData = Object.entries(editedData.months).map(
-      ([month, data]) => ({
-        month,
-        value: Math.round(data.value * 1.05),
-      })
-    );
+    // Create budget data
+    const budgetData = baseData.map(({ month, value }) => ({
+      month,
+      value: Math.round(value * 1.05), // 5% above forecast
+    }));
 
     return [
       {
@@ -83,28 +121,15 @@ export const QuantSidebar = ({
       {
         id: "budget-2025",
         label: "2025 Budget",
-        data: monthlyBudgetData,
+        data: budgetData,
         color: theme.palette.secondary.main,
       },
     ];
-  }, [editedData, theme.palette.secondary.main, theme.palette.info.main]);
+  }, [graphData, theme.palette.info.main, theme.palette.secondary.main]);
 
-  const graphData = useMemo(() => {
-    if (!editedData) return [];
-
-    const baseData = [
-      {
-        id: "forecast",
-        label: `${
-          isCustomerView ? editedData.customer_name : editedData.market_name
-        } - ${editedData.product}`,
-        data: Object.entries(editedData.months).map(([month, data]) => ({
-          month,
-          value: data.value,
-        })),
-        color: theme.palette.primary.main,
-      },
-    ];
+  // Combine base graph data with selected trend lines
+  const combinedGraphData = useMemo(() => {
+    if (!graphData.length) return [];
 
     const selectedTrendLineData = trendLines
       .filter((tl) => selectedTrendLines.includes(tl.id))
@@ -115,75 +140,23 @@ export const QuantSidebar = ({
         color: tl.color,
       }));
 
-    return [...baseData, ...selectedTrendLineData];
-  }, [
-    editedData,
-    trendLines,
-    selectedTrendLines,
-    theme.palette.primary.main,
-    isCustomerView,
-  ]);
+    return [...graphData, ...selectedTrendLineData];
+  }, [graphData, trendLines, selectedTrendLines]);
 
-  useEffect(() => {
-    setEditedData(selectedData || null);
-    setHasChanges(false);
-  }, [selectedData]);
-
-  const handleTrendLineAdd = useCallback((trendLineId: string) => {
+  const handleTrendLineAdd = (trendLineId: string) => {
     setSelectedTrendLines((prev) => [...prev, trendLineId]);
-  }, []);
+  };
 
-  const handleTrendLineRemove = useCallback((trendLineId: string) => {
+  const handleTrendLineRemove = (trendLineId: string) => {
     setSelectedTrendLines((prev) => prev.filter((id) => id !== trendLineId));
-  }, []);
-
-  const handleMonthValueChange = (month: string, value: string) => {
-    const numValue = value === "" ? 0 : Number(value);
-    if (isNaN(numValue)) return;
-
-    setEditedData((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        months: {
-          ...prev.months,
-          [month]: {
-            ...prev.months[month],
-            value: Math.round(numValue * 10) / 10,
-            isManuallyModified: true,
-          },
-        },
-      };
-    });
-    setHasChanges(true);
   };
 
   const calculateTotal = () => {
-    if (!editedData) return 0;
-    return Object.values(editedData.months).reduce(
+    return Object.values(months).reduce(
       (acc, curr: MonthData) => acc + curr.value,
       0
     );
   };
-
-  const handleSave = async () => {
-    if (editedData) {
-      try {
-        onSave(editedData);
-        setHasChanges(false);
-      } catch (error) {
-        console.error("Error saving changes:", error);
-      }
-    }
-  };
-
-  // Helper function to group months by quarter
-  const quarterGroups = [
-    { label: "Q1", months: ["JAN", "FEB", "MAR"] },
-    { label: "Q2", months: ["APR", "MAY", "JUN"] },
-    { label: "Q3", months: ["JUL", "AUG", "SEP"] },
-    { label: "Q4", months: ["OCT", "NOV", "DEC"] },
-  ];
 
   return (
     <Drawer
@@ -192,7 +165,7 @@ export const QuantSidebar = ({
       onClose={onClose}
       sx={{
         "& .MuiDrawer-paper": {
-          width: "600px",
+          width,
           backgroundColor: "background.paper",
           display: "flex",
           flexDirection: "column",
@@ -208,57 +181,56 @@ export const QuantSidebar = ({
             mb: 3,
           }}
         >
-          <Typography variant="h6">Forecast Details</Typography>
+          <Typography variant="h6">{title}</Typography>
           <IconButton onClick={onClose}>
             <CloseIcon />
           </IconButton>
         </Box>
 
         <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-              <Typography sx={{ fontWeight: 700 }}>
-                {isCustomerView ? "Customer:" : "Market:"}
-              </Typography>
-              <Typography>
-                {isCustomerView
-                  ? editedData?.customer_name
-                  : editedData?.market_name}
-              </Typography>
-            </Box>
-          </Grid>
+          {(marketName || customerName) && (
+            <Grid item xs={12}>
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                <Typography sx={{ fontWeight: 700 }}>
+                  {customerName ? "Customer:" : "Market:"}
+                </Typography>
+                <Typography>{customerName || marketName}</Typography>
+              </Box>
+            </Grid>
+          )}
 
-          <Grid item xs={12}>
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-              <Typography sx={{ fontWeight: 700 }}>Item:</Typography>
-              <Typography>{editedData?.product}</Typography>
-            </Box>
-          </Grid>
+          {productName && (
+            <Grid item xs={12}>
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                <Typography sx={{ fontWeight: 700 }}>Item:</Typography>
+                <Typography>{productName}</Typography>
+              </Box>
+            </Grid>
+          )}
 
-          <Grid item xs={12}>
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-              <Typography sx={{ fontWeight: 700 }}>Logic:</Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={editedData?.forecastLogic || ""}
-                  onChange={(e) => {
-                    onForecastLogicChange(e.target.value);
-                    setHasChanges(true);
-                  }}
-                >
-                  {forecastOptions.map((option) => (
-                    <MenuItem key={option.id} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          </Grid>
+          {forecastLogic && forecastOptions && onForecastLogicChange && (
+            <Grid item xs={12}>
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                <Typography sx={{ fontWeight: 700 }}>Logic:</Typography>
+                <FormControl fullWidth size="small">
+                  <Select
+                    value={forecastLogic}
+                    onChange={(e) => onForecastLogicChange(e.target.value)}
+                  >
+                    {forecastOptions.map((option) => (
+                      <MenuItem key={option.id} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Grid>
+          )}
 
           <Grid item xs={12}>
             <InteractiveGraph
-              datasets={graphData}
+              datasets={combinedGraphData}
               availableTrendLines={trendLines}
               onTrendLineAdd={handleTrendLineAdd}
               onTrendLineRemove={handleTrendLineRemove}
@@ -269,38 +241,37 @@ export const QuantSidebar = ({
 
           <Grid item xs={12}>
             <MonthlyValues
-              quarterGroups={quarterGroups.map(({ label, months }) => ({
-                label,
-                months: months.map((month) => ({
-                  month,
-                  value: editedData?.months[month]?.value || 0,
-                  isActual: editedData?.months[month]?.isActual || false,
-                  isManuallyModified:
-                    editedData?.months[month]?.isManuallyModified || false,
-                })),
-              }))}
-              onMonthValueChange={handleMonthValueChange}
+              quarterGroups={QUARTER_GROUPS.map(
+                ({ label, months: monthList }) => ({
+                  label,
+                  months: monthList.map((month) => ({
+                    month,
+                    value: months[month]?.value || 0,
+                    isActual: months[month]?.isActual || false,
+                    isManuallyModified:
+                      months[month]?.isManuallyModified || false,
+                  })),
+                })
+              )}
+              onMonthValueChange={onMonthValueChange}
               label="MONTHLY VALUES"
               defaultExpanded={true}
             />
           </Grid>
 
-          <Grid item xs={12}>
-            <TextField
-              label="Commentary"
-              multiline
-              rows={3}
-              fullWidth
-              value={editedData?.commentary || ""}
-              onChange={(e) => {
-                setEditedData((prev) =>
-                  prev ? { ...prev, commentary: e.target.value } : prev
-                );
-                setHasChanges(true);
-              }}
-              placeholder="Add your comments here..."
-            />
-          </Grid>
+          {onCommentaryChange !== undefined && (
+            <Grid item xs={12}>
+              <TextField
+                label="Commentary"
+                multiline
+                rows={3}
+                fullWidth
+                value={commentary || ""}
+                onChange={(e) => onCommentaryChange(e.target.value)}
+                placeholder="Add your comments here..."
+              />
+            </Grid>
+          )}
 
           <Grid item xs={12}>
             <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
@@ -313,29 +284,31 @@ export const QuantSidebar = ({
         </Grid>
       </Box>
 
-      <Box
-        sx={{
-          p: 2,
-          borderTop: "1px solid",
-          borderColor: "divider",
-          backgroundColor: (theme) => theme.palette.background.paper,
-          display: "flex",
-          gap: 2,
-          justifyContent: "flex-end",
-        }}
-      >
-        <Button variant="outlined" onClick={onClose} sx={{ minWidth: "120px" }}>
-          Close
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSave}
-          disabled={!hasChanges}
-          sx={{ minWidth: "120px" }}
+      {footerButtons.length > 0 && (
+        <Box
+          sx={{
+            p: 2,
+            borderTop: "1px solid",
+            borderColor: "divider",
+            backgroundColor: (theme) => theme.palette.background.paper,
+            display: "flex",
+            gap: 2,
+            justifyContent: "flex-end",
+          }}
         >
-          Save Changes
-        </Button>
-      </Box>
+          {footerButtons.map((button, index) => (
+            <Button
+              key={index}
+              variant={button.variant}
+              onClick={button.onClick}
+              disabled={button.disabled}
+              sx={{ minWidth: "120px" }}
+            >
+              {button.label}
+            </Button>
+          ))}
+        </Box>
+      )}
     </Drawer>
   );
 };

@@ -3,6 +3,7 @@ import { Dialog, DialogContent, IconButton, Box, Button } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { DepletionDetails } from "./depletionDetails";
 import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
+import axios from "axios";
 
 interface DetailsContainerProps {
   open: boolean;
@@ -12,6 +13,8 @@ interface DetailsContainerProps {
   value: number;
   month: any;
   year: number;
+  variant_size_pack_id?: string;
+  variant_size_pack_desc?: string;
 }
 
 export const DetailsContainer = ({
@@ -22,6 +25,8 @@ export const DetailsContainer = ({
   value,
   month,
   year,
+  variant_size_pack_id,
+  variant_size_pack_desc,
 }: DetailsContainerProps) => {
   const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,37 +35,38 @@ export const DetailsContainer = ({
 
   useEffect(() => {
     let isMounted = true;
-    let controller = new AbortController();
+    const controller = new AbortController();
 
     const fetchAccountLevelSales = async () => {
-      if (!open || !market || !product) return;
+      const productToQuery = variant_size_pack_desc || product;
+      if (!open || !market || !productToQuery) return;
 
       setIsLoading(true);
       setDataReady(false);
       setShowContent(false);
       try {
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_URL
-          }/volume/account-level-sales?month=${month}&market=${market}&product=${product}`,
-          { signal: controller.signal }
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/volume/account-level-sales`,
+          {
+            params: {
+              month,
+              market,
+              product: productToQuery,
+            },
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            signal: controller.signal,
+          }
         );
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch account level sales");
-        }
-
-        const data = await response.json();
-
         if (isMounted) {
-          setAccountLevelSalesData(data);
+          setAccountLevelSalesData(response.data);
           setDataReady(true);
         }
       } catch (error: unknown) {
-        if (error instanceof Error) {
-          if (error.name === "AbortError") return;
-          console.error("Error fetching account level sales:", error);
-        }
+        if (axios.isCancel(error)) return;
+        console.error("Error fetching account level sales:", error);
         if (isMounted) {
           setShowContent(true); // Show error state
           setIsLoading(false);
@@ -74,13 +80,17 @@ export const DetailsContainer = ({
       isMounted = false;
       controller.abort();
     };
-  }, [open, month, market, product]);
+  }, [open, month, market, product, variant_size_pack_desc]);
+
+  useEffect(() => {
+    if (dataReady && accountLevelSalesData.length > 0) {
+      handleLoadingComplete();
+    }
+  }, [dataReady, accountLevelSalesData.length]);
 
   const handleLoadingComplete = () => {
-    if (dataReady) {
-      setShowContent(true);
-      setIsLoading(false);
-    }
+    setShowContent(true);
+    setIsLoading(false);
   };
 
   return (
@@ -103,17 +113,19 @@ export const DetailsContainer = ({
             <LoadingProgress
               onComplete={handleLoadingComplete}
               dataReady={dataReady}
+              skipAnimation={accountLevelSalesData.length > 0}
             />
           </Box>
         ) : showContent ? (
           <>
             <DepletionDetails
               market={market}
-              item={product}
+              item={variant_size_pack_desc || product}
               value={value}
               month={Number(month)}
               year={year}
-              variant_size_pack={product}
+              variant_size_pack_id={variant_size_pack_id || product}
+              variant_size_pack_desc={variant_size_pack_desc || product}
               onRetailerClick={() => {}}
               accountLevelSalesData={accountLevelSalesData}
               isLoading={isLoading}

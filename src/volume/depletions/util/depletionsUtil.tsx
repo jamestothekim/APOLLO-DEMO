@@ -84,7 +84,9 @@ export interface ExportableData {
   product: string;
   brand: string;
   variant: string;
-  variantSize: string | number;
+  variant_id: string;
+  variant_size_pack_id: string;
+  variant_size_pack_desc: string;
   forecastLogic: string;
   months: {
     [key: string]: {
@@ -102,6 +104,9 @@ export const exportToCSV = (data: ExportableData[]) => {
     "Product",
     "Brand",
     "Variant",
+    "Variant ID",
+    "Variant Size Pack ID",
+    "Variant Size Pack Desc",
     "Forecast Logic",
     ...monthKeys,
     "Total",
@@ -116,6 +121,9 @@ export const exportToCSV = (data: ExportableData[]) => {
       row.product,
       row.brand,
       row.variant,
+      row.variant_id,
+      row.variant_size_pack_id,
+      row.variant_size_pack_desc,
       row.forecastLogic,
       ...monthValues,
       total,
@@ -135,6 +143,10 @@ export const exportToCSV = (data: ExportableData[]) => {
 };
 
 export const hasNonZeroTotal = (row: ExtendedForecastData): boolean => {
+  if (!row || !row.months || typeof row.months !== "object") {
+    return false;
+  }
+
   const total = Object.values(row.months).reduce((sum, { value }) => {
     const numValue = Number(value);
     return !isNaN(numValue) ? sum + numValue : sum;
