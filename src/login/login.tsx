@@ -54,7 +54,10 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
+      console.log("Attempting login with email:", formData.email); // Don't log password in production
       const success = await login(formData.email, formData.password);
+
+      console.log("Login response:", success); // Add this to see the actual response
 
       if (success) {
         setNotification({
@@ -67,6 +70,7 @@ export const Login: React.FC = () => {
         const from = (location.state as any)?.from?.pathname || "/";
         navigate(from, { replace: true });
       } else {
+        console.warn("Login failed - Server returned false for login attempt");
         setNotification({
           open: true,
           message: "Invalid email or password",
@@ -74,7 +78,10 @@ export const Login: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Login error details:", {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       setNotification({
         open: true,
         message: "An error occurred during login",
