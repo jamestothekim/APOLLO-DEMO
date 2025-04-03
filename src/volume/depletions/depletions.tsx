@@ -63,7 +63,6 @@ export interface ExtendedForecastData {
 }
 
 export type ForecastLogic =
-  | "two_month"
   | "three_month"
   | "six_month"
   | "nine_month"
