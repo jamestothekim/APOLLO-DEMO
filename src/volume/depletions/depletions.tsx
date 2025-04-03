@@ -37,6 +37,7 @@ import {
   exportToCSV,
   hasNonZeroTotal,
   calculateTotal,
+  ForecastLogic,
 } from "./util/depletionsUtil";
 
 export interface ExtendedForecastData {
@@ -62,14 +63,7 @@ export interface ExtendedForecastData {
   commentary?: string;
 }
 
-export type ForecastLogic =
-  | "three_month"
-  | "six_month"
-  | "nine_month"
-  | "flat"
-  | "run_rate";
-
-export interface FilterSelectionProps {
+export type FilterSelectionProps = {
   selectedMarkets: string[];
   selectedBrands: string[];
   marketMetadata: MarketData[];
@@ -78,7 +72,7 @@ export interface FilterSelectionProps {
   onExport?: (handler: () => void) => void;
   onAvailableBrandsChange?: (brands: string[]) => void;
   onAvailableMarketsChange?: (markets: string[]) => void;
-}
+};
 
 // Add this helper function near the top with other utility functions
 const fetchLoggedForecastChanges = async () => {

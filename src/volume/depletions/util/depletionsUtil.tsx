@@ -7,13 +7,14 @@ export type ForecastOption = {
 };
 
 export const FORECAST_OPTIONS: ForecastOption[] = [
-  { id: 1, label: "Two Month", value: "two_month" },
-  { id: 2, label: "Three Month", value: "three_month" },
-  { id: 3, label: "Six Month", value: "six_month" },
-  { id: 4, label: "Nine Month", value: "nine_month" },
-  { id: 5, label: "Flat", value: "flat" },
-  { id: 6, label: "Run Rate", value: "run_rate" },
+  { id: 1, label: "Three Month", value: "three_month" },
+  { id: 2, label: "Six Month", value: "six_month" },
+  { id: 3, label: "Nine Month", value: "nine_month" },
+  { id: 4, label: "Flat", value: "flat" },
+  { id: 5, label: "Run Rate", value: "run_rate" },
 ];
+
+export type ForecastLogic = (typeof FORECAST_OPTIONS)[number]["value"];
 
 export const MONTH_NAMES = [
   "JAN",

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, IconButton, Box, Button } from "@mui/material";
+import { Dialog, DialogContent, IconButton, Box } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { DepletionDetails } from "./depletionDetails";
 import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
@@ -94,7 +94,18 @@ export const DetailsContainer = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={false}
+      PaperProps={{
+        sx: {
+          width: "1152px", // Standard md width (960px) + 20%
+          maxWidth: "90vw",
+        },
+      }}
+      fullWidth
+    >
       <Box sx={{ position: "absolute", right: 8, top: 8, zIndex: 1 }}>
         <IconButton onClick={onClose} aria-label="close">
           <CloseIcon />
@@ -130,11 +141,6 @@ export const DetailsContainer = ({
               accountLevelSalesData={accountLevelSalesData}
               isLoading={isLoading}
             />
-            <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-              <Button onClick={onClose} variant="contained">
-                Close
-              </Button>
-            </Box>
           </>
         ) : null}
       </DialogContent>
