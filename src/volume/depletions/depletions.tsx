@@ -16,12 +16,14 @@ import {
   Typography,
   Chip,
   useTheme,
+  CircularProgress,
 } from "@mui/material";
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
 import CommentIcon from "@mui/icons-material/Comment";
 import { DetailsContainer } from "./details/detailsContainer";
 import type { MarketData } from "../volumeForecast";
+import type { Benchmark } from "../components/benchmarks";
 import axios from "axios";
 
 import {
@@ -38,6 +40,9 @@ import {
   hasNonZeroTotal,
   calculateTotal,
   ForecastLogic,
+  processBenchmarkValue,
+  formatBenchmarkValue,
+  recalculateBenchmarks,
 } from "./util/depletionsUtil";
 
 export interface ExtendedForecastData {
@@ -53,6 +58,10 @@ export interface ExtendedForecastData {
   variant_size_pack_id: string;
   variant_size_pack_desc: string;
   forecastLogic: string;
+  py_case_equivalent_volume?: number;
+  py_gross_sales_value?: number;
+  gross_sales_value?: number;
+  case_equivalent_volume?: number;
   months: {
     [key: string]: {
       value: number;
@@ -61,6 +70,8 @@ export interface ExtendedForecastData {
     };
   };
   commentary?: string;
+  isLoading?: boolean;
+  [key: string]: any; // Allow dynamic benchmark values
 }
 
 export type FilterSelectionProps = {
@@ -72,6 +83,7 @@ export type FilterSelectionProps = {
   onExport?: (handler: () => void) => void;
   onAvailableBrandsChange?: (brands: string[]) => void;
   onAvailableMarketsChange?: (markets: string[]) => void;
+  selectedBenchmarks?: Benchmark[];
 };
 
 // Add this helper function near the top with other utility functions
@@ -95,7 +107,8 @@ const fetchLoggedForecastChanges = async () => {
 const processRawData = (
   data: any[],
   loggedChanges: any[] = [],
-  isCustomerView: boolean
+  isCustomerView: boolean,
+  selectedBenchmarks?: Benchmark[]
 ): ExtendedForecastData[] => {
   // Group data by market/customer and variant_size_pack_id combination
   const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
@@ -119,6 +132,10 @@ const processRawData = (
         variant_size_pack_desc: item.variant_size_pack_desc,
         forecastLogic: item.forecast_method || "flat",
         months: {},
+        // Initialize GSV values to zero
+        gross_sales_value: 0,
+        py_gross_sales_value: 0,
+        py_case_equivalent_volume: 0,
       };
     }
 
@@ -136,8 +153,40 @@ const processRawData = (
       };
     }
 
+    // Sum up GSV values - add them to the accumulated values
+    if (item.gross_sales_value !== undefined) {
+      acc[key].gross_sales_value += Number(item.gross_sales_value) || 0;
+    }
+
+    if (item.py_gross_sales_value !== undefined) {
+      acc[key].py_gross_sales_value += Number(item.py_gross_sales_value) || 0;
+    }
+
+    if (item.py_case_equivalent_volume !== undefined) {
+      acc[key].py_case_equivalent_volume +=
+        Number(item.py_case_equivalent_volume) || 0;
+    }
+
     return acc;
   }, {});
+
+  // Process benchmark data - first handle direct values
+  if (selectedBenchmarks && selectedBenchmarks.length > 0) {
+    // First, add all direct field values
+    selectedBenchmarks.forEach((benchmark) => {
+      if (typeof benchmark.value === "string") {
+        // For direct values like py_case_equivalent_volume
+        // We've already populated these values above, so no additional action needed here
+        console.log(
+          `Benchmark field ${benchmark.value} values:`,
+          Object.keys(groupedData).map((key) => ({
+            id: key,
+            value: groupedData[key][benchmark.value as any],
+          }))
+        );
+      }
+    });
+  }
 
   // Fill in any missing months with zeros
   Object.values(groupedData).forEach((item: any) => {
@@ -162,6 +211,16 @@ const processRawData = (
       groupedData[key].months = change.months;
     }
   });
+
+  // Now calculate the derived benchmark values for each row
+  if (selectedBenchmarks && selectedBenchmarks.length > 0) {
+    Object.keys(groupedData).forEach((key) => {
+      groupedData[key] = recalculateBenchmarks(
+        groupedData[key],
+        selectedBenchmarks
+      );
+    });
+  }
 
   return Object.values(groupedData);
 };
@@ -211,6 +270,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   onExport,
   onAvailableBrandsChange,
   onAvailableMarketsChange,
+  selectedBenchmarks,
 }) => {
   const { user } = useUser();
   const theme = useTheme();
@@ -305,6 +365,30 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const loadForecastData = useMemo(
     () => async () => {
       try {
+        // Set initial loading state by creating placeholder rows
+        if (forecastData.length === 0) {
+          // Only set placeholders if no data exists yet
+          const placeholders = marketMetadata.slice(0, 3).map(
+            (market, idx) =>
+              ({
+                id: `loading-${idx}`,
+                market_id: market.market_id,
+                market_name: market.market_name,
+                product: "Loading...",
+                brand: "Loading...",
+                variant: "Loading...",
+                variant_id: `loading-${idx}`,
+                variant_size_pack_id: `loading-${idx}`,
+                variant_size_pack_desc: "Loading...",
+                forecastLogic: "flat",
+                isLoading: true,
+                months: {},
+              } as ExtendedForecastData)
+          );
+
+          setForecastData(placeholders);
+        }
+
         const allIds = isCustomerView
           ? marketMetadata
               .filter((market) => market.settings?.managed_by === "Customer")
@@ -348,9 +432,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         const processedData = processRawData(
           forecastResponse.data,
           loggedChanges,
-          isCustomerView ?? false
+          isCustomerView ?? false,
+          selectedBenchmarks
         );
-        const nonZeroData = processedData.filter(hasNonZeroTotal);
+        const nonZeroData = processedData
+          .filter(hasNonZeroTotal)
+          .map((row) => ({
+            ...row,
+            isLoading: false,
+          }));
         setForecastData(nonZeroData);
 
         const brands = Array.from(
@@ -359,9 +449,19 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         setAvailableBrands(brands);
       } catch (error) {
         console.error("Error loading forecast data:", error);
+        // Clear loading indicators on error
+        setForecastData((prevData) =>
+          prevData.map((row) => ({ ...row, isLoading: false }))
+        );
       }
     },
-    [marketMetadata, isCustomerView, selectedMarkets]
+    [
+      marketMetadata,
+      isCustomerView,
+      selectedMarkets,
+      selectedBenchmarks,
+      forecastData.length,
+    ]
   );
 
   // Use loadForecastData in useEffect
@@ -449,7 +549,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
-  // Update handleForecastChange to use variant_size_pack_desc
+  // Update handleForecastChange to use recalculateBenchmarks
   const handleForecastChange = async (
     newLogic: string,
     rowData: ExtendedForecastData,
@@ -461,6 +561,21 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     const { updateTable = false, userId } = options;
 
     try {
+      // Set row to loading state
+      if (updateTable) {
+        setForecastData((prevData: ExtendedForecastData[]) =>
+          prevData.map((row: ExtendedForecastData) =>
+            row.id === rowData.id ? { ...row, isLoading: true } : row
+          )
+        );
+      }
+
+      if (selectedRow === rowData.id) {
+        setSelectedDataState((prev) =>
+          prev ? { ...prev, isLoading: true } : null
+        );
+      }
+
       // Store the initial state before making any changes
       const initialState = {
         userId,
@@ -500,11 +615,19 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       const forecastResponseData = forecastResponse.data;
       const updatedMonths = processMonthData(forecastResponseData);
-      const updatedRow = {
+
+      // Create base updated row with new forecast logic and months
+      let updatedRow = {
         ...rowData,
         forecastLogic: newLogic,
         months: updatedMonths,
       };
+
+      // Use the centralized function to recalculate all benchmarks
+      if (selectedBenchmarks && selectedBenchmarks.length > 0) {
+        updatedRow = recalculateBenchmarks(updatedRow, selectedBenchmarks);
+        updatedRow.isLoading = false; // Ensure loading is false after recalculation
+      }
 
       if (updateTable) {
         setForecastData((prevData: ExtendedForecastData[]) =>
@@ -552,13 +675,20 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       return updatedRow;
     } catch (error) {
       console.error("Error updating forecast:", error);
-      if (axios.isAxiosError(error)) {
-        console.error("Axios error details:", {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        });
+
+      // Clear loading state on error
+      if (updateTable) {
+        setForecastData((prevData: ExtendedForecastData[]) =>
+          prevData.map((row: ExtendedForecastData) =>
+            row.id === rowData.id ? { ...row, isLoading: false } : row
+          )
+        );
       }
+
+      if (selectedRow === rowData.id && selectedDataState) {
+        setSelectedDataState({ ...selectedDataState, isLoading: false });
+      }
+
       throw error;
     }
   };
@@ -700,6 +830,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   const columns: Column[] = useMemo(
     () => [
+      // Controls Section
       {
         key: "market",
         header: "MARKET",
@@ -754,7 +885,76 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           </Select>
         ),
       },
-      // Only generate month columns if we have data
+      // Total column moved here, before the month columns
+      {
+        key: "total",
+        header: "VOL 9L",
+        subHeader: "TY",
+        align: "right" as const,
+        render: (_: any, row: ExtendedForecastData) => {
+          // Show loading indicator if the row is loading
+          if (row.isLoading) {
+            return (
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={16} thickness={4} />
+              </Box>
+            );
+          }
+
+          return (
+            Math.round(calculateTotal(row.months) * 10) / 10
+          ).toLocaleString(undefined, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          });
+        },
+      },
+      // Update benchmark columns with loading state
+      ...(selectedBenchmarks?.map((benchmark) => ({
+        key: `benchmark_${benchmark.id}`,
+        header: benchmark.label,
+        subHeader: benchmark.sublabel,
+        align: "right" as const,
+        render: (_: any, row: ExtendedForecastData) => {
+          // Show loading indicator if the entire row is loading
+          if (row.isLoading) {
+            return (
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={16} thickness={4} />
+              </Box>
+            );
+          }
+
+          // For direct values, use the field name directly
+          let value: number | undefined;
+
+          if (typeof benchmark.value === "string") {
+            // Use direct field
+            value = row[
+              benchmark.value as keyof ExtendedForecastData
+            ] as number;
+          } else {
+            // For calculated benchmarks, use the stored result
+            value = row[`benchmark_${benchmark.id}`] as number;
+          }
+
+          // Show loading indicator if value is being calculated
+          if (value === undefined) {
+            return (
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={16} thickness={4} />
+              </Box>
+            );
+          }
+
+          return formatBenchmarkValue(
+            value,
+            benchmark.calculation.format,
+            benchmark.label
+          );
+        },
+      })) || []),
+      // Month columns (Phasing section)
       ...(forecastData.length > 0 && forecastData[0]?.months
         ? Object.keys(forecastData[0].months).map((month) => ({
             key: `months.${month}`,
@@ -762,6 +962,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             subHeader: forecastData[0].months[month]?.isActual ? "ACT" : "FCST",
             align: "right" as const,
             render: (_: any, row: ExtendedForecastData) => {
+              // Show loading indicator if the row is loading
+              if (row.isLoading) {
+                return (
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <CircularProgress size={16} thickness={4} />
+                  </Box>
+                );
+              }
+
               if (!row?.months?.[month]) return "-";
               const data = row.months[month];
               return (
@@ -825,19 +1034,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             align: "right" as const,
             render: () => "-",
           }))),
-      {
-        key: "total",
-        header: "TOTAL",
-        align: "right" as const,
-        render: (_: any, row: ExtendedForecastData) =>
-          (Math.round(calculateTotal(row.months) * 10) / 10).toLocaleString(
-            undefined,
-            {
-              minimumFractionDigits: 1,
-              maximumFractionDigits: 1,
-            }
-          ),
-      },
       ...(hasAnyComments()
         ? [
             {
@@ -862,7 +1058,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           ]
         : []),
     ],
-    [forecastData, isCustomerView, handleLogicChange, marketMetadata]
+    [
+      forecastData,
+      isCustomerView,
+      handleLogicChange,
+      marketMetadata,
+      selectedBenchmarks,
+    ]
   );
 
   const handleSaveClick = async () => {
@@ -936,6 +1138,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
+  // Update handleMonthValueChange to use recalculateBenchmarks
   const handleMonthValueChange = (month: string, value: string) => {
     if (!selectedDataState) return;
 
@@ -944,18 +1147,31 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
     setSelectedDataState((prev) => {
       if (!prev) return null;
-      return {
-        ...prev,
-        months: {
-          ...prev.months,
-          [month]: {
-            ...prev.months[month],
-            value: Math.round(numValue * 10) / 10,
-            isManuallyModified: true,
-          },
+
+      // Create updated months with the new value
+      const updatedMonths = {
+        ...prev.months,
+        [month]: {
+          ...prev.months[month],
+          value: Math.round(numValue * 10) / 10,
+          isManuallyModified: true,
         },
       };
+
+      // Create the base updated state
+      let updatedState = {
+        ...prev,
+        months: updatedMonths,
+      };
+
+      // Use the centralized function to recalculate all benchmarks
+      if (selectedBenchmarks && selectedBenchmarks.length > 0) {
+        updatedState = recalculateBenchmarks(updatedState, selectedBenchmarks);
+      }
+
+      return updatedState;
     });
+
     setHasChanges(true);
   };
 

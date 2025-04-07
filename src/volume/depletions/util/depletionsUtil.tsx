@@ -1,4 +1,5 @@
 import { ExtendedForecastData } from "../depletions";
+import { Box } from "@mui/material";
 
 export type ForecastOption = {
   id: number;
@@ -159,4 +160,323 @@ export const calculateTotal = (
   months: ExtendedForecastData["months"]
 ): number => {
   return Object.values(months).reduce((acc, curr) => acc + curr.value, 0);
+};
+
+// Add this type to handle benchmark data
+export interface BenchmarkData {
+  [key: string]: number;
+}
+
+// Add new types for calculation structure
+export interface BenchmarkCalculation {
+  type: "direct" | "percentage" | "difference";
+  format?: "number" | "percent";
+}
+
+export interface BenchmarkValue {
+  numerator?: string;
+  denominator?: string;
+  expression?: string;
+}
+
+export interface Benchmark {
+  id: number;
+  label: string;
+  sublabel?: string;
+  value: string | BenchmarkValue;
+  calculation: BenchmarkCalculation;
+}
+
+export const processBenchmarkValue = (
+  data: any[],
+  benchmark: Benchmark,
+  isCustomerView: boolean
+): { [key: string]: number } => {
+  const benchmarkData: { [key: string]: number } = {};
+  const aggregatedData: { [key: string]: { [field: string]: number } } = {};
+
+  // First, aggregate the data by market/size-pack
+  data.forEach((item) => {
+    const key = isCustomerView
+      ? `forecast:${item.customer_id}:${item.variant_size_pack_desc}:${item.customer_id}`
+      : `forecast:${item.market_id}:${item.variant_size_pack_desc}`;
+
+    if (!aggregatedData[key]) {
+      aggregatedData[key] = {
+        gross_sales_value: 0,
+        py_gross_sales_value: 0,
+        case_equivalent_volume: 0,
+        py_case_equivalent_volume: 0,
+      };
+    }
+
+    // Sum up all the values we might need
+    aggregatedData[key].gross_sales_value +=
+      Number(item.gross_sales_value) || 0;
+    aggregatedData[key].py_gross_sales_value +=
+      Number(item.py_gross_sales_value) || 0;
+    aggregatedData[key].case_equivalent_volume +=
+      Number(item.case_equivalent_volume) || 0;
+    aggregatedData[key].py_case_equivalent_volume +=
+      Number(item.py_case_equivalent_volume) || 0;
+  });
+
+  // Then process the aggregated data according to benchmark type
+  Object.entries(aggregatedData).forEach(([key, values]) => {
+    if (typeof benchmark.value === "string") {
+      // Direct value (like py_case_equivalent_volume)
+      const fieldName = benchmark.value;
+      benchmarkData[key] = Math.round(values[fieldName] * 100) / 100;
+    } else {
+      // Calculated value
+      const value = benchmark.value as BenchmarkValue;
+
+      if (
+        benchmark.calculation.type === "percentage" &&
+        value.numerator &&
+        value.denominator
+      ) {
+        // Handle percentage calculations - parse the expressions
+        // For example: "gross_sales_value - py_gross_sales_value" / "py_gross_sales_value"
+        const numeratorParts = value.numerator.split(" - ");
+        const minuend = values[numeratorParts[0]];
+        const subtrahend = values[numeratorParts[1]];
+        const numeratorValue = minuend - subtrahend;
+
+        const denominatorValue = values[value.denominator];
+        benchmarkData[key] =
+          denominatorValue === 0 ? 0 : numeratorValue / denominatorValue;
+      } else if (
+        benchmark.calculation.type === "difference" &&
+        value.expression
+      ) {
+        // Handle difference calculations
+        // For example: "gross_sales_value - py_gross_sales_value"
+        const expressionParts = value.expression.split(" - ");
+        const minuend = values[expressionParts[0]];
+        const subtrahend = values[expressionParts[1]];
+        benchmarkData[key] = minuend - subtrahend;
+      } else {
+        benchmarkData[key] = 0;
+      }
+    }
+  });
+
+  return benchmarkData;
+};
+
+// Add this new centralized function to recalculate benchmark values
+export const recalculateBenchmarks = (
+  row: any,
+  selectedBenchmarks: Benchmark[]
+): any => {
+  if (!selectedBenchmarks || selectedBenchmarks.length === 0) {
+    return row;
+  }
+
+  // Make a copy of the row to avoid mutating the original
+  const updatedRow = { ...row };
+
+  // First, ensure we have the total volume (TY) calculated
+  const totalVolume = calculateTotal(updatedRow.months);
+  updatedRow.case_equivalent_volume = totalVolume;
+
+  // For GSV, we need to update the gross_sales_value based on the updated forecast
+  // For simplicity, we'll use a ratio approach: if volume changes by X%, GSV also changes by X%
+  if (updatedRow.py_case_equivalent_volume && updatedRow.py_gross_sales_value) {
+    const volumeRatio =
+      updatedRow.py_case_equivalent_volume > 0
+        ? totalVolume / updatedRow.py_case_equivalent_volume
+        : 1;
+
+    // If we have historical GSV, we can estimate current GSV based on volume change ratio
+    const estimatedGSV = updatedRow.py_gross_sales_value * volumeRatio;
+
+    // Only update if it's significantly different (more than 0.1%)
+    const currentGSV = updatedRow.gross_sales_value || 0;
+    if (
+      Math.abs((estimatedGSV - currentGSV) / Math.max(currentGSV, 1)) > 0.001
+    ) {
+      console.log(`Updating GSV for ${updatedRow.id}:`, {
+        oldGSV: currentGSV,
+        newGSV: estimatedGSV,
+        volumeRatio,
+        LY_volume: updatedRow.py_case_equivalent_volume,
+        TY_volume: totalVolume,
+        LY_GSV: updatedRow.py_gross_sales_value,
+      });
+
+      updatedRow.gross_sales_value = estimatedGSV;
+    }
+  }
+
+  // Ensure GSV values exist
+  if (updatedRow.gross_sales_value === undefined) {
+    console.warn("Missing gross_sales_value (GSV TY) for row:", updatedRow.id);
+    updatedRow.gross_sales_value = 0;
+  }
+
+  if (updatedRow.py_gross_sales_value === undefined) {
+    console.warn(
+      "Missing py_gross_sales_value (GSV LY) for row:",
+      updatedRow.id
+    );
+    updatedRow.py_gross_sales_value = 0;
+  }
+
+  // Log values to help diagnose issues
+  console.log("Benchmark calculation data:", {
+    id: updatedRow.id,
+    case_equivalent_volume: updatedRow.case_equivalent_volume,
+    py_case_equivalent_volume: updatedRow.py_case_equivalent_volume,
+    gross_sales_value: updatedRow.gross_sales_value,
+    py_gross_sales_value: updatedRow.py_gross_sales_value,
+  });
+
+  // Now recalculate all benchmarks
+  selectedBenchmarks.forEach((benchmark) => {
+    if (typeof benchmark.value === "string") {
+      // Direct values don't need recalculation as they come directly from the source data
+      // These include py_case_equivalent_volume, gross_sales_value, py_gross_sales_value, etc.
+    } else {
+      // For calculated values (difference, percentage)
+      if (
+        benchmark.calculation.type === "difference" &&
+        benchmark.value.expression
+      ) {
+        const expressionParts = benchmark.value.expression.split(" - ");
+        const field1 = expressionParts[0].trim();
+        const field2 = expressionParts[1].trim();
+
+        // Get the values for fields, handling special cases
+        const value1 =
+          field1 === "case_equivalent_volume"
+            ? totalVolume
+            : updatedRow[field1];
+        const value2 =
+          field2 === "case_equivalent_volume"
+            ? totalVolume
+            : updatedRow[field2];
+
+        // Calculate the difference
+        const result = (Number(value1) || 0) - (Number(value2) || 0);
+        updatedRow[`benchmark_${benchmark.id}`] = result;
+
+        // Log calculation for debugging
+        console.log(
+          `Calculating difference for ${benchmark.label}: ${field1}(${value1}) - ${field2}(${value2}) = ${result}`
+        );
+      } else if (
+        benchmark.calculation.type === "percentage" &&
+        benchmark.value.numerator &&
+        benchmark.value.denominator
+      ) {
+        // Parse the numerator which is an expression like "field1 - field2"
+        const numeratorParts = benchmark.value.numerator.split(" - ");
+        const numerField1 = numeratorParts[0].trim();
+        const numerField2 = numeratorParts[1].trim();
+
+        // Get denominator field
+        const denomField = benchmark.value.denominator.trim();
+
+        // Get all the values, handling special cases
+        const numerValue1 =
+          numerField1 === "case_equivalent_volume"
+            ? totalVolume
+            : updatedRow[numerField1];
+        const numerValue2 =
+          numerField2 === "case_equivalent_volume"
+            ? totalVolume
+            : updatedRow[numerField2];
+        const denomValue =
+          denomField === "case_equivalent_volume"
+            ? totalVolume
+            : updatedRow[denomField];
+
+        // Calculate the numerator
+        const numerator =
+          (Number(numerValue1) || 0) - (Number(numerValue2) || 0);
+        const denominator = Number(denomValue) || 0;
+
+        // Calculate the percentage, avoiding division by zero
+        const result = denominator === 0 ? 0 : numerator / denominator;
+        updatedRow[`benchmark_${benchmark.id}`] = result;
+
+        // Log calculation for debugging
+        console.log(
+          `Calculating percentage for ${benchmark.label}: (${numerField1}(${numerValue1}) - ${numerField2}(${numerValue2}))/${denomField}(${denomValue}) = ${result}`
+        );
+      }
+    }
+  });
+
+  return updatedRow;
+};
+
+export const formatBenchmarkValue = (
+  value: number | undefined,
+  format: string = "number",
+  benchmarkType?: string
+): React.ReactNode => {
+  if (value === undefined || isNaN(value)) return "-";
+  if (value === Infinity || value === -Infinity) return "-";
+
+  const roundedValue = Math.round(value * 100) / 100;
+  const isNegative = roundedValue < 0;
+
+  // Handle percentage format first
+  if (format === "percent") {
+    // Display percentages as whole numbers
+    const formattedValue =
+      Math.round(roundedValue * 100).toLocaleString() + "%";
+
+    // Return colored text for negative values
+    return isNegative ? (
+      <Box component="span" sx={{ color: "error.main" }}>
+        {formattedValue}
+      </Box>
+    ) : (
+      formattedValue
+    );
+  }
+
+  // Handle currency format for GSV direct values and differences (but not percentages)
+  if (
+    benchmarkType &&
+    benchmarkType.toLowerCase().includes("gsv") &&
+    !benchmarkType.toLowerCase().includes("%")
+  ) {
+    const formattedValue = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Math.abs(roundedValue));
+
+    // Add negative sign for accounting format
+    const accountingValue = isNegative ? `(${formattedValue})` : formattedValue;
+
+    return isNegative ? (
+      <Box component="span" sx={{ color: "error.main" }}>
+        {accountingValue}
+      </Box>
+    ) : (
+      accountingValue
+    );
+  }
+
+  // For other number values
+  const formattedValue = roundedValue.toLocaleString(undefined, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+
+  // Return colored text for negative values
+  return isNegative ? (
+    <Box component="span" sx={{ color: "error.main" }}>
+      {formattedValue}
+    </Box>
+  ) : (
+    formattedValue
+  );
 };

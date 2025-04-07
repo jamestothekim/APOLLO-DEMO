@@ -16,10 +16,6 @@ import {
   TableSortLabel,
   CircularProgress,
 } from "@mui/material";
-import {
-  CustomColumnControls,
-  type CustomColumnType,
-} from "../volume/customColumn";
 
 type SortDirection = "asc" | "desc";
 
@@ -38,6 +34,7 @@ export interface Column {
   width?: number;
   sx?: SxProps<Theme> | ((row: any) => SxProps<Theme>);
   sortable?: boolean;
+  sortValue?: (value: any, row: any) => number | string | null;
 }
 
 export interface DynamicTableProps {
@@ -54,14 +51,6 @@ export interface DynamicTableProps {
   rowsPerPage?: number;
   onRowsPerPageChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   getRowId?: (row: any) => string;
-  customColumns?: {
-    id: string;
-    type: CustomColumnType;
-    calculate: (row: any) => number;
-    label: string;
-  }[];
-  onAddCustomColumn?: (type: CustomColumnType) => void;
-  onRemoveCustomColumn?: (columnId: string) => void;
   showPagination?: boolean;
   expandableRows?: boolean;
   renderExpanded?: (row: any) => React.ReactNode;
@@ -83,9 +72,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   rowsPerPage: controlledRowsPerPage,
   onRowsPerPageChange: controlledRowsPerPageChange,
   getRowId = (row) => row.id,
-  customColumns = [],
-  onAddCustomColumn,
-  onRemoveCustomColumn,
   showPagination = true,
   loading = false,
 }) => {
@@ -149,42 +135,77 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     let sortedData = [...data];
 
     if (sortConfig) {
+      // Get the column definition to access render function and sortValue function
+      const column = columns.find((col) => col.key === sortConfig.key);
+
+      console.log("Sorting column:", {
+        key: sortConfig.key,
+        column,
+        direction: sortConfig.direction,
+      });
+
       sortedData.sort((a, b) => {
-        // Find the column configuration for the current sort key
-        const column = [...tableColumns, ...customColumns].find(
-          (col) =>
-            (col as any).key === sortConfig.key ||
-            (col as any).id === sortConfig.key
-        );
+        // Get the raw values
+        const aRaw = a[sortConfig.key];
+        const bRaw = b[sortConfig.key];
 
-        let aValue = a[sortConfig.key];
-        let bValue = b[sortConfig.key];
+        // Use sortValue function if provided
+        if (column?.sortValue) {
+          const aValue = column.sortValue(aRaw, a);
+          const bValue = column.sortValue(bRaw, b);
 
-        // If it's a custom column, use the calculate function
-        if ((column as any).calculate) {
-          aValue = (column as any).calculate(a);
-          bValue = (column as any).calculate(b);
-        }
+          // Handle null values
+          if (aValue === null && bValue === null) return 0;
+          if (aValue === null) return 1;
+          if (bValue === null) return -1;
 
-        // Handle null/undefined values
-        if (aValue == null) return sortConfig.direction === "asc" ? -1 : 1;
-        if (bValue == null) return sortConfig.direction === "asc" ? 1 : -1;
+          // If both values are numbers, do numeric comparison
+          if (typeof aValue === "number" && typeof bValue === "number") {
+            return sortConfig.direction === "asc"
+              ? aValue - bValue
+              : bValue - aValue;
+          }
 
-        // Handle numeric values
-        if (typeof aValue === "number" && typeof bValue === "number") {
+          // Otherwise do string comparison
+          const aStr = String(aValue);
+          const bStr = String(bValue);
           return sortConfig.direction === "asc"
-            ? aValue - bValue
-            : bValue - aValue;
+            ? aStr.localeCompare(bStr)
+            : bStr.localeCompare(aStr);
         }
 
-        // Handle string values
-        const aString = String(aValue).toLowerCase();
-        const bString = String(bValue).toLowerCase();
+        // If no sortValue function, fall back to existing logic
+        // Get the displayed values using the render function if it exists
+        const aDisplay = column?.render ? column.render(aRaw, a) : aRaw;
+        const bDisplay = column?.render ? column.render(bRaw, b) : bRaw;
 
-        if (sortConfig.direction === "asc") {
-          return aString.localeCompare(bString);
+        // Convert to string and clean up any HTML or special formatting
+        const aValueStr =
+          aDisplay != null
+            ? String(aDisplay)
+                .replace(/<[^>]*>/g, "")
+                .trim()
+            : "";
+        const bValueStr =
+          bDisplay != null
+            ? String(bDisplay)
+                .replace(/<[^>]*>/g, "")
+                .trim()
+            : "";
+
+        // Try to convert to numbers if possible (handling commas)
+        const aNum = parseFloat(aValueStr.replace(/,/g, ""));
+        const bNum = parseFloat(bValueStr.replace(/,/g, ""));
+
+        // If both values can be converted to numbers, do numeric comparison
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
         }
-        return bString.localeCompare(aString);
+
+        // Otherwise do string comparison
+        return sortConfig.direction === "asc"
+          ? aValueStr.localeCompare(bValueStr)
+          : bValueStr.localeCompare(aValueStr);
       });
     }
 
@@ -195,15 +216,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
       page * rowsPerPage,
       page * rowsPerPage + rowsPerPage
     );
-  }, [
-    data,
-    page,
-    rowsPerPage,
-    showPagination,
-    sortConfig,
-    tableColumns,
-    customColumns,
-  ]);
+  }, [data, page, rowsPerPage, showPagination, sortConfig, columns]);
 
   const renderTableHeader = (column: Column) => (
     <TableCell
@@ -251,27 +264,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
         </Box>
       ) : (
         <>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "flex-end",
-              mb: 1,
-              visibility:
-                onAddCustomColumn || onRemoveCustomColumn
-                  ? "visible"
-                  : "hidden",
-            }}
-          >
-            <CustomColumnControls
-              onAddColumn={onAddCustomColumn || (() => {})}
-              onRemoveColumn={onRemoveCustomColumn || (() => {})}
-              customColumns={customColumns.map(({ id, type }) => ({
-                id,
-                type,
-              }))}
-            />
-          </Box>
-
           <TableContainer>
             {sections && (
               <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
@@ -289,28 +281,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
 
             <Table size="small">
               <TableHead>
-                <TableRow>
-                  {tableColumns.map(renderTableHeader)}
-                  {customColumns.map((column) => (
-                    <TableCell
-                      key={column.id}
-                      align="right"
-                      sx={{ fontWeight: 700 }}
-                    >
-                      <TableSortLabel
-                        active={sortConfig?.key === column.id}
-                        direction={
-                          sortConfig?.key === column.id
-                            ? sortConfig.direction
-                            : "asc"
-                        }
-                        onClick={() => handleSort(column.id)}
-                      >
-                        {column.label}
-                      </TableSortLabel>
-                    </TableCell>
-                  ))}
-                </TableRow>
+                <TableRow>{tableColumns.map(renderTableHeader)}</TableRow>
               </TableHead>
               <TableBody>
                 {displayData.map((row) => (
@@ -332,11 +303,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                         {column.render
                           ? column.render(row[column.key], row)
                           : row[column.key]}
-                      </TableCell>
-                    ))}
-                    {customColumns.map((column) => (
-                      <TableCell key={column.id} align="right">
-                        {column.calculate(row).toLocaleString()}
                       </TableCell>
                     ))}
                   </TableRow>

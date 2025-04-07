@@ -21,6 +21,8 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { useUser } from "../userContext";
 import { Toolbox } from "./components/toolbox";
 import type { ToolType } from "./components/toolbox";
+import { BenchmarksDialog } from "./components/benchmarks";
+import type { Benchmark } from "./components/benchmarks";
 import axios from "axios";
 
 interface TabPanelProps {
@@ -80,6 +82,9 @@ export const VolumeForecast: React.FC = () => {
   const [exportHandler, setExportHandler] = useState<(() => void) | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
+  const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
+  const [rowsDialogOpen, setRowsDialogOpen] = useState(false);
+  const [selectedBenchmarks, setSelectedBenchmarks] = useState<Benchmark[]>([]);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -182,8 +187,21 @@ export const VolumeForecast: React.FC = () => {
 
   // Add columns handler
   const handleColumns = () => {
-    // Will implement later
-    console.log("Columns clicked in volumeForecast");
+    setColumnsDialogOpen(true);
+  };
+
+  const handleRows = () => {
+    setRowsDialogOpen(true);
+  };
+
+  const handleApplyColumns = (selectedBenchmarks: Benchmark[]) => {
+    console.log("Adding columns for benchmarks:", selectedBenchmarks);
+    setSelectedBenchmarks(selectedBenchmarks);
+  };
+
+  const handleApplyRows = (selectedBenchmarks: any[]) => {
+    console.log("Adding rows for benchmarks:", selectedBenchmarks);
+    // This will be implemented later to add rows to the depletions table
   };
 
   // Add this function to handle view toggle
@@ -324,6 +342,7 @@ export const VolumeForecast: React.FC = () => {
             tools={[
               "undo" as ToolType,
               "columns" as ToolType,
+              "rows" as ToolType,
               "export" as ToolType,
               ...(marketData.some((m) => m.settings?.managed_by === "Customer")
                 ? ["customerToggle" as ToolType]
@@ -331,6 +350,7 @@ export const VolumeForecast: React.FC = () => {
             ]}
             onUndo={handleUndo}
             onColumns={handleColumns}
+            onRows={handleRows}
             onExport={handleExportClick}
             onCustomerToggle={handleViewToggle}
             canUndo={true}
@@ -352,10 +372,27 @@ export const VolumeForecast: React.FC = () => {
               onUndo={(handler) => setUndoHandler(() => handler)}
               onExport={(handler) => setExportHandler(() => handler)}
               onAvailableBrandsChange={setAvailableBrands}
+              selectedBenchmarks={selectedBenchmarks}
             />
           </TabPanel>
         </Box>
       </Collapse>
+
+      <BenchmarksDialog
+        open={columnsDialogOpen}
+        onClose={() => setColumnsDialogOpen(false)}
+        title="Add Columns"
+        type="columns"
+        onApply={handleApplyColumns}
+      />
+
+      <BenchmarksDialog
+        open={rowsDialogOpen}
+        onClose={() => setRowsDialogOpen(false)}
+        title="Add Rows"
+        type="rows"
+        onApply={handleApplyRows}
+      />
     </Paper>
   );
 };
