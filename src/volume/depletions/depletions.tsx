@@ -504,11 +504,22 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
           const updatedData = prevData.map((item) => {
             if (item.id === expectedKey) {
-              return {
+              // Create base updated row with restored forecast logic and months
+              let updatedItem = {
                 ...item,
                 forecastLogic: restored.forecastType,
                 months: restored.months,
               };
+
+              // Recalculate benchmarks after restore
+              if (selectedBenchmarks && selectedBenchmarks.length > 0) {
+                updatedItem = recalculateBenchmarks(
+                  updatedItem,
+                  selectedBenchmarks
+                );
+              }
+
+              return updatedItem;
             }
             return item;
           });
@@ -528,7 +539,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         console.error("Error undoing change:", error.message);
       }
     }
-  }, [setForecastData, setUndoMessage, setUndoSnackbarOpen, isCustomerView]);
+  }, [
+    setForecastData,
+    setUndoMessage,
+    setUndoSnackbarOpen,
+    isCustomerView,
+    selectedBenchmarks,
+  ]);
 
   // Now the effect can safely include handleUndo in deps
   useEffect(() => {
