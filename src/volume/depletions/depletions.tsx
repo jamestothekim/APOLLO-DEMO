@@ -40,7 +40,6 @@ import {
   hasNonZeroTotal,
   calculateTotal,
   ForecastLogic,
-  processBenchmarkValue,
   formatBenchmarkValue,
   recalculateBenchmarks,
 } from "./util/depletionsUtil";
@@ -888,7 +887,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       // Total column moved here, before the month columns
       {
         key: "total",
-        header: "VOL 9L",
+        header: "VOL 9L",
         subHeader: "TY",
         align: "right" as const,
         render: (_: any, row: ExtendedForecastData) => {

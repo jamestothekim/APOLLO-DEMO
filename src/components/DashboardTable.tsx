@@ -1,5 +1,5 @@
 import { Column } from "../reusableComponents/dynamicTable";
-import { formatNumber } from "../utils/formatters";
+// import { formatNumber } from "../utils/formatters"; // Removed as it's not used
 
 // Define months array if not already defined
 const months = [
@@ -17,6 +17,7 @@ const months = [
   "DEC",
 ];
 
+/* Commented out to fix build error - unused variable
 const monthColumns: Column[] = months.map((month: string) => ({
   key: `months.${month}`,
   header: month,
@@ -29,3 +30,4 @@ const monthColumns: Column[] = months.map((month: string) => ({
   ),
   sortField: "value",
 }));
+*/
