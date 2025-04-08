@@ -70,7 +70,7 @@ interface CustomerData {
 }
 
 export const VolumeForecast: React.FC = () => {
-  const { user } = useUser();
+  const { user, saveBenchmarkPreferences } = useUser();
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
@@ -85,6 +85,9 @@ export const VolumeForecast: React.FC = () => {
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
   const [rowsDialogOpen, setRowsDialogOpen] = useState(false);
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<Benchmark[]>([]);
+  const [availableBenchmarks, setAvailableBenchmarks] = useState<Benchmark[]>(
+    []
+  );
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -122,6 +125,50 @@ export const VolumeForecast: React.FC = () => {
       fetchMarketData();
     }
   }, [user]);
+
+  // Fetch available benchmarks when component mounts
+  useEffect(() => {
+    const fetchBenchmarks = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/util/get-benchmarks`
+        );
+        setAvailableBenchmarks(response.data);
+      } catch (error) {
+        console.error("Error fetching benchmarks:", error);
+      }
+    };
+
+    fetchBenchmarks();
+  }, []);
+
+  // Load user's benchmark preferences when availableBenchmarks are loaded
+  useEffect(() => {
+    const loadUserBenchmarkPreferences = () => {
+      if (!user?.user_settings?.benchmarks || availableBenchmarks.length === 0)
+        return;
+
+      // Sort benchmark preferences by order
+      const sortedPreferences = [...user.user_settings.benchmarks].sort(
+        (a, b) => a.order - b.order
+      );
+
+      // Map preference IDs to actual benchmark objects
+      const userSelectedBenchmarks = sortedPreferences
+        .map((pref) => availableBenchmarks.find((b) => b.id === pref.id))
+        .filter(Boolean) as Benchmark[];
+
+      if (userSelectedBenchmarks.length > 0) {
+        console.log(
+          "Loaded user benchmark preferences:",
+          userSelectedBenchmarks
+        );
+        setSelectedBenchmarks(userSelectedBenchmarks);
+      }
+    };
+
+    loadUserBenchmarkPreferences();
+  }, [user?.user_settings?.benchmarks, availableBenchmarks]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -197,6 +244,19 @@ export const VolumeForecast: React.FC = () => {
   const handleApplyColumns = (selectedBenchmarks: Benchmark[]) => {
     console.log("Adding columns for benchmarks:", selectedBenchmarks);
     setSelectedBenchmarks(selectedBenchmarks);
+
+    // Save benchmark preferences if user is logged in
+    if (user) {
+      try {
+        const benchmarkIds = selectedBenchmarks.map(
+          (benchmark) => benchmark.id
+        );
+        // Use the saveBenchmarkPreferences method from userContext
+        saveBenchmarkPreferences(benchmarkIds);
+      } catch (error) {
+        console.error("Error saving benchmark preferences:", error);
+      }
+    }
   };
 
   const handleApplyRows = (selectedBenchmarks: any[]) => {

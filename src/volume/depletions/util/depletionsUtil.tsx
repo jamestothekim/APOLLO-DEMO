@@ -392,15 +392,6 @@ export const recalculateBenchmarks = (
     if (
       Math.abs((estimatedGSV - currentGSV) / Math.max(currentGSV, 1)) > 0.001
     ) {
-      console.log(`Updating GSV for ${updatedRow.id}:`, {
-        oldGSV: currentGSV,
-        newGSV: estimatedGSV,
-        volumeRatio,
-        LY_volume: updatedRow.py_case_equivalent_volume,
-        TY_volume: totalVolume,
-        LY_GSV: updatedRow.py_gross_sales_value,
-      });
-
       updatedRow.gross_sales_value = estimatedGSV;
     }
   }
@@ -418,15 +409,6 @@ export const recalculateBenchmarks = (
     );
     updatedRow.py_gross_sales_value = 0;
   }
-
-  // Log values to help diagnose issues
-  console.log("Benchmark calculation data:", {
-    id: updatedRow.id,
-    case_equivalent_volume: updatedRow.case_equivalent_volume,
-    py_case_equivalent_volume: updatedRow.py_case_equivalent_volume,
-    gross_sales_value: updatedRow.gross_sales_value,
-    py_gross_sales_value: updatedRow.py_gross_sales_value,
-  });
 
   // Now recalculate all benchmarks
   selectedBenchmarks.forEach((benchmark) => {
@@ -456,11 +438,6 @@ export const recalculateBenchmarks = (
         // Calculate the difference
         const result = (Number(value1) || 0) - (Number(value2) || 0);
         updatedRow[`benchmark_${benchmark.id}`] = result;
-
-        // Log calculation for debugging
-        console.log(
-          `Calculating difference for ${benchmark.label}: ${field1}(${value1}) - ${field2}(${value2}) = ${result}`
-        );
       } else if (
         benchmark.calculation.type === "percentage" &&
         benchmark.value.numerator &&
@@ -496,11 +473,6 @@ export const recalculateBenchmarks = (
         // Calculate the percentage, avoiding division by zero
         const result = denominator === 0 ? 0 : numerator / denominator;
         updatedRow[`benchmark_${benchmark.id}`] = result;
-
-        // Log calculation for debugging
-        console.log(
-          `Calculating percentage for ${benchmark.label}: (${numerField1}(${numerValue1}) - ${numerField2}(${numerValue2}))/${denomField}(${denomValue}) = ${result}`
-        );
       }
     }
   });

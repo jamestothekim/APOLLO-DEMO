@@ -176,13 +176,6 @@ const processRawData = (
       if (typeof benchmark.value === "string") {
         // For direct values like py_case_equivalent_volume
         // We've already populated these values above, so no additional action needed here
-        console.log(
-          `Benchmark field ${benchmark.value} values:`,
-          Object.keys(groupedData).map((key) => ({
-            id: key,
-            value: groupedData[key][benchmark.value as any],
-          }))
-        );
       }
     });
   }

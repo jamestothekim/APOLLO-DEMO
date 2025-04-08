@@ -11,6 +11,7 @@ import {
   Chip,
 } from "@mui/material";
 import axios from "axios";
+import { useUser } from "../../userContext";
 
 export interface Benchmark {
   id: number;
@@ -44,15 +45,24 @@ export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
   type,
   onApply,
 }) => {
+  const { user, saveBenchmarkPreferences } = useUser();
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<Benchmark[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Load all available benchmarks
   useEffect(() => {
     if (open) {
       fetchBenchmarks();
     }
   }, [open]);
+
+  // Load user's benchmark preferences when dialog opens
+  useEffect(() => {
+    if (open && user?.user_settings?.benchmarks && benchmarks.length > 0) {
+      loadUserBenchmarkPreferences();
+    }
+  }, [open, user?.user_settings?.benchmarks, benchmarks]);
 
   const fetchBenchmarks = async () => {
     setLoading(true);
@@ -68,9 +78,44 @@ export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
     }
   };
 
-  const handleApply = () => {
+  // Load user's benchmark preferences
+  const loadUserBenchmarkPreferences = () => {
+    if (!user?.user_settings?.benchmarks || benchmarks.length === 0) return;
+
+    // Sort benchmark preferences by order
+    const sortedPreferences = [...user.user_settings.benchmarks].sort(
+      (a, b) => a.order - b.order
+    );
+
+    // Map preference IDs to actual benchmark objects
+    const userSelectedBenchmarks = sortedPreferences
+      .map((pref) => benchmarks.find((b) => b.id === pref.id))
+      .filter(Boolean) as Benchmark[];
+
+    if (userSelectedBenchmarks.length > 0) {
+      setSelectedBenchmarks(userSelectedBenchmarks);
+    }
+  };
+
+  const handleApply = async () => {
     console.log(`Selected ${type}:`, selectedBenchmarks);
+
+    // Apply benchmark selection
     onApply(selectedBenchmarks);
+
+    // Save benchmark preferences if we have a logged-in user
+    if (user) {
+      try {
+        // Extract benchmark IDs in the current order
+        const benchmarkIds = selectedBenchmarks.map(
+          (benchmark) => benchmark.id
+        );
+        await saveBenchmarkPreferences(benchmarkIds);
+      } catch (error) {
+        console.error("Error saving benchmark preferences:", error);
+      }
+    }
+
     onClose();
   };
 

@@ -25,6 +25,17 @@ export interface MarketAccess {
   };
 }
 
+// Add interface for benchmark settings
+export interface BenchmarkPreference {
+  id: number;
+  order: number;
+}
+
+interface UserSettings {
+  benchmarks?: BenchmarkPreference[];
+  [key: string]: any;
+}
+
 interface User {
   id: number;
   email: string;
@@ -40,9 +51,7 @@ interface User {
     Division?: string;
     [key: string]: any;
   };
-  user_settings: {
-    [key: string]: any;
-  };
+  user_settings: UserSettings;
 }
 
 interface AuthState {
@@ -55,7 +64,8 @@ type AuthAction =
   | { type: "LOGIN"; payload: { user: User; token: string } }
   | { type: "LOGOUT" }
   | { type: "SET_CHECKING"; payload: boolean }
-  | { type: "UPDATE_USER"; payload: User };
+  | { type: "UPDATE_USER"; payload: User }
+  | { type: "UPDATE_USER_SETTINGS"; payload: UserSettings };
 
 // Token service
 const tokenService = {
@@ -109,6 +119,8 @@ interface UserContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<boolean>;
+  updateUserSettings: (settings: UserSettings) => Promise<boolean>;
+  saveBenchmarkPreferences: (benchmarkIds: number[]) => Promise<boolean>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -147,6 +159,18 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
       return {
         ...state,
         user: action.payload,
+      };
+    case "UPDATE_USER_SETTINGS":
+      if (!state.user) return state;
+      return {
+        ...state,
+        user: {
+          ...state.user,
+          user_settings: {
+            ...state.user.user_settings,
+            ...action.payload,
+          },
+        },
       };
     default:
       return state;
@@ -347,6 +371,66 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => axios.interceptors.response.eject(interceptor);
   }, [navigate]);
 
+  // Implement the updateUserSettings method
+  const updateUserSettings = async (
+    settings: UserSettings
+  ): Promise<boolean> => {
+    try {
+      if (!state.user) {
+        return false;
+      }
+
+      const response = await axios.put(
+        `${import.meta.env.VITE_API_URL}/users/settings/update`,
+        {
+          userId: state.user.id,
+          settings,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${tokenService.getToken()}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        dispatch({ type: "UPDATE_USER_SETTINGS", payload: settings });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error updating user settings:", error);
+      return false;
+    }
+  };
+
+  // Implement the saveBenchmarkPreferences method
+  const saveBenchmarkPreferences = async (
+    benchmarkIds: number[]
+  ): Promise<boolean> => {
+    try {
+      if (!state.user) {
+        return false;
+      }
+
+      // Create benchmark preferences array with order
+      const benchmarks = benchmarkIds.map((id, index) => ({
+        id,
+        order: index,
+      }));
+
+      // Update user settings with new benchmark preferences
+      const settings: UserSettings = {
+        benchmarks,
+      };
+
+      return await updateUserSettings(settings);
+    } catch (error) {
+      console.error("Error saving benchmark preferences:", error);
+      return false;
+    }
+  };
+
   const value = {
     user: state.user,
     isLoggedIn: state.isLoggedIn,
@@ -354,6 +438,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     login,
     logout,
     checkAuth,
+    updateUserSettings,
+    saveBenchmarkPreferences,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
