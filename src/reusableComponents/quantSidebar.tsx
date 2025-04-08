@@ -119,12 +119,14 @@ export const QuantSidebar = ({
 
     const baseData = graphData[0].data;
     const months = baseData.map((item) => item.month);
+    const tyValues = baseData.map((item) => item.value || 0);
 
-    return benchmarkForecasts.map((benchmark) => {
+    return benchmarkForecasts.map((benchmarkOption) => {
       // For direct value benchmarks (like py_case_equivalent_volume, gross_sales_value)
-      if (!benchmark.calculation) {
+      if (!benchmarkOption.calculation) {
         // Get the benchmark data values from availableBenchmarkData
-        const benchmarkValues = availableBenchmarkData[benchmark.value] || [];
+        const benchmarkValues =
+          availableBenchmarkData[benchmarkOption.value] || [];
 
         // Map the data to match the format expected by the graph
         const data = months.map((month, index) => ({
@@ -133,17 +135,16 @@ export const QuantSidebar = ({
         }));
 
         return {
-          id: benchmark.value,
-          label: benchmark.label,
+          id: benchmarkOption.value,
+          label: benchmarkOption.label,
           data,
-          color: benchmark.color,
+          color: benchmarkOption.color,
         };
       }
       // For calculated benchmarks (like differences or percentages)
       else {
-        const calculation = benchmark.calculation; // Store reference to avoid null checks
-        // Get the values for calculation
-        const tyValues = availableBenchmarkData["case_equivalent_volume"] || [];
+        const calculation = benchmarkOption.calculation;
+        // Get the benchmark values for calculation
         const lyValues =
           availableBenchmarkData["py_case_equivalent_volume"] || [];
         const tyGsvValues = availableBenchmarkData["gross_sales_value"] || [];
@@ -211,10 +212,10 @@ export const QuantSidebar = ({
         });
 
         return {
-          id: benchmark.value,
-          label: benchmark.label,
+          id: benchmarkOption.value,
+          label: benchmarkOption.label,
           data,
-          color: benchmark.color,
+          color: benchmarkOption.color,
         };
       }
     });
@@ -327,7 +328,7 @@ export const QuantSidebar = ({
               availableTrendLines={trendLines}
               onTrendLineAdd={handleTrendLineAdd}
               onTrendLineRemove={handleTrendLineRemove}
-              primaryLabel="Primary Forecast"
+              primaryLabel="Current Forecast"
               label="FORECAST TREND"
             />
           </Grid>

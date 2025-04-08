@@ -42,9 +42,8 @@ import {
   ForecastLogic,
   formatBenchmarkValue,
   recalculateBenchmarks,
-  BENCHMARK_FORECAST_OPTIONS,
-  HOVER_METRICS,
-  HoverMetric,
+  SIDEBAR_BENCHMARK_OPTIONS,
+  getBenchmarkDataForSidebar,
 } from "./util/depletionsUtil";
 
 export interface ExtendedForecastData {
@@ -134,6 +133,7 @@ const processRawData = (
         variant_size_pack_desc: item.variant_size_pack_desc,
         forecastLogic: item.forecast_method || "flat",
         months: {},
+        py_case_equivalent_volume_months: {},
         // Initialize GSV values to zero
         gross_sales_value: 0,
         py_gross_sales_value: 0,
@@ -143,16 +143,32 @@ const processRawData = (
 
     // Process month data as it comes in
     const monthName = MONTH_NAMES[item.month - 1];
-    // If the month already exists, add to its value, otherwise set initial value
-    if (acc[key].months[monthName]) {
-      acc[key].months[monthName].value +=
-        Math.round(item.case_equivalent_volume * 100) / 100;
-    } else {
-      acc[key].months[monthName] = {
-        value: Math.round(item.case_equivalent_volume * 100) / 100,
-        isActual: item.data_type?.includes("actual"),
-        isManuallyModified: item.is_manual_input || false,
-      };
+    if (monthName) {
+      // Process current year data
+      if (acc[key].months[monthName]) {
+        acc[key].months[monthName].value +=
+          Math.round(item.case_equivalent_volume * 100) / 100;
+      } else {
+        acc[key].months[monthName] = {
+          value: Math.round(item.case_equivalent_volume * 100) / 100,
+          isActual: item.data_type?.includes("actual"),
+          isManuallyModified: item.is_manual_input || false,
+        };
+      }
+
+      // Process historical (last year) data
+      if (item.py_case_equivalent_volume !== undefined) {
+        if (acc[key].py_case_equivalent_volume_months[monthName]) {
+          acc[key].py_case_equivalent_volume_months[monthName].value +=
+            Math.round(item.py_case_equivalent_volume * 100) / 100;
+        } else {
+          acc[key].py_case_equivalent_volume_months[monthName] = {
+            value: Math.round(item.py_case_equivalent_volume * 100) / 100,
+            isActual: true, // Historical data is always actual
+            isManuallyModified: false,
+          };
+        }
+      }
     }
 
     // Sum up GSV values - add them to the accumulated values
@@ -172,24 +188,22 @@ const processRawData = (
     return acc;
   }, {});
 
-  // Process benchmark data - first handle direct values
-  if (selectedBenchmarks && selectedBenchmarks.length > 0) {
-    // First, add all direct field values
-    selectedBenchmarks.forEach((benchmark) => {
-      if (typeof benchmark.value === "string") {
-        // For direct values like py_case_equivalent_volume
-        // We've already populated these values above, so no additional action needed here
-      }
-    });
-  }
-
-  // Fill in any missing months with zeros
+  // Fill in any missing months with zeros for both current and historical data
   Object.values(groupedData).forEach((item: any) => {
     MONTH_NAMES.forEach((month) => {
+      // Fill current year data
       if (!item.months[month]) {
         item.months[month] = {
           value: 0,
           isActual: false,
+          isManuallyModified: false,
+        };
+      }
+      // Fill historical data
+      if (!item.py_case_equivalent_volume_months[month]) {
+        item.py_case_equivalent_volume_months[month] = {
+          value: 0,
+          isActual: true,
           isManuallyModified: false,
         };
       }
@@ -1144,12 +1158,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     if (!selectedDataState) return;
 
     try {
+      // Don't update the table immediately, only update the sidebar state
       const updatedRow = await handleForecastChange(
         newLogic,
         selectedDataState,
         {
-          updateTable: true,
-          userId: user?.id?.toString(),
+          updateTable: false, // Changed from true to false
+          userId: null, // Don't log to Redis yet
         }
       );
       setSelectedDataState(updatedRow);
@@ -1232,179 +1247,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   }, [availableMarkets, onAvailableMarketsChange]);
 
-  // Prepare benchmark data for the sidebar
-  const getBenchmarkDataForSidebar = useMemo(() => {
+  // Replace the existing benchmarkData useMemo with fixed types
+  const sidebarBenchmarkValues = useMemo(() => {
     if (!selectedDataState) return {};
-
-    // Create an object where keys are benchmark values (e.g., 'py_case_equivalent_volume')
-    // and values are arrays of monthly data values in the same order as the months in the graph
-    const result: Record<string, number[]> = {};
-
-    // Get the months in order to ensure data alignment
-    const months = Object.keys(selectedDataState.months);
-
-    // Handle case_equivalent_volume (TY volume)
-    const tyMonthValues = months.map(
-      (month) => selectedDataState.months[month]?.value || 0
+    return getBenchmarkDataForSidebar(
+      selectedDataState,
+      SIDEBAR_BENCHMARK_OPTIONS
     );
-    result["case_equivalent_volume"] = tyMonthValues;
-
-    // Calculate total TY volume for percentage distribution
-    const totalTyVolume = tyMonthValues.reduce((sum, val) => sum + val, 0);
-
-    BENCHMARK_FORECAST_OPTIONS.forEach((benchmark) => {
-      const benchmarkValue = benchmark.value;
-
-      // For direct values like py_case_equivalent_volume and GSV
-      // Explicitly check if calculation property exists before accessing it
-      if (
-        typeof benchmarkValue === "string" &&
-        (!("calculation" in benchmark) || !benchmark.calculation)
-      ) {
-        const baseValue = selectedDataState[benchmarkValue];
-
-        if (baseValue !== undefined) {
-          // For LY volume, distribute based on TY pattern
-          if (benchmarkValue === "py_case_equivalent_volume") {
-            const totalLyVolume = Number(baseValue) || 0;
-
-            // Distribute LY volume based on TY distribution (or equal if TY is zero)
-            if (totalTyVolume > 0) {
-              result[benchmarkValue] = tyMonthValues.map(
-                (monthVal) =>
-                  Math.round((monthVal / totalTyVolume) * totalLyVolume * 10) /
-                  10
-              );
-            } else {
-              // If total TY is zero, distribute equally
-              const equalShare =
-                Math.round((totalLyVolume / months.length) * 10) / 10;
-              result[benchmarkValue] = Array(months.length).fill(equalShare);
-            }
-          }
-          // GSV TY & LY - distribute proportionally to volume
-          else if (
-            benchmarkValue === "gross_sales_value" ||
-            benchmarkValue === "py_gross_sales_value"
-          ) {
-            const totalGsv = Number(baseValue) || 0;
-
-            if (totalTyVolume > 0) {
-              result[benchmarkValue] = tyMonthValues.map((monthVal) =>
-                Math.round((monthVal / totalTyVolume) * totalGsv)
-              );
-            } else {
-              // If total TY is zero, distribute equally
-              const equalShare = Math.round(totalGsv / months.length);
-              result[benchmarkValue] = Array(months.length).fill(equalShare);
-            }
-          }
-        }
-      }
-    });
-
-    return result;
-  }, [selectedDataState]);
-
-  // Calculate hover metrics for the chart
-  const getHoverMetricsForChart = useMemo(() => {
-    if (!selectedDataState) return {};
-
-    const result: Record<string, Record<string, number | string>> = {};
-
-    // Get the months in order to ensure data alignment
-    const months = Object.keys(selectedDataState.months);
-
-    // For each month, calculate the metrics
-    months.forEach((month) => {
-      // Get TY monthly value
-      const tyMonthValue = selectedDataState.months[month]?.value || 0;
-
-      // Initialize metrics for this month
-      result[month] = {};
-
-      // Calculate metrics based on HOVER_METRICS definitions
-      (HOVER_METRICS as HoverMetric[]).forEach((metric) => {
-        if (typeof metric.value === "string") {
-          // For direct values like GSV TY, GSV LY
-          if (
-            metric.value === "gross_sales_value" ||
-            metric.value === "py_gross_sales_value"
-          ) {
-            // Get total value
-            const totalValue = selectedDataState[metric.value] || 0;
-
-            // Get total TY volume
-            const totalTyVolume = Object.values(
-              selectedDataState.months
-            ).reduce((sum, { value }) => sum + value, 0);
-
-            // Calculate monthly proportion of the GSV
-            if (totalTyVolume > 0) {
-              const monthlyProportion = tyMonthValue / totalTyVolume;
-              result[month][metric.label] = Math.round(
-                totalValue * monthlyProportion
-              );
-            } else {
-              result[month][metric.label] = 0;
-            }
-          }
-        } else if ("calculation" in metric && metric.calculation) {
-          // For calculated values
-          if (
-            metric.calculation.type === "difference" &&
-            metric.calculation.expression
-          ) {
-            // Get LY monthly value - assuming pattern in distribution
-            const totalTyVolume = Object.values(
-              selectedDataState.months
-            ).reduce((sum, { value }) => sum + value, 0);
-
-            const totalLyVolume =
-              selectedDataState.py_case_equivalent_volume || 0;
-
-            // Calculate the monthly proportion of LY value
-            let lyMonthValue = 0;
-            if (totalTyVolume > 0) {
-              const monthlyProportion = tyMonthValue / totalTyVolume;
-              lyMonthValue = totalLyVolume * monthlyProportion;
-            }
-
-            // Calculate difference
-            result[month][metric.label] = tyMonthValue - lyMonthValue;
-          } else if (
-            metric.calculation.type === "percentage" &&
-            metric.calculation.numerator &&
-            metric.calculation.denominator
-          ) {
-            // Calculate percentage
-            const totalTyVolume = Object.values(
-              selectedDataState.months
-            ).reduce((sum, { value }) => sum + value, 0);
-
-            const totalLyVolume =
-              selectedDataState.py_case_equivalent_volume || 0;
-
-            // Calculate the monthly proportion of LY value
-            let lyMonthValue = 0;
-            if (totalTyVolume > 0) {
-              const monthlyProportion = tyMonthValue / totalTyVolume;
-              lyMonthValue = totalLyVolume * monthlyProportion;
-            }
-
-            // Calculate percentage
-            if (lyMonthValue > 0) {
-              result[month][metric.label] =
-                (tyMonthValue - lyMonthValue) / lyMonthValue;
-            } else {
-              result[month][metric.label] = 0;
-            }
-          }
-        }
-      });
-    });
-
-    return result;
   }, [selectedDataState]);
 
   return (
@@ -1470,9 +1319,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               ]
             : []
         }
-        benchmarkForecasts={BENCHMARK_FORECAST_OPTIONS}
-        availableBenchmarkData={getBenchmarkDataForSidebar}
-        hoverMetrics={getHoverMetricsForChart}
+        benchmarkForecasts={SIDEBAR_BENCHMARK_OPTIONS}
+        availableBenchmarkData={sidebarBenchmarkValues}
         months={selectedDataState?.months || {}}
         onMonthValueChange={handleMonthValueChange}
         commentary={selectedDataState?.commentary}

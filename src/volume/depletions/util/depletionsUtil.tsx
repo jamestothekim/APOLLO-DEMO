@@ -1,5 +1,6 @@
 import { ExtendedForecastData } from "../depletions";
 import { Box } from "@mui/material";
+import type { BenchmarkForecastOption } from "../../../reusableComponents/quantSidebar";
 
 export type ForecastOption = {
   id: number;
@@ -15,65 +16,13 @@ export const FORECAST_OPTIONS: ForecastOption[] = [
   { id: 5, label: "Run Rate", value: "run_rate" },
 ];
 
-export const BENCHMARK_FORECAST_OPTIONS = [
+// Renamed to make it clear this is for sidebar
+export const SIDEBAR_BENCHMARK_OPTIONS = [
   {
     id: 1,
     label: "Last Year (LY)",
     value: "py_case_equivalent_volume",
     color: "#c7b8ea", // Lavender
-  },
-];
-
-// These metrics will be used for hover information, not as selectable trend lines
-export interface HoverMetric {
-  id: number;
-  label: string;
-  value:
-    | string
-    | {
-        numerator?: string;
-        denominator?: string;
-        expression?: string;
-      };
-  calculation?: {
-    type: "difference" | "percentage";
-    format?: "number" | "percent";
-    expression?: string;
-    numerator?: string;
-    denominator?: string;
-  };
-}
-
-export const HOVER_METRICS: HoverMetric[] = [
-  {
-    id: 1,
-    label: "GSV (TY)",
-    value: "gross_sales_value",
-  },
-  {
-    id: 2,
-    label: "GSV (LY)",
-    value: "py_gross_sales_value",
-  },
-  {
-    id: 3,
-    label: "TY - LY Volume",
-    value: "volume_difference",
-    calculation: {
-      type: "difference" as const,
-      expression: "case_equivalent_volume - py_case_equivalent_volume",
-    },
-  },
-  {
-    id: 4,
-    label: "TY vs LY %",
-    value: "volume_percentage",
-    calculation: {
-      type: "percentage" as const,
-      format: "percent" as const,
-      numerator: "case_equivalent_volume - py_case_equivalent_volume",
-      denominator: "py_case_equivalent_volume",
-    },
   },
 ];
 
@@ -608,4 +557,63 @@ export const formatBenchmarkValue = (
   ) : (
     formattedValue
   );
+};
+
+// More descriptive interface name
+export interface BenchmarkMonthlyValueData {
+  [key: string]: number[];
+}
+
+// More descriptive interface name
+export interface BenchmarkDataSourceInput {
+  months: {
+    [key: string]: {
+      value: number;
+      isActual: boolean;
+      isManuallyModified?: boolean;
+    };
+  };
+  py_case_equivalent_volume?: number;
+  py_gross_sales_value?: number;
+  gross_sales_value?: number;
+  case_equivalent_volume?: number;
+  [key: string]: any;
+}
+
+export const getBenchmarkDataForSidebar = (
+  data: BenchmarkDataSourceInput,
+  benchmarkOptions: BenchmarkForecastOption[]
+): BenchmarkMonthlyValueData => {
+  const sidebarBenchmarkData: BenchmarkMonthlyValueData = {};
+  const months = Object.keys(data.months);
+
+  // Process each benchmark option
+  benchmarkOptions.forEach((benchmark) => {
+    const benchmarkField = benchmark.value;
+
+    // For direct values (like py_case_equivalent_volume, gross_sales_value)
+    if (typeof benchmarkField === "string" && !benchmark.calculation) {
+      // Check if we have historical monthly data in the data object
+      if (data[`${benchmarkField}_months`]) {
+        // Use the actual historical monthly values
+        sidebarBenchmarkData[benchmarkField] = months.map(
+          (month) => data[`${benchmarkField}_months`]?.[month]?.value || 0
+        );
+      } else {
+        // Fallback to distributing the total value if monthly data is not available
+        const totalBenchmarkValue = data[benchmarkField];
+        if (totalBenchmarkValue !== undefined) {
+          const totalValue = Number(totalBenchmarkValue) || 0;
+          const equalShare = Math.round((totalValue / months.length) * 10) / 10;
+          sidebarBenchmarkData[benchmarkField] = Array(months.length).fill(
+            equalShare
+          );
+        }
+      }
+    }
+    // For calculated benchmarks, they will be handled in the QuantSidebar's trendLines calculation
+    // This ensures calculated benchmarks are always derived from the latest forecast data
+  });
+
+  return sidebarBenchmarkData;
 };
