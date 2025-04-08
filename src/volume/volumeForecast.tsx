@@ -83,7 +83,6 @@ export const VolumeForecast: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
-  const [rowsDialogOpen, setRowsDialogOpen] = useState(false);
   const [selectedBenchmarks, setSelectedBenchmarks] = useState<Benchmark[]>([]);
   const [availableBenchmarks, setAvailableBenchmarks] = useState<Benchmark[]>(
     []
@@ -237,12 +236,7 @@ export const VolumeForecast: React.FC = () => {
     setColumnsDialogOpen(true);
   };
 
-  const handleRows = () => {
-    setRowsDialogOpen(true);
-  };
-
   const handleApplyColumns = (selectedBenchmarks: Benchmark[]) => {
-    console.log("Adding columns for benchmarks:", selectedBenchmarks);
     setSelectedBenchmarks(selectedBenchmarks);
 
     // Save benchmark preferences if user is logged in
@@ -257,11 +251,6 @@ export const VolumeForecast: React.FC = () => {
         console.error("Error saving benchmark preferences:", error);
       }
     }
-  };
-
-  const handleApplyRows = (selectedBenchmarks: any[]) => {
-    console.log("Adding rows for benchmarks:", selectedBenchmarks);
-    // This will be implemented later to add rows to the depletions table
   };
 
   // Add this function to handle view toggle
@@ -402,7 +391,6 @@ export const VolumeForecast: React.FC = () => {
             tools={[
               "undo" as ToolType,
               "columns" as ToolType,
-              "rows" as ToolType,
               "export" as ToolType,
               ...(marketData.some((m) => m.settings?.managed_by === "Customer")
                 ? ["customerToggle" as ToolType]
@@ -410,7 +398,6 @@ export const VolumeForecast: React.FC = () => {
             ]}
             onUndo={handleUndo}
             onColumns={handleColumns}
-            onRows={handleRows}
             onExport={handleExportClick}
             onCustomerToggle={handleViewToggle}
             canUndo={true}
@@ -441,17 +428,9 @@ export const VolumeForecast: React.FC = () => {
       <BenchmarksDialog
         open={columnsDialogOpen}
         onClose={() => setColumnsDialogOpen(false)}
-        title="Add Columns"
+        title="Benchmarks"
         type="columns"
         onApply={handleApplyColumns}
-      />
-
-      <BenchmarksDialog
-        open={rowsDialogOpen}
-        onClose={() => setRowsDialogOpen(false)}
-        title="Add Rows"
-        type="rows"
-        onApply={handleApplyRows}
       />
     </Paper>
   );

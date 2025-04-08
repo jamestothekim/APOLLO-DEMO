@@ -15,6 +15,68 @@ export const FORECAST_OPTIONS: ForecastOption[] = [
   { id: 5, label: "Run Rate", value: "run_rate" },
 ];
 
+export const BENCHMARK_FORECAST_OPTIONS = [
+  {
+    id: 1,
+    label: "Last Year (LY)",
+    value: "py_case_equivalent_volume",
+    color: "#c7b8ea", // Lavender
+  },
+];
+
+// These metrics will be used for hover information, not as selectable trend lines
+export interface HoverMetric {
+  id: number;
+  label: string;
+  value:
+    | string
+    | {
+        numerator?: string;
+        denominator?: string;
+        expression?: string;
+      };
+  calculation?: {
+    type: "difference" | "percentage";
+    format?: "number" | "percent";
+    expression?: string;
+    numerator?: string;
+    denominator?: string;
+  };
+}
+
+export const HOVER_METRICS: HoverMetric[] = [
+  {
+    id: 1,
+    label: "GSV (TY)",
+    value: "gross_sales_value",
+  },
+  {
+    id: 2,
+    label: "GSV (LY)",
+    value: "py_gross_sales_value",
+  },
+  {
+    id: 3,
+    label: "TY - LY Volume",
+    value: "volume_difference",
+    calculation: {
+      type: "difference" as const,
+      expression: "case_equivalent_volume - py_case_equivalent_volume",
+    },
+  },
+  {
+    id: 4,
+    label: "TY vs LY %",
+    value: "volume_percentage",
+    calculation: {
+      type: "percentage" as const,
+      format: "percent" as const,
+      numerator: "case_equivalent_volume - py_case_equivalent_volume",
+      denominator: "py_case_equivalent_volume",
+    },
+  },
+];
+
 export type ForecastLogic = (typeof FORECAST_OPTIONS)[number]["value"];
 
 export const MONTH_NAMES = [

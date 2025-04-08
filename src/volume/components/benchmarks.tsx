@@ -34,7 +34,7 @@ interface BenchmarksDialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  type: "columns" | "rows";
+  type: "columns";
   onApply: (selectedBenchmarks: Benchmark[]) => void;
 }
 
@@ -138,7 +138,9 @@ export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
               <TextField
                 {...params}
                 label="Select Benchmarks"
-                placeholder="Search benchmarks..."
+                placeholder={
+                  selectedBenchmarks.length === 0 ? "Search benchmarks..." : ""
+                }
                 size="small"
               />
             )}
@@ -181,7 +183,7 @@ export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
           Cancel
         </Button>
         <Button onClick={handleApply} variant="contained">
-          Add {type === "columns" ? "Columns" : "Rows"}
+          Apply
         </Button>
       </DialogActions>
     </Dialog>

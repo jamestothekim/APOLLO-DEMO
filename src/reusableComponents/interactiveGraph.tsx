@@ -7,7 +7,7 @@ import {
   Collapse,
 } from "@mui/material";
 import { LineChart } from "@mui/x-charts";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import CheckIcon from "@mui/icons-material/Check";
@@ -66,6 +66,7 @@ export const InteractiveGraph = ({
 }: InteractiveGraphProps) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
 
   if (!datasets.length) {
     return (
@@ -153,39 +154,47 @@ export const InteractiveGraph = ({
             )}
           </Box>
 
-          <LineChart
-            series={normalizedData.map((dataset) => ({
-              data: dataset.data.map((d) => {
-                const value = Number(d.value);
-                return isNaN(value) ? 0 : value;
-              }),
-              label: dataset.id === "forecast" ? primaryLabel : dataset.label,
-              color: dataset.color || undefined,
-              showMark: true,
-            }))}
-            xAxis={[
-              {
-                data: MONTHS,
-                scaleType: "point",
-                tickLabelStyle: {
-                  angle: 45,
-                  textAnchor: "start",
+          {/* Chart with mouse event tracking */}
+          <Box
+            ref={chartRef}
+            sx={{ position: "relative", height: height - 32 }}
+          >
+            <LineChart
+              series={normalizedData.map((dataset) => ({
+                data: dataset.data.map((d) => {
+                  const value = Number(d.value);
+                  return isNaN(value) ? 0 : value;
+                }),
+                label: dataset.id === "forecast" ? primaryLabel : dataset.label,
+                color: dataset.color || undefined,
+                showMark: true,
+              }))}
+              xAxis={[
+                {
+                  data: MONTHS,
+                  scaleType: "point",
+                  tickLabelStyle: {
+                    angle: 45,
+                    textAnchor: "start",
+                  },
                 },
-              },
-            ]}
-            height={height - 32}
-            width={width || undefined}
-            sx={{
-              ".MuiLineElement-root": {
-                strokeWidth: 2,
-              },
-              ".MuiMarkElement-root": {
-                strokeWidth: 2,
-                scale: "0.6",
-                fill: "currentColor",
-              },
-            }}
-          />
+              ]}
+              height={height - 32}
+              width={width || undefined}
+              sx={{
+                ".MuiLineElement-root": {
+                  strokeWidth: 2,
+                },
+                ".MuiMarkElement-root": {
+                  strokeWidth: 2,
+                  scale: "0.6",
+                  fill: "currentColor",
+                },
+              }}
+            />
+
+            {/* Chart content */}
+          </Box>
 
           <Menu
             anchorEl={menuAnchorEl}
@@ -213,7 +222,17 @@ export const InteractiveGraph = ({
                     gap: 2,
                   }}
                 >
-                  {trendLine.label}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box
+                      sx={{
+                        width: 12,
+                        height: 12,
+                        backgroundColor: trendLine.color,
+                        borderRadius: "2px",
+                      }}
+                    />
+                    {trendLine.label}
+                  </Box>
                   <Box
                     sx={{
                       width: 24,

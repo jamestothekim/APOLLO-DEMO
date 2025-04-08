@@ -14,7 +14,6 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { useState, useMemo } from "react";
 import { InteractiveGraph } from "./interactiveGraph";
-import { useTheme } from "@mui/material/styles";
 import { MonthlyValues } from "./monthlyValues";
 
 interface MonthData {
@@ -26,6 +25,21 @@ interface MonthData {
 interface MonthGroup {
   label: string;
   months: string[];
+}
+
+// Interface for benchmark forecasts
+export interface BenchmarkForecastOption {
+  id: number;
+  label: string;
+  value: string;
+  color: string;
+  calculation?: {
+    type: "difference" | "percentage";
+    format?: "number" | "percent";
+    expression?: string;
+    numerator?: string;
+    denominator?: string;
+  };
 }
 
 interface QuantSidebarProps {
@@ -47,6 +61,11 @@ interface QuantSidebarProps {
     data: Array<{ month: string; value: number }>;
     color: string;
   }>;
+  // Benchmark props
+  benchmarkForecasts?: BenchmarkForecastOption[];
+  availableBenchmarkData?: Record<string, number[]>;
+  // Hover metrics
+  hoverMetrics?: Record<string, Record<string, number | string>>;
   // Monthly values props
   months: {
     [key: string]: MonthData;
@@ -84,48 +103,122 @@ export const QuantSidebar = ({
   forecastOptions,
   onForecastLogicChange,
   graphData = [],
+  benchmarkForecasts = [],
+  availableBenchmarkData = {},
   months,
   onMonthValueChange,
   commentary,
   onCommentaryChange,
   footerButtons = [],
 }: QuantSidebarProps) => {
-  const theme = useTheme();
   const [selectedTrendLines, setSelectedTrendLines] = useState<string[]>([]);
 
-  // Generate trend lines based on the current data
+  // Generate trend lines from benchmark options
   const trendLines = useMemo(() => {
-    if (!graphData.length) return [];
+    if (!graphData.length || !benchmarkForecasts.length) return [];
 
     const baseData = graphData[0].data;
+    const months = baseData.map((item) => item.month);
 
-    // Create LAP data
-    const lapData = baseData.map(({ month, value }) => ({
-      month,
-      value: Math.round(value * (0.8 + Math.random() * 0.4)), // Random value between -20% and +20%
-    }));
+    return benchmarkForecasts.map((benchmark) => {
+      // For direct value benchmarks (like py_case_equivalent_volume, gross_sales_value)
+      if (!benchmark.calculation) {
+        // Get the benchmark data values from availableBenchmarkData
+        const benchmarkValues = availableBenchmarkData[benchmark.value] || [];
 
-    // Create budget data
-    const budgetData = baseData.map(({ month, value }) => ({
-      month,
-      value: Math.round(value * 1.05), // 5% above forecast
-    }));
+        // Map the data to match the format expected by the graph
+        const data = months.map((month, index) => ({
+          month,
+          value: benchmarkValues[index] || 0,
+        }));
 
-    return [
-      {
-        id: "lap",
-        label: "LAP",
-        data: lapData,
-        color: theme.palette.info.main,
-      },
-      {
-        id: "budget-2025",
-        label: "2025 Budget",
-        data: budgetData,
-        color: theme.palette.secondary.main,
-      },
-    ];
-  }, [graphData, theme.palette.info.main, theme.palette.secondary.main]);
+        return {
+          id: benchmark.value,
+          label: benchmark.label,
+          data,
+          color: benchmark.color,
+        };
+      }
+      // For calculated benchmarks (like differences or percentages)
+      else {
+        const calculation = benchmark.calculation; // Store reference to avoid null checks
+        // Get the values for calculation
+        const tyValues = availableBenchmarkData["case_equivalent_volume"] || [];
+        const lyValues =
+          availableBenchmarkData["py_case_equivalent_volume"] || [];
+        const tyGsvValues = availableBenchmarkData["gross_sales_value"] || [];
+        const lyGsvValues =
+          availableBenchmarkData["py_gross_sales_value"] || [];
+
+        // Map the data with calculated values
+        const data = months.map((month, index) => {
+          let value = 0;
+
+          if (calculation.type === "difference" && calculation.expression) {
+            // Parse and evaluate the expression (e.g., "case_equivalent_volume - py_case_equivalent_volume")
+            const parts = calculation.expression.split(" - ");
+            const minuend =
+              parts[0] === "case_equivalent_volume"
+                ? tyValues[index] || 0
+                : parts[0] === "gross_sales_value"
+                ? tyGsvValues[index] || 0
+                : 0;
+            const subtrahend =
+              parts[1] === "py_case_equivalent_volume"
+                ? lyValues[index] || 0
+                : parts[1] === "py_gross_sales_value"
+                ? lyGsvValues[index] || 0
+                : 0;
+
+            value = minuend - subtrahend;
+          } else if (
+            calculation.type === "percentage" &&
+            calculation.numerator &&
+            calculation.denominator
+          ) {
+            // Handle percentage calculations
+            const numeratorParts = calculation.numerator.split(" - ");
+            const numerValue1 =
+              numeratorParts[0] === "case_equivalent_volume"
+                ? tyValues[index] || 0
+                : numeratorParts[0] === "gross_sales_value"
+                ? tyGsvValues[index] || 0
+                : 0;
+            const numerValue2 =
+              numeratorParts[1] === "py_case_equivalent_volume"
+                ? lyValues[index] || 0
+                : numeratorParts[1] === "py_gross_sales_value"
+                ? lyGsvValues[index] || 0
+                : 0;
+
+            const numerator = numerValue1 - numerValue2;
+
+            const denominator =
+              calculation.denominator === "py_case_equivalent_volume"
+                ? lyValues[index] || 0
+                : calculation.denominator === "py_gross_sales_value"
+                ? lyGsvValues[index] || 0
+                : 0;
+
+            // Calculate the percentage, avoiding division by zero
+            value = denominator !== 0 ? numerator / denominator : 0;
+          }
+
+          return {
+            month,
+            value,
+          };
+        });
+
+        return {
+          id: benchmark.value,
+          label: benchmark.label,
+          data,
+          color: benchmark.color,
+        };
+      }
+    });
+  }, [graphData, benchmarkForecasts, availableBenchmarkData]);
 
   // Combine base graph data with selected trend lines
   const combinedGraphData = useMemo(() => {
@@ -290,7 +383,7 @@ export const QuantSidebar = ({
             p: 2,
             borderTop: "1px solid",
             borderColor: "divider",
-            backgroundColor: (theme) => theme.palette.background.paper,
+            backgroundColor: "background.paper",
             display: "flex",
             gap: 2,
             justifyContent: "flex-end",

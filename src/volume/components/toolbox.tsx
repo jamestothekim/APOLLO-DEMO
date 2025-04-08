@@ -2,7 +2,6 @@ import React from "react";
 import { Box, Button } from "@mui/material";
 import UndoIcon from "@mui/icons-material/Undo";
 import ViewColumnIcon from "@mui/icons-material/ViewColumn";
-import ViewListIcon from "@mui/icons-material/ViewList";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import TableChartIcon from "@mui/icons-material/TableChart";
@@ -14,7 +13,6 @@ import axios from "axios";
 export type ToolType =
   | "undo"
   | "columns"
-  | "rows"
   | "export"
   | "viewToggle"
   | "customerToggle"
@@ -24,7 +22,6 @@ interface ToolboxProps {
   tools?: ToolType[];
   onUndo: (handler: () => Promise<void>) => void;
   onColumns?: () => void;
-  onRows?: () => void;
   onExport: () => void;
   onViewToggle?: () => void;
   onCustomerToggle?: () => void;
@@ -38,7 +35,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   tools = [],
   onUndo,
   onColumns,
-  onRows,
   onExport,
   onViewToggle,
   onCustomerToggle,
@@ -62,12 +58,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   const handleColumns = () => {
     if (onColumns) {
       onColumns();
-    }
-  };
-
-  const handleRows = () => {
-    if (onRows) {
-      onRows();
     }
   };
 
@@ -167,22 +157,7 @@ export const Toolbox: React.FC<ToolboxProps> = ({
               borderRadius: "8px",
             }}
           >
-            +/- Columns
-          </Button>
-        )}
-
-        {tools.includes("rows") && (
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<ViewListIcon />}
-            onClick={handleRows}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-            }}
-          >
-            +/- Rows
+            Benchmarks
           </Button>
         )}
 
