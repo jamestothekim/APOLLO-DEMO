@@ -28,6 +28,14 @@ interface MonthlyValuesProps {
   onMonthValueChange: (month: string, value: string) => void;
   label?: string;
   defaultExpanded?: boolean;
+  gsvRate?: number;
+  benchmarkForecasts?: Array<{
+    id: number;
+    label: string;
+    value: string;
+    color: string;
+  }>;
+  availableBenchmarkData?: Record<string, number[]>;
 }
 
 export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
@@ -35,26 +43,24 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
   onMonthValueChange,
   label = "MONTHLY VALUES",
   defaultExpanded = true,
+  gsvRate,
+  benchmarkForecasts = [],
+  availableBenchmarkData = {},
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-  // Track input values locally to handle display and edits more cleanly
   const [localInputValues, setLocalInputValues] = useState<
     Record<string, string | undefined>
   >({});
 
-  // Helper function to format display values consistently
   const formatDisplayValue = (value: number): string => {
-    // Format with one decimal place, preserving decimal display
     return value.toLocaleString(undefined, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
   };
 
-  // Get display value for the input field
   const getDisplayValue = (monthData: MonthData): string => {
     const monthKey = `${monthData.month}`;
-    // If there's a local editing value, use that, otherwise format the stored value
     return localInputValues[monthKey] !== undefined
       ? localInputValues[monthKey] || ""
       : formatDisplayValue(monthData.value);
@@ -66,19 +72,14 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
   ) => {
     const rawValue = e.target.value.replace(/,/g, "");
     const monthKey = `${monthData.month}`;
-
-    // Store the raw input value for display purposes
     setLocalInputValues((prev) => ({
       ...prev,
       [monthKey]: rawValue,
     }));
-
-    // Pass the raw string value to parent component
     onMonthValueChange(monthData.month, rawValue);
   };
 
   const handleInputBlur = (monthKey: string) => {
-    // Clear local value on blur to revert to formatted display value
     setLocalInputValues((prev) => ({
       ...prev,
       [monthKey]: undefined,
@@ -124,39 +125,170 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
               {quarterLabel}
             </Typography>
             <Grid container spacing={2}>
-              {months.map((monthData) => (
-                <Grid item xs={4} key={monthData.month}>
-                  <TextField
-                    label={monthData.month}
-                    value={getDisplayValue(monthData)}
-                    onChange={(e) => handleInputChange(e, monthData)}
-                    onBlur={() => handleInputBlur(monthData.month)}
-                    size="small"
-                    fullWidth
-                    type="text"
-                    InputProps={{
-                      readOnly: monthData.isActual,
-                      endAdornment: monthData.isManuallyModified ? (
-                        <EditIcon
-                          fontSize="small"
-                          sx={{
-                            color: (theme) => theme.palette.secondary.main,
-                          }}
-                        />
-                      ) : null,
-                      sx: {
-                        "& .MuiInputBase-input": {
-                          color: monthData.isManuallyModified
-                            ? (theme) => theme.palette.secondary.main
-                            : monthData.isActual
-                            ? (theme) => theme.palette.primary.main
-                            : "inherit",
+              {months.map((monthData, monthIndex) => {
+                const quarterIndex = quarterGroups.findIndex(
+                  (q) => q.label === quarterLabel
+                );
+                const globalIndex = quarterIndex * 3 + monthIndex;
+
+                return (
+                  <Grid item xs={4} key={monthData.month}>
+                    <TextField
+                      label={monthData.month}
+                      value={getDisplayValue(monthData)}
+                      onChange={(e) => handleInputChange(e, monthData)}
+                      onBlur={() => handleInputBlur(monthData.month)}
+                      size="small"
+                      fullWidth
+                      type="text"
+                      InputProps={{
+                        readOnly: monthData.isActual,
+                        endAdornment: monthData.isManuallyModified ? (
+                          <EditIcon
+                            fontSize="small"
+                            sx={{
+                              color: (theme) => theme.palette.secondary.main,
+                            }}
+                          />
+                        ) : null,
+                        sx: {
+                          "& .MuiInputBase-input": {
+                            color: monthData.isManuallyModified
+                              ? (theme) => theme.palette.secondary.main
+                              : monthData.isActual
+                              ? (theme) => theme.palette.primary.main
+                              : "inherit",
+                          },
                         },
-                      },
-                    }}
-                  />
-                </Grid>
-              ))}
+                      }}
+                    />
+
+                    {benchmarkForecasts.map((benchmark) => {
+                      const monthValues =
+                        availableBenchmarkData[benchmark.value] || [];
+                      if (monthValues.length === 0) return null;
+
+                      const forecastValues = quarterGroups.flatMap(
+                        ({ months }) =>
+                          months.map((monthData) => monthData.value)
+                      );
+
+                      const benchmarkValue = monthValues[globalIndex] || 0;
+                      const forecastValue = forecastValues[globalIndex];
+                      const diff = forecastValue - benchmarkValue;
+                      const percentDiff =
+                        benchmarkValue !== 0
+                          ? ((forecastValue - benchmarkValue) /
+                              benchmarkValue) *
+                            100
+                          : 0;
+
+                      return (
+                        <Box
+                          key={`${benchmark.id}-${monthData.month}`}
+                          sx={{
+                            mt: 1,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 0.5,
+                            bgcolor: "background.paper",
+                            p: 1,
+                            borderRadius: 1,
+                            border: "1px solid",
+                            borderColor: "divider",
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              mb: 1,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                backgroundColor: benchmark.color,
+                                borderRadius: "2px",
+                              }}
+                            />
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {benchmark.label}
+                            </Typography>
+                          </Box>
+
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: "80px 1fr",
+                              gap: 1,
+                              alignItems: "center",
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              sx={{ color: "text.secondary" }}
+                            >
+                              Δ Vol:
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: diff < 0 ? "error.main" : "success.main",
+                                textAlign: "right",
+                              }}
+                            >
+                              {diff.toLocaleString(undefined, {
+                                minimumFractionDigits: 1,
+                                maximumFractionDigits: 1,
+                              })}{" "}
+                              ({Math.round(Math.abs(percentDiff))}%)
+                            </Typography>
+                          </Box>
+
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: "80px 1fr",
+                              gap: 1,
+                              alignItems: "center",
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              sx={{ color: "text.secondary" }}
+                            >
+                              Δ GSV:
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: diff < 0 ? "error.main" : "success.main",
+                                textAlign: "right",
+                              }}
+                            >
+                              {(diff * (gsvRate || 0)).toLocaleString(
+                                undefined,
+                                {
+                                  style: "currency",
+                                  currency: "USD",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0,
+                                }
+                              )}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Grid>
+                );
+              })}
             </Grid>
           </Box>
         ))}

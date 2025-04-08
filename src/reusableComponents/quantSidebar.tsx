@@ -71,6 +71,8 @@ interface QuantSidebarProps {
     [key: string]: MonthData;
   };
   onMonthValueChange: (month: string, value: string) => void;
+  // GSV rate props
+  gsvRate?: number;
   // Commentary
   commentary?: string;
   onCommentaryChange?: (value: string) => void;
@@ -107,6 +109,7 @@ export const QuantSidebar = ({
   availableBenchmarkData = {},
   months,
   onMonthValueChange,
+  gsvRate,
   commentary,
   onCommentaryChange,
   footerButtons = [],
@@ -220,6 +223,13 @@ export const QuantSidebar = ({
       }
     });
   }, [graphData, benchmarkForecasts, availableBenchmarkData]);
+
+  // Get selected benchmarks data
+  const selectedBenchmarks = useMemo(() => {
+    return benchmarkForecasts.filter((benchmark) =>
+      selectedTrendLines.includes(benchmark.value)
+    );
+  }, [benchmarkForecasts, selectedTrendLines]);
 
   // Combine base graph data with selected trend lines
   const combinedGraphData = useMemo(() => {
@@ -350,6 +360,9 @@ export const QuantSidebar = ({
               onMonthValueChange={onMonthValueChange}
               label="MONTHLY VALUES"
               defaultExpanded={true}
+              gsvRate={gsvRate}
+              benchmarkForecasts={selectedBenchmarks}
+              availableBenchmarkData={availableBenchmarkData}
             />
           </Grid>
 

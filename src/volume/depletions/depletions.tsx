@@ -1323,6 +1323,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         availableBenchmarkData={sidebarBenchmarkValues}
         months={selectedDataState?.months || {}}
         onMonthValueChange={handleMonthValueChange}
+        gsvRate={
+          selectedDataState?.gross_sales_value
+            ? selectedDataState.gross_sales_value /
+              calculateTotal(selectedDataState.months)
+            : undefined
+        }
         commentary={selectedDataState?.commentary}
         onCommentaryChange={handleCommentaryChange}
         footerButtons={[
