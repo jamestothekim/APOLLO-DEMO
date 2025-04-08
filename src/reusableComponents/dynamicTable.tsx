@@ -56,6 +56,8 @@ export interface DynamicTableProps {
   renderExpanded?: (row: any) => React.ReactNode;
   dense?: boolean;
   loading?: boolean;
+  stickyHeader?: boolean;
+  maxHeight?: string | number;
 }
 
 export const DynamicTable: React.FC<DynamicTableProps> = ({
@@ -74,6 +76,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   getRowId = (row) => row.id,
   showPagination = true,
   loading = false,
+  stickyHeader = false,
+  maxHeight = "70vh",
 }) => {
   // All hooks must be at the top level and in the same order every time
   const [activeSection, setActiveSection] = useState(0);
@@ -222,7 +226,19 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     <TableCell
       key={column.key}
       align={column.align}
-      sx={{ fontWeight: 700, width: column.width }}
+      sx={{
+        fontWeight: 700,
+        width: column.width,
+        // Add sticky styles for header cells when stickyHeader is enabled
+        ...(stickyHeader && {
+          position: "sticky",
+          top: 0,
+          backgroundColor: (theme) => theme.palette.background.paper,
+          zIndex: 2,
+          // Add shadow for better separation
+          boxShadow: "0 3px 3px -3px rgba(0,0,0,0.2)",
+        }),
+      }}
     >
       {column.sortable !== false ? (
         <TableSortLabel
@@ -264,22 +280,31 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
         </Box>
       ) : (
         <>
-          <TableContainer>
-            {sections && (
-              <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
-                <Tabs
-                  value={activeSection}
-                  onChange={handleChangeSection}
-                  aria-label="table sections"
-                >
-                  {sections.map((section) => (
-                    <Tab key={section.value} label={section.label} />
-                  ))}
-                </Tabs>
-              </Box>
-            )}
+          {sections && (
+            <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+              <Tabs
+                value={activeSection}
+                onChange={handleChangeSection}
+                aria-label="table sections"
+              >
+                {sections.map((section) => (
+                  <Tab key={section.value} label={section.label} />
+                ))}
+              </Tabs>
+            </Box>
+          )}
 
-            <Table size="small">
+          <TableContainer
+            sx={{
+              ...(stickyHeader && {
+                maxHeight,
+                overflow: "auto",
+                // Use position: relative to contain sticky elements
+                position: "relative",
+              }),
+            }}
+          >
+            <Table size="small" stickyHeader={stickyHeader}>
               <TableHead>
                 <TableRow>{tableColumns.map(renderTableHeader)}</TableRow>
               </TableHead>
@@ -309,32 +334,32 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                 ))}
               </TableBody>
             </Table>
-
-            {showPagination && (
-              <TablePagination
-                component="div"
-                count={data.length}
-                page={rowsPerPage === -1 ? 0 : page}
-                onPageChange={handleChangePage}
-                rowsPerPage={rowsPerPage}
-                onRowsPerPageChange={handleChangeRowsPerPage}
-                rowsPerPageOptions={rowsPerPageOptions}
-                sx={{
-                  ".MuiTablePagination-select": {
-                    fontSize: "0.875rem",
-                  },
-                  ".MuiTablePagination-displayedRows": {
-                    fontSize: "0.875rem",
-                  },
-                }}
-                labelDisplayedRows={({ from, to, count }) =>
-                  rowsPerPage === -1
-                    ? `All ${count} rows`
-                    : `${from}–${to} of ${count}`
-                }
-              />
-            )}
           </TableContainer>
+
+          {showPagination && (
+            <TablePagination
+              component="div"
+              count={data.length}
+              page={rowsPerPage === -1 ? 0 : page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={rowsPerPageOptions}
+              sx={{
+                ".MuiTablePagination-select": {
+                  fontSize: "0.875rem",
+                },
+                ".MuiTablePagination-displayedRows": {
+                  fontSize: "0.875rem",
+                },
+              }}
+              labelDisplayedRows={({ from, to, count }) =>
+                rowsPerPage === -1
+                  ? `All ${count} rows`
+                  : `${from}–${to} of ${count}`
+              }
+            />
+          )}
         </>
       )}
     </Box>

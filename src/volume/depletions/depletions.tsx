@@ -504,22 +504,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
           const updatedData = prevData.map((item) => {
             if (item.id === expectedKey) {
-              // Create base updated row with restored forecast logic and months
-              let updatedItem = {
+              return {
                 ...item,
                 forecastLogic: restored.forecastType,
                 months: restored.months,
               };
-
-              // Recalculate benchmarks after restore
-              if (selectedBenchmarks && selectedBenchmarks.length > 0) {
-                updatedItem = recalculateBenchmarks(
-                  updatedItem,
-                  selectedBenchmarks
-                );
-              }
-
-              return updatedItem;
             }
             return item;
           });
@@ -539,13 +528,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         console.error("Error undoing change:", error.message);
       }
     }
-  }, [
-    setForecastData,
-    setUndoMessage,
-    setUndoSnackbarOpen,
-    isCustomerView,
-    selectedBenchmarks,
-  ]);
+  }, [setForecastData, setUndoMessage, setUndoSnackbarOpen, isCustomerView]);
 
   // Now the effect can safely include handleUndo in deps
   useEffect(() => {
@@ -1112,8 +1095,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Add handleExport function
   const handleExport = useCallback(() => {
-    exportToCSV(forecastData);
-  }, [forecastData]);
+    exportToCSV(forecastData, selectedBenchmarks);
+  }, [forecastData, selectedBenchmarks]);
 
   // Register export handler
   useEffect(() => {
@@ -1235,6 +1218,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         rowsPerPage={rowsPerPage}
         onRowsPerPageChange={handleChangeRowsPerPage}
         rowsPerPageOptions={[10, 15, 25, 50, { value: -1, label: "All" }]}
+        stickyHeader={true}
+        maxHeight="calc(100vh - 250px)"
       />
 
       <Box

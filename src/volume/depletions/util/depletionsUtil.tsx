@@ -83,6 +83,8 @@ export const processMonthData = (data: any[]) => {
 export interface ExportableData {
   market_id: string | number;
   market_name: string;
+  customer_id?: string;
+  customer_name?: string;
   product: string;
   brand: string;
   variant: string;
@@ -90,6 +92,10 @@ export interface ExportableData {
   variant_size_pack_id: string;
   variant_size_pack_desc: string;
   forecastLogic: string;
+  py_case_equivalent_volume?: number;
+  py_gross_sales_value?: number;
+  gross_sales_value?: number;
+  case_equivalent_volume?: number;
   months: {
     [key: string]: {
       value: number;
@@ -97,42 +103,127 @@ export interface ExportableData {
       isManuallyModified?: boolean;
     };
   };
+  [key: string]: any; // Allow for benchmark fields
 }
 
-export const exportToCSV = (data: ExportableData[]) => {
+export const exportToCSV = (
+  data: ExportableData[],
+  selectedBenchmarks?: Benchmark[]
+) => {
   const monthKeys = MONTH_NAMES;
-  const headers = [
+
+  // Build a complete set of headers including benchmarks
+  const baseHeaders = [
     "Market",
+    ...(data.some((row) => row.customer_name) ? ["Customer"] : []),
     "Product",
-    "Brand",
-    "Variant",
-    "Variant ID",
-    "Variant Size Pack ID",
-    "Variant Size Pack Desc",
     "Forecast Logic",
-    ...monthKeys,
-    "Total",
-  ].join(",");
+    "VOL 9L (TY)",
+  ];
 
-  const rows = data.map((row) => {
-    const monthValues = monthKeys.map((month) => row.months[month]?.value || 0);
-    const total = monthValues.reduce((sum, val) => sum + val, 0);
+  // Add benchmark headers
+  const benchmarkHeaders =
+    selectedBenchmarks?.map((benchmark) =>
+      benchmark.sublabel
+        ? `${benchmark.label} (${benchmark.sublabel})`
+        : benchmark.label
+    ) || [];
 
-    return [
-      row.market_name,
-      row.product,
-      row.brand,
-      row.variant,
-      row.variant_id,
-      row.variant_size_pack_id,
-      row.variant_size_pack_desc,
-      row.forecastLogic,
-      ...monthValues,
-      total,
-    ].join(",");
+  // Add month headers with ACT/FCST labels
+  const monthHeaders = monthKeys.map((month) => {
+    const firstRow = data[0];
+    const isActual = firstRow?.months[month]?.isActual;
+    return `${month} ${isActual ? "(ACT)" : "(FCST)"}`;
   });
 
-  const csvContent = [headers, ...rows].join("\n");
+  // Combine all headers for CSV
+  const headerRow = [...baseHeaders, ...benchmarkHeaders, ...monthHeaders];
+
+  // Format each data row with proper formatting
+  const dataRows = data.map((item) => {
+    // Format the total volume with 2 decimal places (hundredths)
+    const totalVolume = calculateTotal(item.months);
+    const formattedTotal = totalVolume.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    // Base columns
+    const baseColumns = [
+      item.market_name,
+      ...(data.some((r) => r.customer_name) ? [item.customer_name || ""] : []),
+      item.product.includes(" - ")
+        ? item.product.split(" - ")[1]
+        : item.product,
+      item.forecastLogic,
+      formattedTotal,
+    ];
+
+    // Format benchmark values
+    const benchmarkColumns =
+      selectedBenchmarks?.map((benchmark) => {
+        // Get benchmark value from the row
+        const value =
+          typeof benchmark.value === "string"
+            ? item[benchmark.value]
+            : item[`benchmark_${benchmark.id}`];
+
+        if (value === undefined || isNaN(value)) return "";
+
+        // Apply appropriate formatting based on benchmark type
+        if (benchmark.calculation.format === "percent") {
+          return `${Math.round(value * 100)}%`;
+        } else if (
+          benchmark.label.toLowerCase().includes("gsv") &&
+          !benchmark.label.toLowerCase().includes("%")
+        ) {
+          // Currency format for GSV values
+          return new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }).format(value);
+        } else {
+          // Standard number format with 2 decimal places (hundredths)
+          return value.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        }
+      }) || [];
+
+    // Format month values with 2 decimal places (hundredths)
+    const monthValues = monthKeys.map((month) => {
+      const value = item.months[month]?.value || 0;
+      return value.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    });
+
+    // Combine all columns for this row
+    return [...baseColumns, ...benchmarkColumns, ...monthValues];
+  });
+
+  // Convert rows to CSV format, properly handling commas and quotes
+  const processedRows = dataRows.map((row) =>
+    row
+      .map((cell) => {
+        const stringCell = String(cell);
+        // If cell contains comma or quote, wrap in quotes
+        if (stringCell.includes(",") || stringCell.includes('"')) {
+          // Double up any quotes to escape them
+          return `"${stringCell.replace(/"/g, '""')}"`;
+        }
+        return stringCell;
+      })
+      .join(",")
+  );
+
+  // Create the CSV content and trigger download
+  const csvContent = [headerRow.join(","), ...processedRows].join("\n");
+
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
@@ -156,9 +247,13 @@ export const hasNonZeroTotal = (row: ExtendedForecastData): boolean => {
   return total > 0.0001; // Using small epsilon to handle floating point precision
 };
 
-export const calculateTotal = (
-  months: ExtendedForecastData["months"]
-): number => {
+export const calculateTotal = (months: {
+  [key: string]: {
+    value: number;
+    isActual?: boolean;
+    isManuallyModified?: boolean;
+  };
+}): number => {
   return Object.values(months).reduce((acc, curr) => acc + curr.value, 0);
 };
 
@@ -467,8 +562,8 @@ export const formatBenchmarkValue = (
 
   // For other number values
   const formattedValue = roundedValue.toLocaleString(undefined, {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 
   // Return colored text for negative values
