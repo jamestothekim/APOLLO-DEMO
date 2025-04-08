@@ -5,12 +5,14 @@ import {
   Menu,
   MenuItem,
   Collapse,
+  Button,
 } from "@mui/material";
 import { LineChart } from "@mui/x-charts";
 import { useState, useRef } from "react";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import CheckIcon from "@mui/icons-material/Check";
+import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 
 export interface TimeSeriesData {
   id: string;
@@ -139,18 +141,18 @@ export const InteractiveGraph = ({
             }}
           >
             {availableTrendLines.length > 0 && (
-              <IconButton
-                onClick={(e) => setMenuAnchorEl(e.currentTarget)}
+              <Button
+                variant="outlined"
                 size="small"
+                startIcon={<ViewColumnIcon />}
+                onClick={(e) => setMenuAnchorEl(e.currentTarget)}
                 sx={{
-                  bgcolor: "background.paper",
-                  border: 1,
-                  borderColor: "divider",
-                  "&:hover": { bgcolor: "action.hover" },
+                  textTransform: "none",
+                  borderRadius: "8px",
                 }}
               >
-                <AddIcon fontSize="small" />
-              </IconButton>
+                Benchmarks
+              </Button>
             )}
           </Box>
 
