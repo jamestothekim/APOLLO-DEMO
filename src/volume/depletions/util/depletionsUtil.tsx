@@ -61,15 +61,38 @@ export const MONTH_MAPPING: { [key: string]: number } = {
 export const processMonthData = (data: any[]) => {
   const months: { [key: string]: any } = {};
 
-  // Initialize all months with zero values
-  MONTH_NAMES.forEach((month) => {
+  // First identify all actual months from the data
+  const actualMonths = new Set<(typeof MONTH_NAMES)[number]>();
+  let hasAnyActuals = false;
+  data.forEach((item) => {
+    if (item?.data_type?.includes("actual")) {
+      hasAnyActuals = true;
+      const monthName = MONTH_NAMES[item.month - 1];
+      if (monthName) {
+        actualMonths.add(monthName);
+      }
+    }
+  });
+
+  // Find the last actual month index
+  const lastActualMonthIndex =
+    hasAnyActuals && actualMonths.size > 0
+      ? Math.max(...Array.from(actualMonths).map((m) => MONTH_NAMES.indexOf(m)))
+      : -1;
+
+  // Initialize all months
+  MONTH_NAMES.forEach((month, index) => {
+    // If we have any actuals, all months up to the last actual month should be marked as actual
+    const shouldBeActual = hasAnyActuals && index <= lastActualMonthIndex;
+
     months[month] = {
       value: 0,
-      isActual: false,
+      isActual: shouldBeActual,
       isManuallyModified: false,
     };
   });
 
+  // Fill in actual values from data
   data.forEach((item) => {
     if (item?.month && item.case_equivalent_volume !== undefined) {
       const monthName = MONTH_NAMES[item.month - 1];

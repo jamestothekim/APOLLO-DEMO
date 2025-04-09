@@ -433,6 +433,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           ),
           fetchLoggedForecastChanges(),
         ]);
+        console.log(forecastResponse.data);
 
         if (!forecastResponse.data) {
           throw new Error("Failed to fetch forecast data");
@@ -990,78 +991,96 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         },
       })) || []),
       // Month columns (Phasing section)
-      ...(forecastData.length > 0 && forecastData[0]?.months
-        ? Object.keys(forecastData[0].months).map((month) => ({
-            key: `months.${month}`,
-            header: month,
-            subHeader: forecastData[0].months[month]?.isActual ? "ACT" : "FCST",
-            align: "right" as const,
-            render: (_: any, row: ExtendedForecastData) => {
-              // Show loading indicator if the row is loading
-              if (row.isLoading) {
+      ...(forecastData.length > 0
+        ? MONTH_NAMES.map((month) => {
+            // Find any row that has this month as actual to determine header status
+            const isActualMonth = forecastData.some(
+              (row) => row.months[month]?.isActual
+            );
+
+            return {
+              key: `months.${month}`,
+              header: month,
+              subHeader: isActualMonth ? "ACT" : "FCST",
+              align: "right" as const,
+              render: (_: any, row: ExtendedForecastData) => {
+                // Show loading indicator if the row is loading
+                if (row.isLoading) {
+                  return (
+                    <Box sx={{ display: "flex", justifyContent: "center" }}>
+                      <CircularProgress size={16} thickness={4} />
+                    </Box>
+                  );
+                }
+
+                if (!row?.months?.[month]) return "-";
+                const data = row.months[month];
                 return (
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <CircularProgress size={16} thickness={4} />
-                  </Box>
-                );
-              }
+                  <div
+                    onClick={(event) => {
+                      if (data.isActual) {
+                        event.stopPropagation();
+                        // Find the market info using market_id
+                        const marketInfo = marketMetadata.find(
+                          (m) => m.market_id === row.market_id
+                        );
 
-              if (!row?.months?.[month]) return "-";
-              const data = row.months[month];
-              return (
-                <div
-                  onClick={(event) => {
-                    if (data.isActual) {
-                      event.stopPropagation();
-                      // Find the market info using market_id
-                      const marketInfo = marketMetadata.find(
-                        (m) => m.market_id === row.market_id
-                      );
+                        // Get the first two characters of the market_code (e.g., "NY" from "NYU")
+                        const stateCode =
+                          marketInfo?.market_code?.substring(0, 2) || "";
 
-                      // Get the first two characters of the market_code (e.g., "NY" from "NYU")
-                      const stateCode =
-                        marketInfo?.market_code?.substring(0, 2) || "";
-
-                      setSelectedDetails({
-                        market: stateCode,
-                        product: row.product,
-                        value: Math.round(data.value),
-                        month: MONTH_MAPPING[month],
-                        year: 2025,
-                      });
-                      setDetailsOpen(true);
-                    }
-                  }}
-                  style={{ position: "relative" }}
-                >
-                  <Box
-                    component="span"
-                    sx={{
-                      color: data.isActual ? "primary.main" : "inherit",
-                      cursor: data.isActual ? "pointer" : "inherit",
+                        // If it's a phantom actual month (value is 0 and isActual is true)
+                        if (data.value === 0 && data.isActual) {
+                          setSelectedDetails({
+                            market: stateCode,
+                            product: row.product,
+                            value: -1, // Special value to indicate no data
+                            month: MONTH_MAPPING[month],
+                            year: 2025,
+                          });
+                        } else {
+                          setSelectedDetails({
+                            market: stateCode,
+                            product: row.product,
+                            value: Math.round(data.value),
+                            month: MONTH_MAPPING[month],
+                            year: 2025,
+                          });
+                        }
+                        setDetailsOpen(true);
+                      }
                     }}
+                    style={{ position: "relative" }}
                   >
-                    {((data.value * 10) / 10).toLocaleString(undefined, {
-                      minimumFractionDigits: 1,
-                      maximumFractionDigits: 1,
-                    })}
-                  </Box>
-                  {data.isManuallyModified && (
-                    <EditIcon
+                    <Box
+                      component="span"
                       sx={{
-                        fontSize: "0.875rem",
-                        position: "absolute",
-                        right: "-16px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        color: "secondary.main",
+                        color: data.isActual ? "primary.main" : "inherit",
+                        cursor: data.isActual ? "pointer" : "inherit",
                       }}
-                    />
-                  )}
-                </div>
-              );
-            },
-          }))
+                    >
+                      {((data.value * 10) / 10).toLocaleString(undefined, {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1,
+                      })}
+                    </Box>
+                    {data.isManuallyModified && (
+                      <EditIcon
+                        sx={{
+                          fontSize: "0.875rem",
+                          position: "absolute",
+                          right: "-16px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          color: "secondary.main",
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              },
+            };
+          })
         : MONTH_NAMES.map((month) => ({
             key: `months.${month}`,
             header: month,
