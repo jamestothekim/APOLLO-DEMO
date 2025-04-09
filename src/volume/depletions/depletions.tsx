@@ -1390,7 +1390,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             variant: "outlined",
           },
           {
-            label: "Save Changes",
+            label: "Apply Changes",
             onClick: handleSave,
             variant: "contained",
             disabled: !hasChanges,
