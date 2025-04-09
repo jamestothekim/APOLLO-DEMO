@@ -1,6 +1,6 @@
 import { ExtendedForecastData } from "../depletions";
 import { Box } from "@mui/material";
-import type { BenchmarkForecastOption } from "../../../reusableComponents/quantSidebar";
+import type { GuidanceForecastOption } from "../../../reusableComponents/quantSidebar";
 
 export type ForecastOption = {
   id: number;
@@ -146,7 +146,7 @@ export interface ExportableData {
 
 export const exportToCSV = (
   data: ExportableData[],
-  selectedBenchmarks?: Benchmark[]
+  selectedGuidance?: Guidance[]
 ) => {
   const monthKeys = MONTH_NAMES;
 
@@ -161,7 +161,7 @@ export const exportToCSV = (
 
   // Add benchmark headers
   const benchmarkHeaders =
-    selectedBenchmarks?.map((benchmark) =>
+    selectedGuidance?.map((benchmark) =>
       benchmark.sublabel
         ? `${benchmark.label} (${benchmark.sublabel})`
         : benchmark.label
@@ -199,7 +199,7 @@ export const exportToCSV = (
 
     // Format benchmark values
     const benchmarkColumns =
-      selectedBenchmarks?.map((benchmark) => {
+      selectedGuidance?.map((benchmark) => {
         // Get benchmark value from the row
         const value =
           typeof benchmark.value === "string"
@@ -296,33 +296,33 @@ export const calculateTotal = (months: {
 };
 
 // Add this type to handle benchmark data
-export interface BenchmarkData {
+export interface GuidanceData {
   [key: string]: number;
 }
 
 // Add new types for calculation structure
-export interface BenchmarkCalculation {
+export interface GuidanceCalculation {
   type: "direct" | "percentage" | "difference";
   format?: "number" | "percent";
 }
 
-export interface BenchmarkValue {
+export interface GuidanceValue {
   numerator?: string;
   denominator?: string;
   expression?: string;
 }
 
-export interface Benchmark {
+export interface Guidance {
   id: number;
   label: string;
   sublabel?: string;
-  value: string | BenchmarkValue;
-  calculation: BenchmarkCalculation;
+  value: string | GuidanceValue;
+  calculation: GuidanceCalculation;
 }
 
-export const processBenchmarkValue = (
+export const processGuidanceValue = (
   data: any[],
-  benchmark: Benchmark,
+  benchmark: Guidance,
   isCustomerView: boolean
 ): { [key: string]: number } => {
   const benchmarkData: { [key: string]: number } = {};
@@ -362,7 +362,7 @@ export const processBenchmarkValue = (
       benchmarkData[key] = Math.round(values[fieldName] * 100) / 100;
     } else {
       // Calculated value
-      const value = benchmark.value as BenchmarkValue;
+      const value = benchmark.value as GuidanceValue;
 
       if (
         benchmark.calculation.type === "percentage" &&
@@ -399,11 +399,11 @@ export const processBenchmarkValue = (
 };
 
 // Add this new centralized function to recalculate benchmark values
-export const recalculateBenchmarks = (
+export const recalculateGuidance = (
   row: any,
-  selectedBenchmarks: Benchmark[]
+  selectedGuidance: Guidance[]
 ): any => {
-  if (!selectedBenchmarks || selectedBenchmarks.length === 0) {
+  if (!selectedGuidance || selectedGuidance.length === 0) {
     return row;
   }
 
@@ -449,7 +449,7 @@ export const recalculateBenchmarks = (
   }
 
   // Now recalculate all benchmarks
-  selectedBenchmarks.forEach((benchmark) => {
+  selectedGuidance.forEach((benchmark) => {
     if (typeof benchmark.value === "string") {
       // Direct values don't need recalculation as they come directly from the source data
       // These include py_case_equivalent_volume, gross_sales_value, py_gross_sales_value, etc.
@@ -518,7 +518,7 @@ export const recalculateBenchmarks = (
   return updatedRow;
 };
 
-export const formatBenchmarkValue = (
+export const formatGuidanceValue = (
   value: number | undefined,
   format: string = "number",
   benchmarkType?: string
@@ -587,12 +587,12 @@ export const formatBenchmarkValue = (
 };
 
 // More descriptive interface name
-export interface BenchmarkMonthlyValueData {
+export interface GuidanceMonthlyValueData {
   [key: string]: number[];
 }
 
 // More descriptive interface name
-export interface BenchmarkDataSourceInput {
+export interface GuidanceDataSourceInput {
   months: {
     [key: string]: {
       value: number;
@@ -607,11 +607,11 @@ export interface BenchmarkDataSourceInput {
   [key: string]: any;
 }
 
-export const getBenchmarkDataForSidebar = (
-  data: BenchmarkDataSourceInput,
-  benchmarkOptions: BenchmarkForecastOption[]
-): BenchmarkMonthlyValueData => {
-  const sidebarBenchmarkData: BenchmarkMonthlyValueData = {};
+export const getGuidanceDataForSidebar = (
+  data: GuidanceDataSourceInput,
+  benchmarkOptions: GuidanceForecastOption[]
+): GuidanceMonthlyValueData => {
+  const sidebarGuidanceData: GuidanceMonthlyValueData = {};
   const months = Object.keys(data.months);
 
   // Process each benchmark option
@@ -623,16 +623,16 @@ export const getBenchmarkDataForSidebar = (
       // Check if we have historical monthly data in the data object
       if (data[`${benchmarkField}_months`]) {
         // Use the actual historical monthly values
-        sidebarBenchmarkData[benchmarkField] = months.map(
+        sidebarGuidanceData[benchmarkField] = months.map(
           (month) => data[`${benchmarkField}_months`]?.[month]?.value || 0
         );
       } else {
         // Fallback to distributing the total value if monthly data is not available
-        const totalBenchmarkValue = data[benchmarkField];
-        if (totalBenchmarkValue !== undefined) {
-          const totalValue = Number(totalBenchmarkValue) || 0;
+        const totalGuidanceValue = data[benchmarkField];
+        if (totalGuidanceValue !== undefined) {
+          const totalValue = Number(totalGuidanceValue) || 0;
           const equalShare = Math.round((totalValue / months.length) * 10) / 10;
-          sidebarBenchmarkData[benchmarkField] = Array(months.length).fill(
+          sidebarGuidanceData[benchmarkField] = Array(months.length).fill(
             equalShare
           );
         }
@@ -642,5 +642,5 @@ export const getBenchmarkDataForSidebar = (
     // This ensures calculated benchmarks are always derived from the latest forecast data
   });
 
-  return sidebarBenchmarkData;
+  return sidebarGuidanceData;
 };

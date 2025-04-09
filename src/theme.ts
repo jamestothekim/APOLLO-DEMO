@@ -19,6 +19,13 @@ declare module '@mui/material/styles' {
           root?: React.CSSProperties;
         };
       };
+      MuiDynamicTable?: {
+        styleOverrides?: {
+          sectionHeader?: any;
+          columnHeader?: any;
+          dataCell?: any;
+        };
+      };
     }
     interface TypeText {
       tertiary: string;
@@ -198,6 +205,32 @@ declare module '@mui/material/styles' {
         styleOverrides: {
           root: {
             ...removeFocusHighlight,
+          },
+        },
+      },
+      MuiDynamicTable: {
+        styleOverrides: {
+          sectionHeader: {
+            fontWeight: 700,
+            position: 'relative',
+            padding: '8px 3px',
+            margin: 0,
+            border: '1px solid rgba(224, 224, 224, 1)',
+            backgroundColor: 'lavender',
+            color: '#020239',
+          },
+          columnHeader: {
+            fontWeight: 700,
+            padding: '8px 16px',
+            margin: 0,
+            backgroundColor: '#F5F5F5',
+            color: '#020239',
+            borderBottom: '1px solid rgba(224, 224, 224, 1)',
+          },
+          dataCell: {
+            padding: '8px 20px',
+            backgroundColor: '#F5F5F5',
+            borderBottom: '1px solid rgba(224, 224, 224, 1)',
           },
         },
       },

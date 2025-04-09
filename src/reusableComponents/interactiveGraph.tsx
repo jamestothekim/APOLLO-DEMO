@@ -151,7 +151,7 @@ export const InteractiveGraph = ({
                   borderRadius: "8px",
                 }}
               >
-                Benchmarks
+                Guidance
               </Button>
             )}
           </Box>

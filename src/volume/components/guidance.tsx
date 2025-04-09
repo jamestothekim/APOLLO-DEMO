@@ -13,7 +13,7 @@ import {
 import axios from "axios";
 import { useUser } from "../../userContext";
 
-export interface Benchmark {
+export interface Guidance {
   id: number;
   label: string;
   sublabel?: string;
@@ -30,47 +30,47 @@ export interface Benchmark {
   };
 }
 
-interface BenchmarksDialogProps {
+interface GuidanceDialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
   type: "columns";
-  onApply: (selectedBenchmarks: Benchmark[]) => void;
+  onApply: (selectedGuidance: Guidance[]) => void;
 }
 
-export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
+export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
   open,
   onClose,
   title,
   type,
   onApply,
 }) => {
-  const { user, saveBenchmarkPreferences } = useUser();
-  const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
-  const [selectedBenchmarks, setSelectedBenchmarks] = useState<Benchmark[]>([]);
+  const { user, saveGuidancePreferences } = useUser();
+  const [benchmarks, setGuidance] = useState<Guidance[]>([]);
+  const [selectedGuidance, setSelectedGuidance] = useState<Guidance[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Load all available benchmarks
   useEffect(() => {
     if (open) {
-      fetchBenchmarks();
+      fetchGuidance();
     }
   }, [open]);
 
   // Load user's benchmark preferences when dialog opens
   useEffect(() => {
     if (open && user?.user_settings?.benchmarks && benchmarks.length > 0) {
-      loadUserBenchmarkPreferences();
+      loadUserGuidancePreferences();
     }
   }, [open, user?.user_settings?.benchmarks, benchmarks]);
 
-  const fetchBenchmarks = async () => {
+  const fetchGuidance = async () => {
     setLoading(true);
     try {
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/util/get-benchmarks`
       );
-      setBenchmarks(response.data);
+      setGuidance(response.data);
     } catch (error) {
       console.error("Error fetching benchmarks:", error);
     } finally {
@@ -79,7 +79,7 @@ export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
   };
 
   // Load user's benchmark preferences
-  const loadUserBenchmarkPreferences = () => {
+  const loadUserGuidancePreferences = () => {
     if (!user?.user_settings?.benchmarks || benchmarks.length === 0) return;
 
     // Sort benchmark preferences by order
@@ -88,29 +88,27 @@ export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
     );
 
     // Map preference IDs to actual benchmark objects
-    const userSelectedBenchmarks = sortedPreferences
+    const userSelectedGuidance = sortedPreferences
       .map((pref) => benchmarks.find((b) => b.id === pref.id))
-      .filter(Boolean) as Benchmark[];
+      .filter(Boolean) as Guidance[];
 
-    if (userSelectedBenchmarks.length > 0) {
-      setSelectedBenchmarks(userSelectedBenchmarks);
+    if (userSelectedGuidance.length > 0) {
+      setSelectedGuidance(userSelectedGuidance);
     }
   };
 
   const handleApply = async () => {
-    console.log(`Selected ${type}:`, selectedBenchmarks);
+    console.log(`Selected ${type}:`, selectedGuidance);
 
     // Apply benchmark selection
-    onApply(selectedBenchmarks);
+    onApply(selectedGuidance);
 
     // Save benchmark preferences if we have a logged-in user
     if (user) {
       try {
         // Extract benchmark IDs in the current order
-        const benchmarkIds = selectedBenchmarks.map(
-          (benchmark) => benchmark.id
-        );
-        await saveBenchmarkPreferences(benchmarkIds);
+        const benchmarkIds = selectedGuidance.map((benchmark) => benchmark.id);
+        await saveGuidancePreferences(benchmarkIds);
       } catch (error) {
         console.error("Error saving benchmark preferences:", error);
       }
@@ -132,14 +130,14 @@ export const BenchmarksDialog: React.FC<BenchmarksDialogProps> = ({
                 ? `${option.label}: ${option.sublabel}`
                 : option.label
             }
-            value={selectedBenchmarks}
-            onChange={(_, newValue) => setSelectedBenchmarks(newValue)}
+            value={selectedGuidance}
+            onChange={(_, newValue) => setSelectedGuidance(newValue)}
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Select Benchmarks"
+                label="Select Guidance"
                 placeholder={
-                  selectedBenchmarks.length === 0 ? "Search benchmarks..." : ""
+                  selectedGuidance.length === 0 ? "Search benchmarks..." : ""
                 }
                 size="small"
               />

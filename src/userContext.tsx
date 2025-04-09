@@ -26,13 +26,13 @@ export interface MarketAccess {
 }
 
 // Add interface for benchmark settings
-export interface BenchmarkPreference {
+export interface GuidancePreference {
   id: number;
   order: number;
 }
 
 interface UserSettings {
-  benchmarks?: BenchmarkPreference[];
+  benchmarks?: GuidancePreference[];
   [key: string]: any;
 }
 
@@ -120,7 +120,7 @@ interface UserContextType {
   logout: () => Promise<void>;
   checkAuth: () => Promise<boolean>;
   updateUserSettings: (settings: UserSettings) => Promise<boolean>;
-  saveBenchmarkPreferences: (benchmarkIds: number[]) => Promise<boolean>;
+  saveGuidancePreferences: (benchmarkIds: number[]) => Promise<boolean>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -406,8 +406,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Implement the saveBenchmarkPreferences method
-  const saveBenchmarkPreferences = async (
+  // Implement the saveGuidancePreferences method
+  const saveGuidancePreferences = async (
     benchmarkIds: number[]
   ): Promise<boolean> => {
     try {
@@ -441,7 +441,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     logout,
     checkAuth,
     updateUserSettings,
-    saveBenchmarkPreferences,
+    saveGuidancePreferences,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

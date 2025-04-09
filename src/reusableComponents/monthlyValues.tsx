@@ -35,7 +35,7 @@ interface MonthlyValuesProps {
     value: string;
     color: string;
   }>;
-  availableBenchmarkData?: Record<string, number[]>;
+  availableGuidanceData?: Record<string, number[]>;
 }
 
 export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
@@ -45,7 +45,7 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
   defaultExpanded = true,
   gsvRate,
   benchmarkForecasts = [],
-  availableBenchmarkData = {},
+  availableGuidanceData = {},
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [localInputValues, setLocalInputValues] = useState<
@@ -165,7 +165,7 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
 
                     {benchmarkForecasts.map((benchmark) => {
                       const monthValues =
-                        availableBenchmarkData[benchmark.value] || [];
+                        availableGuidanceData[benchmark.value] || [];
                       if (monthValues.length === 0) return null;
 
                       const forecastValues = quarterGroups.flatMap(

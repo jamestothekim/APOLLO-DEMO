@@ -157,7 +157,7 @@ export const Toolbox: React.FC<ToolboxProps> = ({
               borderRadius: "8px",
             }}
           >
-            Benchmarks
+            Guidance
           </Button>
         )}
 

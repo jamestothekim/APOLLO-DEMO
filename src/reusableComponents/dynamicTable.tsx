@@ -15,6 +15,7 @@ import {
   Theme,
   TableSortLabel,
   CircularProgress,
+  useTheme,
 } from "@mui/material";
 
 type SortDirection = "asc" | "desc";
@@ -26,15 +27,18 @@ interface SortConfig {
 
 export interface Column {
   key: string;
-  header: string;
+  header: string | React.ReactNode;
   subHeader?: string;
   align?: "left" | "right" | "center";
   render?: (value: any, row: any) => React.ReactNode;
   detailsOnly?: boolean;
   width?: number;
-  sx?: SxProps<Theme> | ((row: any) => SxProps<Theme>);
+  extraWide?: boolean;
+  sx?: SxProps<Theme>;
   sortable?: boolean;
   sortValue?: (value: any, row: any) => number | string | null;
+  columnGroup?: boolean;
+  columns?: Column[];
 }
 
 export interface DynamicTableProps {
@@ -60,6 +64,31 @@ export interface DynamicTableProps {
   maxHeight?: string | number;
 }
 
+const getSectionInfo = (columns: Column[], index: number) => {
+  let currentIndex = 0;
+  for (const section of columns) {
+    if (section.columnGroup) {
+      const sectionLength = section.columns?.length || 0;
+      if (index >= currentIndex && index < currentIndex + sectionLength) {
+        return {
+          name: section.key,
+          isFirst: index === currentIndex,
+        };
+      }
+      currentIndex += sectionLength;
+    } else {
+      if (index === currentIndex) {
+        return {
+          name: section.key,
+          isFirst: true,
+        };
+      }
+      currentIndex += 1;
+    }
+  }
+  return { name: "", isFirst: false };
+};
+
 export const DynamicTable: React.FC<DynamicTableProps> = ({
   data,
   columns,
@@ -79,17 +108,13 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   stickyHeader = false,
   maxHeight = "70vh",
 }) => {
+  const theme = useTheme();
   // All hooks must be at the top level and in the same order every time
   const [activeSection, setActiveSection] = useState(0);
   const [internalPage, setInternalPage] = useState(0);
   const [internalRowsPerPage, setInternalRowsPerPage] =
     useState(defaultRowsPerPage);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
-
-  const tableColumns = useMemo(
-    () => columns.filter((column) => !column.detailsOnly),
-    [columns]
-  );
 
   const page = controlledPage ?? internalPage;
   const rowsPerPage = controlledRowsPerPage ?? internalRowsPerPage;
@@ -222,48 +247,15 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     );
   }, [data, page, rowsPerPage, showPagination, sortConfig, columns]);
 
-  const renderTableHeader = (column: Column) => (
-    <TableCell
-      key={column.key}
-      align={column.align}
-      sx={{
-        fontWeight: 700,
-        width: column.width,
-        // Add sticky styles for header cells when stickyHeader is enabled
-        ...(stickyHeader && {
-          position: "sticky",
-          top: 0,
-          backgroundColor: (theme) => theme.palette.background.paper,
-          zIndex: 2,
-          // Add shadow for better separation
-          boxShadow: "0 3px 3px -3px rgba(0,0,0,0.2)",
-        }),
-      }}
-    >
-      {column.sortable !== false ? (
-        <TableSortLabel
-          active={sortConfig?.key === column.key}
-          direction={
-            sortConfig?.key === column.key ? sortConfig.direction : "asc"
-          }
-          onClick={() => handleSort(column.key)}
-        >
-          {column.header}
-        </TableSortLabel>
-      ) : (
-        column.header
-      )}
-      {column.subHeader && (
-        <Typography
-          variant="caption"
-          display="block"
-          sx={{ fontStyle: "italic" }}
-        >
-          {column.subHeader}
-        </Typography>
-      )}
-    </TableCell>
-  );
+  // Flatten columns for data display
+  const flatColumns = useMemo(() => {
+    return columns.reduce((acc: Column[], col) => {
+      if (col.columnGroup && col.columns) {
+        return [...acc, ...col.columns];
+      }
+      return [...acc, col];
+    }, []);
+  }, [columns]);
 
   return (
     <Box>
@@ -299,14 +291,121 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
               ...(stickyHeader && {
                 maxHeight,
                 overflow: "auto",
-                // Use position: relative to contain sticky elements
                 position: "relative",
+                "& .MuiTableHead-root": {
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 2,
+                  bgcolor: "background.paper",
+                  "& .MuiTableCell-root": {
+                    position: "relative",
+                    padding: "8px 8px",
+                    "&::after": {
+                      content: '""',
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      borderBottom: 1,
+                      borderColor: "divider",
+                    },
+                  },
+                },
               }),
             }}
           >
-            <Table size="small" stickyHeader={stickyHeader}>
+            <Table size="small" sx={{ borderCollapse: "collapse" }}>
               <TableHead>
-                <TableRow>{tableColumns.map(renderTableHeader)}</TableRow>
+                {/* Group header row */}
+                <TableRow>
+                  {columns.map((col) => {
+                    if (col.columnGroup) {
+                      return (
+                        <TableCell
+                          key={col.key}
+                          colSpan={col.columns?.length}
+                          align="center"
+                          sx={{
+                            ...(theme.components?.MuiDynamicTable
+                              ?.styleOverrides?.sectionHeader || {}),
+                            minWidth: col.width,
+                            ...col.sx,
+                          }}
+                        >
+                          {col.header}
+                        </TableCell>
+                      );
+                    }
+                    return (
+                      <TableCell
+                        key={col.key}
+                        sx={{
+                          border: "none",
+                          padding: "8px 8px",
+                          borderBottom: 0,
+                          minWidth: col.width,
+                          ...col.sx,
+                        }}
+                      />
+                    );
+                  })}
+                </TableRow>
+                {/* Column headers row */}
+                <TableRow>
+                  {flatColumns.map((column, index) => {
+                    const sectionInfo = getSectionInfo(columns, index);
+                    return (
+                      <TableCell
+                        key={column.key}
+                        align="center"
+                        data-section={sectionInfo.name.toLowerCase()}
+                        data-first-in-section={sectionInfo.isFirst}
+                        sx={{
+                          ...(theme.components?.MuiDynamicTable?.styleOverrides
+                            ?.columnHeader || {}),
+                          width: column.width,
+                          minWidth: column.extraWide ? 200 : undefined,
+                          textAlign: "center",
+                          ...column.sx,
+                        }}
+                      >
+                        {column.sortable !== false ? (
+                          <TableSortLabel
+                            active={sortConfig?.key === column.key}
+                            direction={
+                              sortConfig?.key === column.key
+                                ? sortConfig.direction
+                                : "asc"
+                            }
+                            onClick={() => handleSort(column.key)}
+                            hideSortIcon={true}
+                            sx={{
+                              "& .MuiTableSortLabel-icon": {
+                                display: "none",
+                              },
+                            }}
+                          >
+                            {column.header}
+                          </TableSortLabel>
+                        ) : (
+                          column.header
+                        )}
+                        {column.subHeader && (
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            sx={{
+                              fontStyle: "italic",
+                              marginTop: "2px",
+                            }}
+                          >
+                            {column.subHeader}
+                          </Typography>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
               </TableHead>
               <TableBody>
                 {displayData.map((row) => (
@@ -323,13 +422,27 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                       },
                     }}
                   >
-                    {tableColumns.map((column) => (
-                      <TableCell key={column.key} align={column.align}>
-                        {column.render
-                          ? column.render(row[column.key], row)
-                          : row[column.key]}
-                      </TableCell>
-                    ))}
+                    {flatColumns.map((column, index) => {
+                      const sectionInfo = getSectionInfo(columns, index);
+                      return (
+                        <TableCell
+                          key={column.key}
+                          align={column.align}
+                          data-section={sectionInfo.name.toLowerCase()}
+                          data-first-in-section={sectionInfo.isFirst}
+                          sx={{
+                            ...(theme.components?.MuiDynamicTable
+                              ?.styleOverrides?.dataCell || {}),
+                            minWidth: column.extraWide ? 200 : undefined,
+                            ...column.sx,
+                          }}
+                        >
+                          {column.render
+                            ? column.render(row[column.key], row)
+                            : row[column.key]}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))}
               </TableBody>

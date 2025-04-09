@@ -28,7 +28,7 @@ interface MonthGroup {
 }
 
 // Interface for benchmark forecasts
-export interface BenchmarkForecastOption {
+export interface GuidanceForecastOption {
   id: number;
   label: string;
   value: string;
@@ -61,9 +61,9 @@ interface QuantSidebarProps {
     data: Array<{ month: string; value: number }>;
     color: string;
   }>;
-  // Benchmark props
-  benchmarkForecasts?: BenchmarkForecastOption[];
-  availableBenchmarkData?: Record<string, number[]>;
+  // Guidance props
+  benchmarkForecasts?: GuidanceForecastOption[];
+  availableGuidanceData?: Record<string, number[]>;
   // Hover metrics
   hoverMetrics?: Record<string, Record<string, number | string>>;
   // Monthly values props
@@ -106,7 +106,7 @@ export const QuantSidebar = ({
   onForecastLogicChange,
   graphData = [],
   benchmarkForecasts = [],
-  availableBenchmarkData = {},
+  availableGuidanceData = {},
   months,
   onMonthValueChange,
   gsvRate,
@@ -127,9 +127,9 @@ export const QuantSidebar = ({
     return benchmarkForecasts.map((benchmarkOption) => {
       // For direct value benchmarks (like py_case_equivalent_volume, gross_sales_value)
       if (!benchmarkOption.calculation) {
-        // Get the benchmark data values from availableBenchmarkData
+        // Get the benchmark data values from availableGuidanceData
         const benchmarkValues =
-          availableBenchmarkData[benchmarkOption.value] || [];
+          availableGuidanceData[benchmarkOption.value] || [];
 
         // Map the data to match the format expected by the graph
         const data = months.map((month, index) => ({
@@ -149,10 +149,9 @@ export const QuantSidebar = ({
         const calculation = benchmarkOption.calculation;
         // Get the benchmark values for calculation
         const lyValues =
-          availableBenchmarkData["py_case_equivalent_volume"] || [];
-        const tyGsvValues = availableBenchmarkData["gross_sales_value"] || [];
-        const lyGsvValues =
-          availableBenchmarkData["py_gross_sales_value"] || [];
+          availableGuidanceData["py_case_equivalent_volume"] || [];
+        const tyGsvValues = availableGuidanceData["gross_sales_value"] || [];
+        const lyGsvValues = availableGuidanceData["py_gross_sales_value"] || [];
 
         // Map the data with calculated values
         const data = months.map((month, index) => {
@@ -222,10 +221,10 @@ export const QuantSidebar = ({
         };
       }
     });
-  }, [graphData, benchmarkForecasts, availableBenchmarkData]);
+  }, [graphData, benchmarkForecasts, availableGuidanceData]);
 
   // Get selected benchmarks data
-  const selectedBenchmarks = useMemo(() => {
+  const selectedGuidance = useMemo(() => {
     return benchmarkForecasts.filter((benchmark) =>
       selectedTrendLines.includes(benchmark.value)
     );
@@ -361,8 +360,8 @@ export const QuantSidebar = ({
               label="MONTHLY VALUES"
               defaultExpanded={true}
               gsvRate={gsvRate}
-              benchmarkForecasts={selectedBenchmarks}
-              availableBenchmarkData={availableBenchmarkData}
+              benchmarkForecasts={selectedGuidance}
+              availableGuidanceData={availableGuidanceData}
             />
           </Grid>
 

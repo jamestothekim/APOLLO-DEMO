@@ -13,17 +13,15 @@ import {
   DialogActions,
   TextField,
   Alert,
-  Typography,
-  Chip,
   useTheme,
   CircularProgress,
+  IconButton,
 } from "@mui/material";
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
-import CommentIcon from "@mui/icons-material/Comment";
 import { DetailsContainer } from "./details/detailsContainer";
 import type { MarketData } from "../volumeForecast";
-import type { Benchmark } from "../components/benchmarks";
+import type { Guidance } from "../components/guidance";
 import axios from "axios";
 
 import {
@@ -40,11 +38,16 @@ import {
   hasNonZeroTotal,
   calculateTotal,
   ForecastLogic,
-  formatBenchmarkValue,
-  recalculateBenchmarks,
+  formatGuidanceValue,
+  recalculateGuidance,
   SIDEBAR_BENCHMARK_OPTIONS,
-  getBenchmarkDataForSidebar,
+  getGuidanceDataForSidebar,
 } from "./util/depletionsUtil";
+import {
+  Save as SaveIcon,
+  Publish as PublishIcon,
+  Comment as CommentIcon,
+} from "@mui/icons-material";
 
 export interface ExtendedForecastData {
   id: string;
@@ -84,7 +87,7 @@ export type FilterSelectionProps = {
   onExport?: (handler: () => void) => void;
   onAvailableBrandsChange?: (brands: string[]) => void;
   onAvailableMarketsChange?: (markets: string[]) => void;
-  selectedBenchmarks?: Benchmark[];
+  selectedGuidance?: Guidance[];
 };
 
 // Add this helper function near the top with other utility functions
@@ -109,7 +112,7 @@ const processRawData = (
   data: any[],
   loggedChanges: any[] = [],
   isCustomerView: boolean,
-  selectedBenchmarks?: Benchmark[]
+  selectedGuidance?: Guidance[]
 ): ExtendedForecastData[] => {
   // First identify all actual months from the data
   const actualMonths = new Set<(typeof MONTH_NAMES)[number]>();
@@ -251,15 +254,18 @@ const processRawData = (
     if (groupedData[key]) {
       groupedData[key].forecastLogic = change.forecastType;
       groupedData[key].months = change.months;
+      if (change.comment) {
+        groupedData[key].commentary = change.comment;
+      }
     }
   });
 
   // Now calculate the derived benchmark values for each row
-  if (selectedBenchmarks && selectedBenchmarks.length > 0) {
+  if (selectedGuidance && selectedGuidance.length > 0) {
     Object.keys(groupedData).forEach((key) => {
-      groupedData[key] = recalculateBenchmarks(
+      groupedData[key] = recalculateGuidance(
         groupedData[key],
-        selectedBenchmarks
+        selectedGuidance
       );
     });
   }
@@ -312,7 +318,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   onExport,
   onAvailableBrandsChange,
   onAvailableMarketsChange,
-  selectedBenchmarks,
+  selectedGuidance,
 }) => {
   const { user } = useUser();
   const theme = useTheme();
@@ -346,20 +352,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const [initialSidebarState, setInitialSidebarState] =
     useState<ExtendedForecastData | null>(null);
   const [comment, setComment] = useState("");
-  const [undoHistory, setUndoHistory] = useState<
-    Array<{
-      timestamp: number;
-      timestampFormatted: string;
-      market_name: string;
-      variant_size_pack_desc: string;
-      forecastType: string;
-      userId: string;
-      distributor_name?: string;
-      key: string;
-      isNextUndo: boolean;
-    }>
-  >([]);
-  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
   const showSnackbar = (message: string, severity: "success" | "error") => {
@@ -476,7 +468,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           forecastResponse.data,
           loggedChanges,
           isCustomerView ?? false,
-          selectedBenchmarks
+          selectedGuidance
         );
         const nonZeroData = processedData
           .filter(hasNonZeroTotal)
@@ -502,7 +494,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       marketMetadata,
       isCustomerView,
       selectedMarkets,
-      selectedBenchmarks,
+      selectedGuidance,
       forecastData.length,
     ]
   );
@@ -531,15 +523,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         return;
       }
 
-      const undoResponse: UndoResponse & { history: typeof undoHistory } =
-        response.data;
+      const undoResponse: UndoResponse = response.data;
 
       if (undoResponse.success && undoResponse.restoredState) {
         const restored = undoResponse.restoredState;
-
-        if (undoResponse.history) {
-          setUndoHistory(undoResponse.history);
-        }
 
         setForecastData((prevData) => {
           const expectedKey = isCustomerView
@@ -560,10 +547,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               updatedItem.case_equivalent_volume = totalVolume;
 
               // Recalculate benchmarks if they exist
-              if (selectedBenchmarks && selectedBenchmarks.length > 0) {
-                updatedItem = recalculateBenchmarks(
+              if (selectedGuidance && selectedGuidance.length > 0) {
+                updatedItem = recalculateGuidance(
                   updatedItem,
-                  selectedBenchmarks
+                  selectedGuidance
                 );
               }
 
@@ -592,7 +579,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setUndoMessage,
     setUndoSnackbarOpen,
     isCustomerView,
-    selectedBenchmarks,
+    selectedGuidance,
   ]);
 
   // Now the effect can safely include handleUndo in deps
@@ -613,7 +600,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
-  // Update handleForecastChange to use recalculateBenchmarks
+  // Update handleForecastChange to use recalculateGuidance
   const handleForecastChange = async (
     newLogic: string,
     rowData: ExtendedForecastData,
@@ -688,8 +675,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       };
 
       // Use the centralized function to recalculate all benchmarks
-      if (selectedBenchmarks && selectedBenchmarks.length > 0) {
-        updatedRow = recalculateBenchmarks(updatedRow, selectedBenchmarks);
+      if (selectedGuidance && selectedGuidance.length > 0) {
+        updatedRow = recalculateGuidance(updatedRow, selectedGuidance);
         updatedRow.isLoading = false; // Ensure loading is false after recalculation
       }
 
@@ -727,6 +714,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             months: updatedMonths,
             initialState,
             isManualEdit: false,
+            comment: rowData.commentary || null,
           },
           {
             headers: {
@@ -862,6 +850,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           months: JSON.parse(JSON.stringify(editedData.months)),
           initialState,
           isManualEdit: false,
+          comment: editedData.commentary || null,
         },
         {
           headers: {
@@ -871,8 +860,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       );
 
       // Recalculate benchmarks if they exist
-      if (selectedBenchmarks && selectedBenchmarks.length > 0) {
-        editedData = recalculateBenchmarks(editedData, selectedBenchmarks);
+      if (selectedGuidance && selectedGuidance.length > 0) {
+        editedData = recalculateGuidance(editedData, selectedGuidance);
       }
 
       // Update local state
@@ -889,6 +878,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const handleCommentClick = (event: React.MouseEvent, commentary?: string) => {
     event.stopPropagation();
     setSelectedComment(commentary);
+    setComment(commentary || "");
     setCommentDialogOpen(true);
   };
 
@@ -897,136 +887,181 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     return filteredData.some((row) => row.commentary);
   };
 
+  const handleCommentaryChange = (value: string) => {
+    if (!selectedDataState) return;
+
+    setSelectedDataState((prev) =>
+      prev ? { ...prev, commentary: value } : prev
+    );
+    setHasChanges(true);
+  };
+
+  const handleSidebarSaveChanges = async () => {
+    if (!selectedDataState) return;
+
+    try {
+      // If there's a comment in the dialog, update the selectedDataState
+      if (commentDialogOpen && comment) {
+        setSelectedDataState((prev) =>
+          prev ? { ...prev, commentary: comment } : prev
+        );
+      }
+
+      await handleSidebarSave(selectedDataState);
+      setHasChanges(false);
+      setCommentDialogOpen(false);
+      showSnackbar("Changes saved successfully", "success");
+    } catch (error) {
+      console.error("Error saving changes:", error);
+      showSnackbar("Failed to save changes", "error");
+    }
+  };
+
   const columns: Column[] = useMemo(
     () => [
-      // Controls Section
+      // Control section
       {
-        key: "market",
-        header: "MARKET",
-        align: "left" as const,
-        render: (_: any, row: ExtendedForecastData) => {
-          const { user } = useUser();
-          const marketInfo = user?.user_access?.Markets?.find(
-            (m: MarketAccess) => m.market_code === row.market_name
-          );
-          return marketInfo?.market || row.market_name;
-        },
-      },
-      // Add customer column when in customer view
-      ...(isCustomerView
-        ? [
-            {
-              key: "customer",
-              header: "CUSTOMER",
-              align: "left" as const,
-              render: (_: any, row: ExtendedForecastData) =>
-                row.customer_name || "-",
+        key: "control_section",
+        header: "CONTROL",
+        columnGroup: true,
+        columns: [
+          {
+            key: "market",
+            header: "MARKET",
+            align: "left" as const,
+            render: (_: any, row: ExtendedForecastData) => {
+              const { user } = useUser();
+              const marketInfo = user?.user_access?.Markets?.find(
+                (m: MarketAccess) => m.market_code === row.market_name
+              );
+              return marketInfo?.market || row.market_name;
             },
-          ]
-        : []),
-      {
-        key: "product",
-        header: "PRODUCT",
-        align: "left" as const,
-        render: (_: any, row: ExtendedForecastData) => {
-          if (!row.product) return "-";
-          const parts = row.product.split(" - ");
-          return parts.length > 1 ? parts[1] : row.product;
-        },
+          },
+          ...(isCustomerView
+            ? [
+                {
+                  key: "customer",
+                  header: "CUSTOMER",
+                  align: "left" as const,
+                  render: (_: any, row: ExtendedForecastData) =>
+                    row.customer_name || "-",
+                },
+              ]
+            : []),
+          {
+            key: "product",
+            header: "PRODUCT",
+            align: "left" as const,
+            extraWide: true,
+            render: (_: any, row: ExtendedForecastData) => {
+              if (!row.product) return "-";
+              const parts = row.product.split(" - ");
+              return parts.length > 1 ? parts[1] : row.product;
+            },
+          },
+          {
+            key: "forecastLogic",
+            header: "LOGIC",
+            align: "left" as const,
+            sx: { borderRight: "1px solid rgba(224, 224, 224, 1)" },
+            render: (value: string, row: ExtendedForecastData) => (
+              <Select
+                value={value}
+                onChange={(e) => handleLogicChange(e, row.id)}
+                onClick={(e) => e.stopPropagation()}
+                size="small"
+                sx={{ minWidth: 120, fontSize: "inherit" }}
+              >
+                {FORECAST_OPTIONS.map((option) => (
+                  <MenuItem key={option.id} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            ),
+          },
+        ],
       },
+      // Analytics section
       {
-        key: "forecastLogic",
-        header: "LOGIC",
-        align: "left" as const,
-        render: (value: string, row: ExtendedForecastData) => (
-          <Select
-            value={value}
-            onChange={(e) => handleLogicChange(e, row.id)}
-            onClick={(e) => e.stopPropagation()}
-            size="small"
-            sx={{ minWidth: 120, fontSize: "inherit" }}
-          >
-            {FORECAST_OPTIONS.map((option) => (
-              <MenuItem key={option.id} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        ),
+        key: "guidance_section",
+        header: "GUIDANCE",
+        columnGroup: true,
+        columns: [
+          {
+            key: "total",
+            header: "VOL 9L",
+            subHeader: "TY",
+            align: "right" as const,
+            render: (_: any, row: ExtendedForecastData) => {
+              if (row.isLoading) {
+                return (
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <CircularProgress size={16} thickness={4} />
+                  </Box>
+                );
+              }
+
+              return (
+                Math.round(calculateTotal(row.months) * 10) / 10
+              ).toLocaleString(undefined, {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              });
+            },
+          },
+          ...(selectedGuidance?.map((benchmark, index, array) => ({
+            key: `benchmark_${benchmark.id}`,
+            header: benchmark.label,
+            subHeader: benchmark.sublabel,
+            align: "right" as const,
+            sx:
+              index === array.length - 1
+                ? { borderRight: "1px solid rgba(224, 224, 224, 1)" }
+                : undefined,
+            render: (_: any, row: ExtendedForecastData) => {
+              if (row.isLoading) {
+                return (
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <CircularProgress size={16} thickness={4} />
+                  </Box>
+                );
+              }
+
+              let value: number | undefined;
+
+              if (typeof benchmark.value === "string") {
+                value = row[
+                  benchmark.value as keyof ExtendedForecastData
+                ] as number;
+              } else {
+                value = row[`benchmark_${benchmark.id}`] as number;
+              }
+
+              if (value === undefined) {
+                return (
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <CircularProgress size={16} thickness={4} />
+                  </Box>
+                );
+              }
+
+              return formatGuidanceValue(
+                value,
+                benchmark.calculation?.format,
+                benchmark.label
+              );
+            },
+          })) || []),
+        ],
       },
-      // Total column moved here, before the month columns
+      // Phasing section
       {
-        key: "total",
-        header: "VOL 9L",
-        subHeader: "TY",
-        align: "right" as const,
-        render: (_: any, row: ExtendedForecastData) => {
-          // Show loading indicator if the row is loading
-          if (row.isLoading) {
-            return (
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <CircularProgress size={16} thickness={4} />
-              </Box>
-            );
-          }
-
-          return (
-            Math.round(calculateTotal(row.months) * 10) / 10
-          ).toLocaleString(undefined, {
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-          });
-        },
-      },
-      // Update benchmark columns with loading state
-      ...(selectedBenchmarks?.map((benchmark) => ({
-        key: `benchmark_${benchmark.id}`,
-        header: benchmark.label,
-        subHeader: benchmark.sublabel,
-        align: "right" as const,
-        render: (_: any, row: ExtendedForecastData) => {
-          // Show loading indicator if the entire row is loading
-          if (row.isLoading) {
-            return (
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <CircularProgress size={16} thickness={4} />
-              </Box>
-            );
-          }
-
-          // For direct values, use the field name directly
-          let value: number | undefined;
-
-          if (typeof benchmark.value === "string") {
-            // Use direct field
-            value = row[
-              benchmark.value as keyof ExtendedForecastData
-            ] as number;
-          } else {
-            // For calculated benchmarks, use the stored result
-            value = row[`benchmark_${benchmark.id}`] as number;
-          }
-
-          // Show loading indicator if value is being calculated
-          if (value === undefined) {
-            return (
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <CircularProgress size={16} thickness={4} />
-              </Box>
-            );
-          }
-
-          return formatBenchmarkValue(
-            value,
-            benchmark.calculation?.format,
-            benchmark.label
-          );
-        },
-      })) || []),
-      // Month columns (Phasing section)
-      ...(forecastData.length > 0
-        ? MONTH_NAMES.map((month) => {
-            // Find any row that has this month as actual to determine header status
+        key: "months_section",
+        header: "PHASING",
+        columnGroup: true,
+        columns: [
+          ...MONTH_NAMES.map((month) => {
             const isActualMonth = forecastData.some(
               (row) => row.months[month]?.isActual
             );
@@ -1037,7 +1072,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               subHeader: isActualMonth ? "ACT" : "FCST",
               align: "right" as const,
               render: (_: any, row: ExtendedForecastData) => {
-                // Show loading indicator if the row is loading
                 if (row.isLoading) {
                   return (
                     <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -1049,47 +1083,41 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 if (!row?.months?.[month]) return "-";
                 const data = row.months[month];
                 return (
-                  <div
-                    onClick={(event) => {
-                      if (data.isActual) {
-                        event.stopPropagation();
-                        // Find the market info using market_id
-                        const marketInfo = marketMetadata.find(
-                          (m) => m.market_id === row.market_id
-                        );
-
-                        // Get the first two characters of the market_code (e.g., "NY" from "NYU")
-                        const stateCode =
-                          marketInfo?.market_code?.substring(0, 2) || "";
-
-                        // If it's a phantom actual month (value is 0 and isActual is true)
-                        if (data.value === 0 && data.isActual) {
-                          setSelectedDetails({
-                            market: stateCode,
-                            product: row.product,
-                            value: -1, // Special value to indicate no data
-                            month: MONTH_MAPPING[month],
-                            year: 2025,
-                          });
-                        } else {
-                          setSelectedDetails({
-                            market: stateCode,
-                            product: row.product,
-                            value: Math.round(data.value),
-                            month: MONTH_MAPPING[month],
-                            year: 2025,
-                          });
-                        }
-                        setDetailsOpen(true);
-                      }
-                    }}
-                    style={{ position: "relative" }}
-                  >
+                  <div style={{ position: "relative" }}>
                     <Box
                       component="span"
                       sx={{
                         color: data.isActual ? "primary.main" : "inherit",
                         cursor: data.isActual ? "pointer" : "inherit",
+                      }}
+                      onClick={(event) => {
+                        if (data.isActual) {
+                          event.stopPropagation();
+                          const marketInfo = marketMetadata.find(
+                            (m) => m.market_id === row.market_id
+                          );
+                          const stateCode =
+                            marketInfo?.market_code?.substring(0, 2) || "";
+
+                          if (data.value === 0 && data.isActual) {
+                            setSelectedDetails({
+                              market: stateCode,
+                              product: row.product,
+                              value: -1,
+                              month: MONTH_MAPPING[month],
+                              year: 2025,
+                            });
+                          } else {
+                            setSelectedDetails({
+                              market: stateCode,
+                              product: row.product,
+                              value: Math.round(data.value),
+                              month: MONTH_MAPPING[month],
+                              year: 2025,
+                            });
+                          }
+                          setDetailsOpen(true);
+                        }
                       }}
                     >
                       {((data.value * 10) / 10).toLocaleString(undefined, {
@@ -1113,44 +1141,45 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 );
               },
             };
-          })
-        : MONTH_NAMES.map((month) => ({
-            key: `months.${month}`,
-            header: month,
-            subHeader: "FCST",
-            align: "right" as const,
-            render: () => "-",
-          }))),
-      ...(hasAnyComments()
-        ? [
-            {
-              key: "commentary",
-              header: "COM",
-              align: "center" as const,
-              render: (
-                commentary: string | undefined,
-                _row: ExtendedForecastData
-              ) =>
-                commentary ? (
-                  <Box
-                    onClick={(e) => handleCommentClick(e, commentary)}
-                    sx={{ cursor: "pointer" }}
-                  >
-                    <Tooltip title="View Comment">
-                      <CommentIcon color="action" fontSize="small" />
-                    </Tooltip>
-                  </Box>
-                ) : null,
-            },
-          ]
-        : []),
+          }),
+          ...(hasAnyComments()
+            ? [
+                {
+                  key: "commentary",
+                  header: "COM",
+                  align: "center" as const,
+                  render: (
+                    commentary: string | undefined,
+                    _row: ExtendedForecastData
+                  ) =>
+                    commentary ? (
+                      <Box
+                        onClick={(e) => handleCommentClick(e, commentary)}
+                        sx={{ cursor: "pointer" }}
+                      >
+                        <Tooltip title="View Comment">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleCommentClick(e, commentary)}
+                          >
+                            <CommentIcon fontSize="small" color="primary" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    ) : null,
+                },
+              ]
+            : []),
+        ],
+      },
     ],
     [
       forecastData,
+      filteredData,
       isCustomerView,
       handleLogicChange,
       marketMetadata,
-      selectedBenchmarks,
+      selectedGuidance,
     ]
   );
 
@@ -1183,8 +1212,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Add handleExport function
   const handleExport = useCallback(() => {
-    exportToCSV(forecastData, selectedBenchmarks);
-  }, [forecastData, selectedBenchmarks]);
+    exportToCSV(forecastData, selectedGuidance);
+  }, [forecastData, selectedGuidance]);
 
   // Register export handler
   useEffect(() => {
@@ -1226,7 +1255,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
-  // Update handleMonthValueChange to use recalculateBenchmarks
+  // Update handleMonthValueChange to use recalculateGuidance
   const handleMonthValueChange = (month: string, value: string) => {
     if (!selectedDataState) return;
 
@@ -1257,34 +1286,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       updatedState.case_equivalent_volume = totalVolume;
 
       // Use the centralized function to recalculate all benchmarks
-      if (selectedBenchmarks && selectedBenchmarks.length > 0) {
-        updatedState = recalculateBenchmarks(updatedState, selectedBenchmarks);
+      if (selectedGuidance && selectedGuidance.length > 0) {
+        updatedState = recalculateGuidance(updatedState, selectedGuidance);
       }
 
       return updatedState;
     });
 
     setHasChanges(true);
-  };
-
-  const handleCommentaryChange = (value: string) => {
-    if (!selectedDataState) return;
-
-    setSelectedDataState((prev) =>
-      prev ? { ...prev, commentary: value } : prev
-    );
-    setHasChanges(true);
-  };
-
-  const handleSave = async () => {
-    if (!selectedDataState) return;
-
-    try {
-      await handleSidebarSave(selectedDataState);
-      setHasChanges(false);
-    } catch (error) {
-      console.error("Error saving changes:", error);
-    }
   };
 
   useEffect(() => {
@@ -1300,9 +1309,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   }, [availableMarkets, onAvailableMarketsChange]);
 
   // Replace the existing benchmarkData useMemo with fixed types
-  const sidebarBenchmarkValues = useMemo(() => {
+  const sidebarGuidanceValues = useMemo(() => {
     if (!selectedDataState) return {};
-    return getBenchmarkDataForSidebar(
+    return getGuidanceDataForSidebar(
       selectedDataState,
       SIDEBAR_BENCHMARK_OPTIONS
     );
@@ -1321,7 +1330,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         onRowsPerPageChange={handleChangeRowsPerPage}
         rowsPerPageOptions={[10, 15, 25, 50, { value: -1, label: "All" }]}
         stickyHeader={true}
-        maxHeight="calc(100vh - 250px)"
+        maxHeight="calc(100vh)"
       />
 
       <Box
@@ -1333,9 +1342,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         }}
       >
         <Button variant="contained" color="primary" onClick={handleSaveClick}>
+          <SaveIcon sx={{ mr: 1 }} />
           Save Progress
         </Button>
         <Button variant="contained" color="secondary" onClick={handlePublish}>
+          <PublishIcon sx={{ mr: 1 }} />
           Publish
         </Button>
       </Box>
@@ -1372,7 +1383,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             : []
         }
         benchmarkForecasts={SIDEBAR_BENCHMARK_OPTIONS}
-        availableBenchmarkData={sidebarBenchmarkValues}
+        availableGuidanceData={sidebarGuidanceValues}
         months={selectedDataState?.months || {}}
         onMonthValueChange={handleMonthValueChange}
         gsvRate={
@@ -1391,7 +1402,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           },
           {
             label: "Apply Changes",
-            onClick: handleSave,
+            onClick: handleSidebarSaveChanges,
             variant: "contained",
             disabled: !hasChanges,
           },
@@ -1401,30 +1412,24 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       <Dialog
         open={commentDialogOpen}
         onClose={() => setCommentDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
       >
-        <DialogTitle>Add Comment</DialogTitle>
+        <DialogTitle>View Comment</DialogTitle>
         <DialogContent>
           <TextField
             multiline
             rows={4}
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
             fullWidth
+            InputProps={{
+              readOnly: true,
+              sx: { backgroundColor: "action.hover" },
+            }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCommentDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={() => {
-              setCommentDialogOpen(false);
-              // Add your save logic here
-              // For example:
-              // handleSaveComment(comment);
-            }}
-            variant="contained"
-          >
-            Save
-          </Button>
+          <Button onClick={() => setCommentDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 
@@ -1466,68 +1471,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         onClose={() => setUndoSnackbarOpen(false)}
         message={undoMessage}
       />
-
-      <Dialog
-        open={historyDialogOpen}
-        onClose={() => setHistoryDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Forecast Change History</DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            {undoHistory.map((entry) => (
-              <Box
-                key={entry.timestamp}
-                sx={{
-                  p: 2,
-                  mb: 1,
-                  border: "1px solid",
-                  borderColor: entry.isNextUndo ? "primary.main" : "divider",
-                  borderRadius: 1,
-                  bgcolor: entry.isNextUndo
-                    ? "primary.light"
-                    : "background.paper",
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Typography variant="subtitle1">
-                    {entry.market_name} - {entry.variant_size_pack_desc}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {new Date(entry.timestamp).toLocaleString()}
-                  </Typography>
-                </Box>
-                <Box sx={{ mt: 1 }}>
-                  <Typography variant="body2">
-                    Forecast Type: {entry.forecastType}
-                  </Typography>
-                  {entry.distributor_name && (
-                    <Typography variant="body2">
-                      Customer: {entry.distributor_name}
-                    </Typography>
-                  )}
-                  <Typography variant="body2">User: {entry.userId}</Typography>
-                </Box>
-                {entry.isNextUndo && (
-                  <Box sx={{ mt: 1 }}>
-                    <Chip label="Next Undo" color="primary" size="small" />
-                  </Box>
-                )}
-              </Box>
-            ))}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setHistoryDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

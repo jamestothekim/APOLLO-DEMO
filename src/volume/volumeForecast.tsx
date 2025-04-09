@@ -21,8 +21,8 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { useUser } from "../userContext";
 import { Toolbox } from "./components/toolbox";
 import type { ToolType } from "./components/toolbox";
-import { BenchmarksDialog } from "./components/benchmarks";
-import type { Benchmark } from "./components/benchmarks";
+import { GuidanceDialog } from "./components/guidance";
+import type { Guidance } from "./components/guidance";
 import axios from "axios";
 
 interface TabPanelProps {
@@ -70,7 +70,7 @@ interface CustomerData {
 }
 
 export const VolumeForecast: React.FC = () => {
-  const { user, saveBenchmarkPreferences } = useUser();
+  const { user, saveGuidancePreferences } = useUser();
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
@@ -83,10 +83,8 @@ export const VolumeForecast: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
-  const [selectedBenchmarks, setSelectedBenchmarks] = useState<Benchmark[]>([]);
-  const [availableBenchmarks, setAvailableBenchmarks] = useState<Benchmark[]>(
-    []
-  );
+  const [selectedGuidance, setSelectedGuidance] = useState<Guidance[]>([]);
+  const [availableGuidance, setAvailableGuidance] = useState<Guidance[]>([]);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -127,24 +125,24 @@ export const VolumeForecast: React.FC = () => {
 
   // Fetch available benchmarks when component mounts
   useEffect(() => {
-    const fetchBenchmarks = async () => {
+    const fetchGuidance = async () => {
       try {
         const response = await axios.get(
           `${import.meta.env.VITE_API_URL}/util/get-benchmarks`
         );
-        setAvailableBenchmarks(response.data);
+        setAvailableGuidance(response.data);
       } catch (error) {
         console.error("Error fetching benchmarks:", error);
       }
     };
 
-    fetchBenchmarks();
+    fetchGuidance();
   }, []);
 
-  // Load user's benchmark preferences when availableBenchmarks are loaded
+  // Load user's benchmark preferences when availableGuidance are loaded
   useEffect(() => {
-    const loadUserBenchmarkPreferences = () => {
-      if (!user?.user_settings?.benchmarks || availableBenchmarks.length === 0)
+    const loadUserGuidancePreferences = () => {
+      if (!user?.user_settings?.benchmarks || availableGuidance.length === 0)
         return;
 
       // Sort benchmark preferences by order
@@ -153,17 +151,17 @@ export const VolumeForecast: React.FC = () => {
       );
 
       // Map preference IDs to actual benchmark objects
-      const userSelectedBenchmarks = sortedPreferences
-        .map((pref) => availableBenchmarks.find((b) => b.id === pref.id))
-        .filter(Boolean) as Benchmark[];
+      const userSelectedGuidance = sortedPreferences
+        .map((pref) => availableGuidance.find((b) => b.id === pref.id))
+        .filter(Boolean) as Guidance[];
 
-      if (userSelectedBenchmarks.length > 0) {
-        setSelectedBenchmarks(userSelectedBenchmarks);
+      if (userSelectedGuidance.length > 0) {
+        setSelectedGuidance(userSelectedGuidance);
       }
     };
 
-    loadUserBenchmarkPreferences();
-  }, [user?.user_settings?.benchmarks, availableBenchmarks]);
+    loadUserGuidancePreferences();
+  }, [user?.user_settings?.benchmarks, availableGuidance]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -232,17 +230,15 @@ export const VolumeForecast: React.FC = () => {
     setColumnsDialogOpen(true);
   };
 
-  const handleApplyColumns = (selectedBenchmarks: Benchmark[]) => {
-    setSelectedBenchmarks(selectedBenchmarks);
+  const handleApplyColumns = (selectedGuidance: Guidance[]) => {
+    setSelectedGuidance(selectedGuidance);
 
     // Save benchmark preferences if user is logged in
     if (user) {
       try {
-        const benchmarkIds = selectedBenchmarks.map(
-          (benchmark) => benchmark.id
-        );
-        // Use the saveBenchmarkPreferences method from userContext
-        saveBenchmarkPreferences(benchmarkIds);
+        const benchmarkIds = selectedGuidance.map((benchmark) => benchmark.id);
+        // Use the saveGuidancePreferences method from userContext
+        saveGuidancePreferences(benchmarkIds);
       } catch (error) {
         console.error("Error saving benchmark preferences:", error);
       }
@@ -415,16 +411,16 @@ export const VolumeForecast: React.FC = () => {
               onUndo={(handler) => setUndoHandler(() => handler)}
               onExport={(handler) => setExportHandler(() => handler)}
               onAvailableBrandsChange={setAvailableBrands}
-              selectedBenchmarks={selectedBenchmarks}
+              selectedGuidance={selectedGuidance}
             />
           </TabPanel>
         </Box>
       </Collapse>
 
-      <BenchmarksDialog
+      <GuidanceDialog
         open={columnsDialogOpen}
         onClose={() => setColumnsDialogOpen(false)}
-        title="Benchmarks"
+        title="Guidance"
         type="columns"
         onApply={handleApplyColumns}
       />
