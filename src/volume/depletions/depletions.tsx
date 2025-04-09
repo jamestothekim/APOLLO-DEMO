@@ -111,6 +111,25 @@ const processRawData = (
   isCustomerView: boolean,
   selectedBenchmarks?: Benchmark[]
 ): ExtendedForecastData[] => {
+  // First identify all actual months from the data
+  const actualMonths = new Set<(typeof MONTH_NAMES)[number]>();
+  let hasAnyActuals = false;
+  data.forEach((item) => {
+    if (item?.data_type?.includes("actual")) {
+      hasAnyActuals = true;
+      const monthName = MONTH_NAMES[item.month - 1];
+      if (monthName) {
+        actualMonths.add(monthName);
+      }
+    }
+  });
+
+  // Find the last actual month index
+  const lastActualMonthIndex =
+    hasAnyActuals && actualMonths.size > 0
+      ? Math.max(...Array.from(actualMonths).map((m) => MONTH_NAMES.indexOf(m)))
+      : -1;
+
   // Group data by market/customer and variant_size_pack_id combination
   const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
     // Construct the key consistently with how it's done in Redis
@@ -139,6 +158,17 @@ const processRawData = (
         py_gross_sales_value: 0,
         py_case_equivalent_volume: 0,
       };
+
+      // Initialize all months with proper actual status
+      MONTH_NAMES.forEach((month, index) => {
+        const shouldBeActual = hasAnyActuals && index <= lastActualMonthIndex;
+        acc[key].months[month] = {
+          value: 0,
+          isActual: shouldBeActual,
+          isManuallyModified: false,
+          data_type: shouldBeActual ? "actual_complete" : "forecast",
+        };
+      });
     }
 
     // Process month data as it comes in
@@ -149,10 +179,12 @@ const processRawData = (
         acc[key].months[monthName].value +=
           Math.round(item.case_equivalent_volume * 100) / 100;
       } else {
+        const isActual = Boolean(item.data_type?.includes("actual"));
         acc[key].months[monthName] = {
           value: Math.round(item.case_equivalent_volume * 100) / 100,
-          isActual: item.data_type?.includes("actual"),
+          isActual,
           isManuallyModified: item.is_manual_input || false,
+          data_type: isActual ? "actual_complete" : "forecast",
         };
       }
 
@@ -166,6 +198,7 @@ const processRawData = (
             value: Math.round(item.py_case_equivalent_volume * 100) / 100,
             isActual: true, // Historical data is always actual
             isManuallyModified: false,
+            data_type: "actual_complete",
           };
         }
       }
@@ -924,7 +957,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       // Total column moved here, before the month columns
       {
         key: "total",
-        header: "VOL 9L",
+        header: "VOL 9L",
         subHeader: "TY",
         align: "right" as const,
         render: (_: any, row: ExtendedForecastData) => {

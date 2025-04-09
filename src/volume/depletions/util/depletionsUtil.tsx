@@ -89,6 +89,7 @@ export const processMonthData = (data: any[]) => {
       value: 0,
       isActual: shouldBeActual,
       isManuallyModified: false,
+      data_type: shouldBeActual ? "actual_complete" : "forecast", // Add data_type for phantom records
     };
   });
 
@@ -106,6 +107,9 @@ export const processMonthData = (data: any[]) => {
         value: isNaN(value) ? 0 : value,
         isActual: Boolean(item.data_type?.includes("actual")),
         isManuallyModified: Boolean(item.is_manual_input),
+        data_type:
+          item.data_type ||
+          (months[monthName].isActual ? "actual_complete" : "forecast"), // Preserve or set data_type
       };
     }
   });
