@@ -23,6 +23,7 @@ import {
   PersonAdd as PersonAddIcon,
 } from "@mui/icons-material";
 import axios from "axios";
+import { useUser } from "../../userContext";
 
 // Types
 interface User {
@@ -55,6 +56,7 @@ interface MarketOption {
 
 // Main component
 const UserMaster = () => {
+  const { user: currentUser, checkAuth } = useUser();
   const [users, setUsers] = useState<User[]>([]);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -180,6 +182,12 @@ const UserMaster = () => {
       }
 
       await fetchUsers();
+
+      // If the updated user is the currently logged-in user, refresh user context
+      if (currentUser && editingUser.id === currentUser.id) {
+        await checkAuth();
+      }
+
       showSnackbar(
         `User ${isNewUser ? "created" : "updated"} successfully`,
         "success"
@@ -314,7 +322,14 @@ const UserMaster = () => {
       await axios.delete(
         `${import.meta.env.VITE_API_URL}/users/delete/${editingUser.id}`
       );
+
       await fetchUsers();
+
+      // If the deleted user is the current user, refresh auth state
+      if (currentUser && editingUser.id === currentUser.id) {
+        await checkAuth();
+      }
+
       showSnackbar("User deleted successfully", "success");
       setSidebarOpen(false);
     } catch (error) {

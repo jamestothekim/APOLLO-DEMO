@@ -158,10 +158,6 @@ export const VolumeForecast: React.FC = () => {
         .filter(Boolean) as Benchmark[];
 
       if (userSelectedBenchmarks.length > 0) {
-        console.log(
-          "Loaded user benchmark preferences:",
-          userSelectedBenchmarks
-        );
         setSelectedBenchmarks(userSelectedBenchmarks);
       }
     };

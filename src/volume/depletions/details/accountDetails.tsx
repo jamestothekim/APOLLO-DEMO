@@ -106,7 +106,6 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
 
   useEffect(() => {
     if (cachedData) {
-      console.log("Using cached account data:", cachedData);
       setAccountData(cachedData);
       setIsLoading(false);
       return;
@@ -115,10 +114,6 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
     const fetchAccountDetails = async () => {
       try {
         setIsLoading(true);
-        console.log("Fetching account details with params:", {
-          outletId,
-          period: selectedPeriod,
-        });
         const response = await axios.get<AccountData[]>(
           `${import.meta.env.VITE_API_URL}/volume/account-details`,
           {
@@ -168,7 +163,6 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
           }
         );
         const data = response.data;
-        console.log("Fetched invoice data:", data);
         setInvoiceData(data);
       } catch (err) {
         console.error("Error fetching invoice data:", err);

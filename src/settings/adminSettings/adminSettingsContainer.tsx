@@ -3,6 +3,7 @@ import { Box, Tabs, Tab, Typography, Paper } from "@mui/material";
 import UserMaster from "./userMaster";
 import { MarketMaster } from "./marketMaster";
 import { SKUMaster } from "./skuMaster";
+import { RateMaster } from "./rateMaster";
 
 export const AdminSettingsContainer = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -23,12 +24,14 @@ export const AdminSettingsContainer = () => {
             <Tab label="Users" />
             <Tab label="Market" />
             <Tab label="SKU" />
+            <Tab label="Rates" />
           </Tabs>
         </Box>
         <Box sx={{ pt: 3 }}>
           {activeTab === 0 && <UserMaster />}
           {activeTab === 1 && <MarketMaster />}
           {activeTab === 2 && <SKUMaster />}
+          {activeTab === 3 && <RateMaster />}
         </Box>
       </Box>
     </Paper>

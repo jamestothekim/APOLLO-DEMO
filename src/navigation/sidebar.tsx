@@ -9,7 +9,6 @@ import {
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import SettingsIcon from "@mui/icons-material/Settings";
-import PaidIcon from "@mui/icons-material/Paid";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import { useNavigate } from "react-router-dom";
 
@@ -30,7 +29,6 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
       path: "/P&LModel",
     },
     { text: "Volume", icon: <ShowChartIcon />, path: "/volume" },
-    { text: "Rates", icon: <PaidIcon />, path: "/rates" },
     { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
   ];
 

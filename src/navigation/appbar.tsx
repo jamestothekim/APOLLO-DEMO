@@ -67,7 +67,7 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
           }}
         />
         <Tooltip
-          title={`Pre-release 1 includes personal and admin settings, volume forecasting by market and customer, undo changes, and saving your work. Includes VIP RAD data integration.Initial work on dashboarding and visualizations has commenced but will be further developed.`}
+          title={`Pre-release 2 includes enhancements, bug fixes, and the ability to include benchmark analysis in the volume module.`}
           arrow
         >
           <IconButton size="small" sx={{ ml: 0.5 }}>

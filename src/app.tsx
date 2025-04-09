@@ -14,7 +14,6 @@ import { DashboardContainer } from "./dashboard/dashboardContainer";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import theme from "./theme";
-import { Rates } from "./rates/rates";
 import ProfitModel from "./profitModel/profitModel";
 import { SettingsContainer } from "./settings/settingsContainer";
 import { Login } from "./login/login";
@@ -69,7 +68,6 @@ const AppLayout = () => {
         <Box sx={{ p: 2 }}>
           <Routes>
             <Route path="/" element={<DashboardContainer />} />
-            <Route path="/rates" element={<Rates />} />
             <Route path="/P&LModel" element={<ProfitModel />} />
             <Route path="/volume" element={<VolumeView />} />
             <Route path="/settings" element={<SettingsContainer />} />

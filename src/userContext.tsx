@@ -198,11 +198,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         tokenService.setAuthHeader(token);
       }
 
+      // Add cache-busting parameter to ensure fresh data
       const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/users/verify-token`
+        `${import.meta.env.VITE_API_URL}/users/verify-token?_=${Date.now()}`
       );
 
       if (response.data.user) {
+        // Make sure to update the entire user object with fresh data
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
         return true;
       }
