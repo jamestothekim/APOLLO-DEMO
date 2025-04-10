@@ -218,7 +218,7 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
                               variant="caption"
                               color="text.secondary"
                             >
-                              {benchmark.label}
+                              {`${monthData.month} ${benchmark.label}`}
                             </Typography>
                           </Box>
 

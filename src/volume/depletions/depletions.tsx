@@ -954,7 +954,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           {
             key: "market",
             header: "MARKET",
-            align: "left" as const,
+            align: "center" as const,
+            sx: { minWidth: 160 },
             render: (_: any, row: ExtendedForecastData) => {
               const marketName = (() => {
                 const { user } = useUser();
@@ -969,6 +970,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   sx={{
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
                   {marketName}
@@ -990,7 +992,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           {
             key: "product",
             header: "PRODUCT",
-            align: "left" as const,
+            align: "center" as const,
             extraWide: true,
             render: (_: any, row: ExtendedForecastData) => {
               if (!row.product) return "-";
