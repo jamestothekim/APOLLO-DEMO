@@ -921,19 +921,25 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
     try {
       // If there's a comment in the dialog, update the selectedDataState
-      if (commentDialogOpen && comment) {
-        setSelectedDataState((prev) =>
-          prev ? { ...prev, commentary: comment } : prev
-        );
-      }
+      // (This logic seems like it might belong inside handleSidebarSave or be redundant? Check later)
+      // if (commentDialogOpen && comment) {
+      //   setSelectedDataState((prev) =>
+      //     prev ? { ...prev, commentary: comment } : prev
+      //   );
+      // }
 
       await handleSidebarSave(selectedDataState);
       setHasChanges(false);
-      setCommentDialogOpen(false);
+      // setCommentDialogOpen(false); // Likely not needed if sidebar closes
       showSnackbar("Changes saved successfully", "success");
+
+      // *** Close sidebar after successful save ***
+      setSelectedRowForSidebar(null);
+      setSelectedDataState(null); // Clear selected data state as well
     } catch (error) {
       console.error("Error saving changes:", error);
       showSnackbar("Failed to save changes", "error");
+      // Keep sidebar open on error
     }
   };
 
@@ -1644,7 +1650,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         footerButtons={[
           {
             label: "Close",
-            onClick: () => setSelectedRowForSidebar(null),
+            onClick: () => {
+              setSelectedRowForSidebar(null);
+              setSelectedDataState(null);
+            },
             variant: "outlined",
           },
           {
