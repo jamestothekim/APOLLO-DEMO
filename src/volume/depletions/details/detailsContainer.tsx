@@ -50,6 +50,7 @@ export const DetailsContainer = ({
           {
             params: {
               month,
+              year,
               market,
               product: productToQuery,
             },
@@ -131,7 +132,6 @@ export const DetailsContainer = ({
           <>
             <DepletionDetails
               market={market}
-              item={variant_size_pack_desc || product}
               value={value}
               month={Number(month)}
               year={year}

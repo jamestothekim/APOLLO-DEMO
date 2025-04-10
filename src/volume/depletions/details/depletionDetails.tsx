@@ -5,7 +5,6 @@ import { AccountDetails } from "./accountDetails";
 
 interface DepletionDetailsProps {
   market: string;
-  item: string;
   value: number;
   month: any;
   year: number;

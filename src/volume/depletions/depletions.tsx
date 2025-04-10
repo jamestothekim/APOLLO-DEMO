@@ -16,6 +16,9 @@ import {
   useTheme,
   CircularProgress,
   IconButton,
+  Typography,
+  TableRow,
+  TableCell,
 } from "@mui/material";
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
@@ -42,12 +45,16 @@ import {
   recalculateGuidance,
   SIDEBAR_BENCHMARK_OPTIONS,
   getGuidanceDataForSidebar,
+  calculateRowGuidanceMonthlyData,
 } from "./util/depletionsUtil";
 import {
   Save as SaveIcon,
   Publish as PublishIcon,
   Comment as CommentIcon,
+  DescriptionOutlined as DescriptionOutlinedIcon,
 } from "@mui/icons-material";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 
 export interface ExtendedForecastData {
   id: string;
@@ -88,6 +95,7 @@ export type FilterSelectionProps = {
   onAvailableBrandsChange?: (brands: string[]) => void;
   onAvailableMarketsChange?: (markets: string[]) => void;
   selectedGuidance?: Guidance[];
+  rowGuidanceSelections?: Guidance[];
 };
 
 // Add this helper function near the top with other utility functions
@@ -319,13 +327,19 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   onAvailableBrandsChange,
   onAvailableMarketsChange,
   selectedGuidance,
+  rowGuidanceSelections,
 }) => {
   const { user } = useUser();
   const theme = useTheme();
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [availableMarkets, setAvailableMarkets] = useState<string[]>([]);
-  const [selectedRow, setSelectedRow] = useState<string | null>(null);
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
+  const [selectedRowForSidebar, setSelectedRowForSidebar] = useState<
+    string | null
+  >(null);
+  const [selectedDataState, setSelectedDataState] =
+    useState<ExtendedForecastData | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -338,21 +352,23 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
     "success"
   );
-  const [noMoreActionsSnackbarOpen, setNoMoreActionsSnackbarOpen] =
-    useState(false);
   const [selectedDetails, setSelectedDetails] = useState<{
     market: string;
     product: string;
     value: number;
     month: number;
     year: number;
+    variant_size_pack_id: string;
+    variant_size_pack_desc: string;
   } | null>(null);
-  const [selectedDataState, setSelectedDataState] =
-    useState<ExtendedForecastData | null>(null);
-  const [initialSidebarState, setInitialSidebarState] =
-    useState<ExtendedForecastData | null>(null);
   const [comment, setComment] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+  // const [expandedGuidanceStates, setExpandedGuidanceStates] = useState<{ [guidanceId: string]: boolean }>({});
+
+  // Reset sub-row icon states when main expanded row changes
+  // useEffect(() => {
+  //   setExpandedGuidanceStates({});
+  // }, [expandedRowId]);
 
   const showSnackbar = (message: string, severity: "success" | "error") => {
     setSnackbarMessage(message);
@@ -589,13 +605,24 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   }, [onUndo, handleUndo]);
 
-  // Update handleRowClick to use filteredData
-  const handleRowClick = (id: string) => {
-    setSelectedRow(id);
-    const selectedData = filteredData.find((row) => row.id === id);
+  // Handler for icon click (expansion only)
+  const handleExpandClick = (rowId: string) => {
+    setExpandedRowIds((prevIds) => {
+      const newIds = new Set(prevIds);
+      if (newIds.has(rowId)) {
+        newIds.delete(rowId);
+      } else {
+        newIds.add(rowId);
+      }
+      return newIds;
+    });
+  };
+
+  // Handler for clicking the row itself (Sidebar selection)
+  const handleSidebarSelect = (row: ExtendedForecastData) => {
+    setSelectedRowForSidebar(row.id);
+    const selectedData = filteredData.find((r) => r.id === row.id); // Make sure filteredData is accessible
     if (selectedData) {
-      // Store the initial state before any modifications
-      setInitialSidebarState(JSON.parse(JSON.stringify(selectedData)));
       setSelectedDataState(selectedData);
     }
   };
@@ -618,12 +645,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           prevData.map((row: ExtendedForecastData) =>
             row.id === rowData.id ? { ...row, isLoading: true } : row
           )
-        );
-      }
-
-      if (selectedRow === rowData.id) {
-        setSelectedDataState((prev) =>
-          prev ? { ...prev, isLoading: true } : null
         );
       }
 
@@ -688,11 +709,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         );
       }
 
-      // Always update selectedDataState if this is the selected row
-      if (selectedRow === rowData.id) {
-        setSelectedDataState(updatedRow);
-      }
-
       // Only log to Redis if we have a userId
       if (userId) {
         await axios.post(
@@ -737,10 +753,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         );
       }
 
-      if (selectedRow === rowData.id && selectedDataState) {
-        setSelectedDataState({ ...selectedDataState, isLoading: false });
-      }
-
       throw error;
     }
   };
@@ -766,6 +778,18 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
+  // Handler for toggling individual guidance row icons
+  // const handleGuidanceToggleClick = (
+  //   e: React.MouseEvent,
+  //   guidanceId: string
+  // ) => {
+  //   e.stopPropagation(); // Prevent interfering with other clicks
+  //   setExpandedGuidanceStates(prev => ({
+  //     ...prev,
+  //     [guidanceId]: !prev[guidanceId]
+  //   }));
+  // };
+
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -781,29 +805,27 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Update handleSidebarSave to use initialSidebarState
   const handleSidebarSave = async (editedData: ExtendedForecastData) => {
-    if (!user || !initialSidebarState) return;
+    if (!user) return;
 
     try {
       // Use the initial state we captured when the sidebar was opened
       const initialState = {
         userId: user.id,
         market_id: isCustomerView
-          ? initialSidebarState.customer_id
-          : initialSidebarState.market_id,
+          ? editedData.customer_id
+          : editedData.market_id,
         market_name: isCustomerView
-          ? initialSidebarState.customer_name
-          : initialSidebarState.market_name,
-        variant_size_pack_desc: initialSidebarState.variant_size_pack_desc,
-        variant_size_pack_id: initialSidebarState.variant_size_pack_id,
-        brand: initialSidebarState.brand,
-        variant: initialSidebarState.variant,
-        variant_id: initialSidebarState.variant_id,
-        customer_id: isCustomerView ? initialSidebarState.customer_id : null,
-        customer_name: isCustomerView
-          ? initialSidebarState.customer_name
-          : null,
-        forecastType: initialSidebarState.forecastLogic,
-        months: JSON.parse(JSON.stringify(initialSidebarState.months)),
+          ? editedData.customer_name
+          : editedData.market_name,
+        variant_size_pack_desc: editedData.variant_size_pack_desc,
+        variant_size_pack_id: editedData.variant_size_pack_id,
+        brand: editedData.brand,
+        variant: editedData.variant,
+        variant_id: editedData.variant_id,
+        customer_id: isCustomerView ? editedData.customer_id : null,
+        customer_name: isCustomerView ? editedData.customer_name : null,
+        forecastType: editedData.forecastLogic,
+        months: JSON.parse(JSON.stringify(editedData.months)),
       };
 
       // First update the forecast
@@ -868,8 +890,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       setForecastData((prevData) =>
         prevData.map((item) => (item.id === editedData.id ? editedData : item))
       );
-
-      setSelectedRow(null);
     } catch (error) {
       console.error("Error saving changes:", error);
     }
@@ -917,9 +937,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
-  const columns: Column[] = useMemo(
-    () => [
-      // Control section
+  const columns: Column[] = useMemo(() => {
+    const baseColumns: Column[] = [
+      // --- Control Section ---
       {
         key: "control_section",
         header: "CONTROL",
@@ -930,11 +950,24 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             header: "MARKET",
             align: "left" as const,
             render: (_: any, row: ExtendedForecastData) => {
-              const { user } = useUser();
-              const marketInfo = user?.user_access?.Markets?.find(
-                (m: MarketAccess) => m.market_code === row.market_name
+              const marketName = (() => {
+                const { user } = useUser();
+                const marketInfo = user?.user_access?.Markets?.find(
+                  (m: MarketAccess) => m.market_code === row.market_name
+                );
+                return marketInfo?.market || row.market_name;
+              })();
+
+              return (
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {marketName}
+                </Box>
               );
-              return marketInfo?.market || row.market_name;
             },
           },
           ...(isCustomerView
@@ -982,7 +1015,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           },
         ],
       },
-      // Analytics section
+      // --- Column Guidance Section ---
       {
         key: "guidance_section",
         header: "GUIDANCE",
@@ -1055,17 +1088,78 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           })) || []),
         ],
       },
-      // Phasing section
+      // --- Phasing Section ---
       {
         key: "months_section",
         header: "PHASING",
         columnGroup: true,
         columns: [
+          // --- Conditionally add GUIDANCE Label Column ---
+          ...(rowGuidanceSelections && rowGuidanceSelections.length > 0
+            ? [
+                {
+                  key: "row_guidance_label",
+                  header: "GUIDANCE",
+                  align: "center" as const,
+                  wide: true,
+                  render: (_: any, row: ExtendedForecastData) => {
+                    const isExpanded = expandedRowIds.has(row.id);
+                    return (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          position: "relative",
+                        }}
+                      >
+                        {/* Label Box */}
+                        <Box sx={{ textAlign: "center", flexGrow: 1 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: "bold" }}
+                          >
+                            VOL 9L
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            sx={{
+                              fontStyle: "italic",
+                              marginTop: "2px",
+                            }}
+                          >
+                            TY
+                          </Typography>
+                        </Box>
+                        {/* Icon Button */}
+                        <IconButton
+                          aria-label="expand row"
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExpandClick(row.id);
+                          }}
+                          className="row-expand-button"
+                          sx={{ ml: 0.5, visibility: "hidden" }}
+                        >
+                          {isExpanded ? (
+                            <KeyboardArrowDownIcon fontSize="inherit" />
+                          ) : (
+                            <ChevronRightIcon fontSize="inherit" />
+                          )}
+                        </IconButton>
+                      </Box>
+                    );
+                  },
+                },
+              ]
+            : []),
+          // --- Month Columns ---
           ...MONTH_NAMES.map((month) => {
             const isActualMonth = forecastData.some(
               (row) => row.months[month]?.isActual
             );
-
             return {
               key: `months.${month}`,
               header: month,
@@ -1079,7 +1173,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                     </Box>
                   );
                 }
-
                 if (!row?.months?.[month]) return "-";
                 const data = row.months[month];
                 return (
@@ -1099,23 +1192,21 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                           const stateCode =
                             marketInfo?.market_code?.substring(0, 2) || "";
 
-                          if (data.value === 0 && data.isActual) {
-                            setSelectedDetails({
-                              market: stateCode,
-                              product: row.product,
-                              value: -1,
-                              month: MONTH_MAPPING[month],
-                              year: 2025,
-                            });
-                          } else {
-                            setSelectedDetails({
-                              market: stateCode,
-                              product: row.product,
-                              value: Math.round(data.value),
-                              month: MONTH_MAPPING[month],
-                              year: 2025,
-                            });
-                          }
+                          // Define the current year (adjust if needed dynamically later)
+                          const currentYear = new Date().getFullYear(); // Assuming current year for TY actuals
+
+                          setSelectedDetails({
+                            market: stateCode,
+                            product: row.product, // Keep original product identifier
+                            value:
+                              data.value === 0 && data.isActual
+                                ? -1
+                                : Math.round(data.value), // Keep original value logic
+                            month: MONTH_MAPPING[month],
+                            year: currentYear, // Pass the correct year
+                            variant_size_pack_id: row.variant_size_pack_id, // Pass variant info
+                            variant_size_pack_desc: row.variant_size_pack_desc, // Pass variant info
+                          });
                           setDetailsOpen(true);
                         }
                       }}
@@ -1142,11 +1233,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               },
             };
           }),
+          // --- Commentary Column ---
           ...(hasAnyComments()
             ? [
                 {
                   key: "commentary",
-                  header: "COM",
+                  header: <DescriptionOutlinedIcon fontSize="small" />,
                   align: "center" as const,
                   render: (
                     commentary: string | undefined,
@@ -1172,16 +1264,155 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             : []),
         ],
       },
-    ],
-    [
-      forecastData,
-      filteredData,
-      isCustomerView,
-      handleLogicChange,
-      marketMetadata,
-      selectedGuidance,
-    ]
-  );
+    ];
+    return baseColumns;
+  }, [
+    selectedGuidance,
+    rowGuidanceSelections,
+    expandedRowIds,
+    isCustomerView, // Added as it affects control columns
+    forecastData, // Needed for isActualMonth check
+    marketMetadata, // Add marketMetadata as dependency for marketInfo lookup
+    // Note: handleExpandClick doesn't need to be a dependency if defined outside useMemo
+  ]);
+
+  // --- Function to render the expanded content ---
+  // Returns one or more TableRow components
+  const renderExpandedRowContent = (
+    row: ExtendedForecastData,
+    flatColumns: Column[]
+  ) => {
+    if (!rowGuidanceSelections || rowGuidanceSelections.length === 0) {
+      return null; // Don't render anything if no row guidance selected
+    }
+
+    // Calculate monthly data for each selected row guidance
+    const guidanceData = rowGuidanceSelections
+      .map((guidance) => ({
+        guidance,
+        monthlyData: calculateRowGuidanceMonthlyData(row, guidance),
+      }))
+      .filter((item) => item.monthlyData); // Filter out any null results
+
+    if (guidanceData.length === 0) {
+      return (
+        <TableRow>
+          <TableCell colSpan={flatColumns.length} align="center">
+            <Typography variant="caption">
+              Could not calculate row guidance data.
+            </Typography>
+          </TableCell>
+        </TableRow>
+      );
+    }
+
+    // Define the current year to calculate the previous year
+    const currentYear = new Date().getFullYear();
+    const previousYear = currentYear - 1;
+
+    // Map each selected guidance to a TableRow
+    return guidanceData.map(({ guidance, monthlyData }) => {
+      // Determine if this guidance row represents Last Year (LY) data
+      const isLYGuidance = guidance.value === "py_case_equivalent_volume"; // Adjust if LY identifier changes
+
+      return (
+        <TableRow
+          key={`${row.id}-${guidance.id}`}
+          sx={{ backgroundColor: "action.hover" }}
+        >
+          {/* Render cells matching the main table's flatColumns structure */}
+          {flatColumns.map((col) => {
+            let cellContent: React.ReactNode = null; // Default empty cell
+
+            // Special rendering for specific columns in the expanded row
+            if (col.key === "expand") {
+              cellContent = null; // No expand icon in sub-rows
+            } else if (col.key === "row_guidance_label") {
+              // Replicate column header format (only the label part)
+              cellContent = (
+                <Box sx={{ textAlign: "center" }}>
+                  <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+                    {guidance.label}
+                  </Typography>
+                  {guidance.sublabel && (
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      sx={{
+                        fontStyle: "italic",
+                        marginTop: "2px",
+                      }}
+                    >
+                      {guidance.sublabel}
+                    </Typography>
+                  )}
+                </Box>
+              );
+            } else if (col.key.startsWith("months.")) {
+              // Render the calculated monthly guidance value
+              const month = col.key.split(".")[1];
+              const value = monthlyData![month];
+
+              // Use formatGuidanceValue initially for consistent formatting
+              const formattedValue = formatGuidanceValue(
+                value,
+                guidance.calculation.format
+              );
+
+              if (isLYGuidance) {
+                // Make LY values clickable
+                cellContent = (
+                  <Box
+                    component="span"
+                    sx={{
+                      color: "primary.main", // Highlight LY values
+                      cursor: "pointer",
+                      display: "inline-block", // Ensure Box takes space for click
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      const marketInfo = marketMetadata.find(
+                        (m) => m.market_id === row.market_id
+                      );
+                      const stateCode =
+                        marketInfo?.market_code?.substring(0, 2) || "";
+
+                      setSelectedDetails({
+                        market: stateCode,
+                        product: row.product,
+                        value: value === 0 ? -1 : Math.round(value), // Use raw value for details
+                        month: MONTH_MAPPING[month],
+                        year: previousYear, // Use previous year for LY
+                        variant_size_pack_id: row.variant_size_pack_id,
+                        variant_size_pack_desc: row.variant_size_pack_desc,
+                      });
+                      setDetailsOpen(true);
+                    }}
+                  >
+                    {formattedValue}
+                  </Box>
+                );
+              } else {
+                // Non-clickable guidance values
+                cellContent = formattedValue;
+              }
+            }
+            // Other columns (Control, Column Guidance) will be empty in the sub-row
+
+            return (
+              <TableCell
+                key={`${row.id}-${guidance.id}-${col.key}`}
+                align={col.align || "left"}
+                sx={{ ...col.sx }}
+              >
+                {cellContent}
+              </TableCell>
+            );
+          })}
+        </TableRow>
+      );
+    });
+  };
 
   const handleSaveClick = async () => {
     try {
@@ -1317,13 +1548,25 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     );
   }, [selectedDataState]);
 
+  // Log row guidance selections when they change
+  useEffect(() => {
+    if (rowGuidanceSelections) {
+      console.log(
+        "Depletions received Row Guidance Selections:",
+        rowGuidanceSelections
+      );
+    }
+  }, [rowGuidanceSelections]);
+
   return (
     <Box>
       <DynamicTable
         data={filteredData}
         columns={columns}
-        onRowClick={(row) => handleRowClick(row.id)}
-        selectedRow={selectedRow}
+        onRowClick={handleSidebarSelect}
+        expandedRowIds={expandedRowIds}
+        renderExpandedRow={renderExpandedRowContent}
+        getRowId={(row) => row.id}
         page={page}
         onPageChange={handleChangePage}
         rowsPerPage={rowsPerPage}
@@ -1352,8 +1595,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       </Box>
 
       <QuantSidebar
-        open={!!selectedRow}
-        onClose={() => setSelectedRow(null)}
+        open={!!selectedRowForSidebar}
+        onClose={() => {
+          setSelectedRowForSidebar(null);
+          setSelectedDataState(null);
+        }}
         title="Forecast Details"
         marketName={selectedDataState?.market_name}
         customerName={selectedDataState?.customer_name}
@@ -1361,6 +1607,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         forecastLogic={selectedDataState?.forecastLogic}
         forecastOptions={FORECAST_OPTIONS}
         onForecastLogicChange={handleSidebarForecastChange}
+        pyTotalVolume={selectedDataState?.py_case_equivalent_volume}
         graphData={
           selectedDataState
             ? [
@@ -1397,7 +1644,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         footerButtons={[
           {
             label: "Close",
-            onClick: () => setSelectedRow(null),
+            onClick: () => setSelectedRowForSidebar(null),
             variant: "outlined",
           },
           {
@@ -1442,6 +1689,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           value={selectedDetails.value}
           month={selectedDetails.month}
           year={selectedDetails.year}
+          variant_size_pack_id={selectedDetails.variant_size_pack_id}
+          variant_size_pack_desc={selectedDetails.variant_size_pack_desc}
         />
       )}
 
@@ -1457,13 +1706,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           {snackbarMessage}
         </Alert>
       </Snackbar>
-
-      <Snackbar
-        open={noMoreActionsSnackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setNoMoreActionsSnackbarOpen(false)}
-        message="No actions left to undo"
-      />
 
       <Snackbar
         open={undoSnackbarOpen}

@@ -70,7 +70,7 @@ interface CustomerData {
 }
 
 export const VolumeForecast: React.FC = () => {
-  const { user, saveGuidancePreferences } = useUser();
+  const { user, /* saveGuidancePreferences, */ updateUserSettings } = useUser();
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
@@ -84,6 +84,9 @@ export const VolumeForecast: React.FC = () => {
   const [isCustomerView, setIsCustomerView] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
   const [selectedGuidance, setSelectedGuidance] = useState<Guidance[]>([]);
+  const [selectedRowGuidanceState, setSelectedRowGuidanceState] = useState<
+    Guidance[]
+  >([]);
   const [availableGuidance, setAvailableGuidance] = useState<Guidance[]>([]);
 
   useEffect(() => {
@@ -139,29 +142,45 @@ export const VolumeForecast: React.FC = () => {
     fetchGuidance();
   }, []);
 
-  // Load user's benchmark preferences when availableGuidance are loaded
+  // Load user's guidance preferences when availableGuidance are loaded
   useEffect(() => {
     const loadUserGuidancePreferences = () => {
-      if (!user?.user_settings?.benchmarks || availableGuidance.length === 0)
-        return;
+      if (!user?.user_settings || availableGuidance.length === 0) return;
 
-      // Sort benchmark preferences by order
-      const sortedPreferences = [...user.user_settings.benchmarks].sort(
-        (a, b) => a.order - b.order
-      );
+      const { guidance_columns, guidance_rows } = user.user_settings;
 
-      // Map preference IDs to actual benchmark objects
-      const userSelectedGuidance = sortedPreferences
-        .map((pref) => availableGuidance.find((b) => b.id === pref.id))
-        .filter(Boolean) as Guidance[];
+      // Load Column Preferences
+      if (guidance_columns && Array.isArray(guidance_columns)) {
+        const userSelectedColumns = guidance_columns
+          .map((id) => availableGuidance.find((g) => g.id === id))
+          .filter(Boolean) as Guidance[]; // Filter out undefined if an ID is invalid
 
-      if (userSelectedGuidance.length > 0) {
-        setSelectedGuidance(userSelectedGuidance);
+        if (userSelectedColumns.length > 0) {
+          setSelectedGuidance(userSelectedColumns);
+        } else {
+          // Optional: Set default columns if none saved or invalid?
+          // setSelectedGuidance([defaultColumnGuidance]);
+        }
+      }
+
+      // Load Row Preferences
+      if (guidance_rows && Array.isArray(guidance_rows)) {
+        const userSelectedRows = guidance_rows
+          .map((id) => availableGuidance.find((g) => g.id === id))
+          .filter(Boolean) as Guidance[]; // Filter out undefined
+
+        if (userSelectedRows.length > 0) {
+          setSelectedRowGuidanceState(userSelectedRows);
+        } else {
+          // Optional: Set default rows if none saved or invalid?
+          // setSelectedRowGuidanceState([defaultRowGuidance]);
+        }
       }
     };
 
     loadUserGuidancePreferences();
-  }, [user?.user_settings?.benchmarks, availableGuidance]);
+    // Depend on the specific settings keys if possible, or the whole user object
+  }, [user?.user_settings, availableGuidance]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -230,17 +249,37 @@ export const VolumeForecast: React.FC = () => {
     setColumnsDialogOpen(true);
   };
 
-  const handleApplyColumns = (selectedGuidance: Guidance[]) => {
-    setSelectedGuidance(selectedGuidance);
+  const handleApplyColumns = async (columns: Guidance[]) => {
+    console.log("VolumeForecast saving Columns:", columns);
+    const newSelectedGuidance = columns || [];
+    setSelectedGuidance(newSelectedGuidance);
+    setColumnsDialogOpen(false);
 
-    // Save benchmark preferences if user is logged in
+    // Save COLUMN preferences using the new structure
     if (user) {
       try {
-        const benchmarkIds = selectedGuidance.map((benchmark) => benchmark.id);
-        // Use the saveGuidancePreferences method from userContext
-        saveGuidancePreferences(benchmarkIds);
+        const columnIds = newSelectedGuidance.map((col) => col.id);
+        await updateUserSettings({ guidance_columns: columnIds }); // Use generic update function
       } catch (error) {
-        console.error("Error saving benchmark preferences:", error);
+        console.error("Error saving column guidance preferences:", error);
+      }
+    }
+  };
+
+  const handleApplyRows = async (rows: Guidance[]) => {
+    console.log("VolumeForecast saving Rows:", rows);
+    const newSelectedRows = rows || [];
+    setSelectedRowGuidanceState(newSelectedRows);
+    // Note: Dialog closing is handled by handleApplyColumns if it's the same dialog
+    // setColumnsDialogOpen(false); // Assuming the dialog closes after applying either
+
+    // Save ROW preferences using the new structure
+    if (user) {
+      try {
+        const rowIds = newSelectedRows.map((row) => row.id);
+        await updateUserSettings({ guidance_rows: rowIds }); // Use generic update function
+      } catch (error) {
+        console.error("Error saving row guidance preferences:", error);
       }
     }
   };
@@ -412,6 +451,7 @@ export const VolumeForecast: React.FC = () => {
               onExport={(handler) => setExportHandler(() => handler)}
               onAvailableBrandsChange={setAvailableBrands}
               selectedGuidance={selectedGuidance}
+              rowGuidanceSelections={selectedRowGuidanceState}
             />
           </TabPanel>
         </Box>
@@ -420,9 +460,9 @@ export const VolumeForecast: React.FC = () => {
       <GuidanceDialog
         open={columnsDialogOpen}
         onClose={() => setColumnsDialogOpen(false)}
-        title="Guidance"
-        type="columns"
-        onApply={handleApplyColumns}
+        title="Guidance Options"
+        onApplyColumns={handleApplyColumns}
+        onApplyRows={handleApplyRows}
       />
     </Paper>
   );

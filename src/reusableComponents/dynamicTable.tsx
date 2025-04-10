@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -34,6 +34,7 @@ export interface Column {
   detailsOnly?: boolean;
   width?: number;
   extraWide?: boolean;
+  wide?: boolean;
   sx?: SxProps<Theme>;
   sortable?: boolean;
   sortValue?: (value: any, row: any) => number | string | null;
@@ -47,7 +48,7 @@ export interface DynamicTableProps {
   sections?: { label: string; value: string }[];
   onSectionChange?: (value: string) => void;
   onRowClick?: (row: any) => void;
-  selectedRow?: string | null;
+  expandedRowIds?: Set<string>;
   rowsPerPageOptions?: Array<number | { value: number; label: string }>;
   defaultRowsPerPage?: number;
   page?: number;
@@ -62,6 +63,7 @@ export interface DynamicTableProps {
   loading?: boolean;
   stickyHeader?: boolean;
   maxHeight?: string | number;
+  renderExpandedRow?: (row: any, flatColumns: Column[]) => React.ReactNode;
 }
 
 const getSectionInfo = (columns: Column[], index: number) => {
@@ -95,7 +97,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   sections,
   onSectionChange,
   onRowClick,
-  selectedRow,
+  expandedRowIds,
   rowsPerPageOptions = [10, 25, 50, { value: -1, label: "All" }],
   defaultRowsPerPage = 10,
   page: controlledPage,
@@ -107,6 +109,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   loading = false,
   stickyHeader = false,
   maxHeight = "70vh",
+  renderExpandedRow,
 }) => {
   const theme = useTheme();
   // All hooks must be at the top level and in the same order every time
@@ -257,6 +260,13 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     }, []);
   }, [columns]);
 
+  // Define minWidth calculation logic
+  const getMinWidth = (column: Column): number | undefined => {
+    if (column.extraWide) return 200;
+    if (column.wide) return 160; // 80% of 200
+    return column.width; // Fallback to width if provided, else undefined
+  };
+
   return (
     <Box>
       {loading ? (
@@ -312,6 +322,9 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                   },
                 },
               }),
+              "& .MuiTableRow-root:hover .row-expand-button": {
+                visibility: "visible",
+              },
             }}
           >
             <Table size="small" sx={{ borderCollapse: "collapse" }}>
@@ -354,6 +367,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                 <TableRow>
                   {flatColumns.map((column, index) => {
                     const sectionInfo = getSectionInfo(columns, index);
+                    const minW = getMinWidth(column);
                     return (
                       <TableCell
                         key={column.key}
@@ -364,7 +378,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                           ...(theme.components?.MuiDynamicTable?.styleOverrides
                             ?.columnHeader || {}),
                           width: column.width,
-                          minWidth: column.extraWide ? 200 : undefined,
+                          minWidth: minW,
                           textAlign: "center",
                           ...column.sx,
                         }}
@@ -408,43 +422,49 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {displayData.map((row) => (
-                  <TableRow
-                    key={getRowId(row)}
-                    hover={!!onRowClick}
-                    onClick={() => onRowClick?.(row)}
-                    selected={selectedRow === getRowId(row)}
-                    sx={{
-                      cursor: onRowClick ? "pointer" : "default",
-                      "&.Mui-selected, &.Mui-selected:hover": {
-                        backgroundColor: (theme) =>
-                          theme.palette.action.selected,
-                      },
-                    }}
-                  >
-                    {flatColumns.map((column, index) => {
-                      const sectionInfo = getSectionInfo(columns, index);
-                      return (
-                        <TableCell
-                          key={column.key}
-                          align={column.align}
-                          data-section={sectionInfo.name.toLowerCase()}
-                          data-first-in-section={sectionInfo.isFirst}
-                          sx={{
-                            ...(theme.components?.MuiDynamicTable
-                              ?.styleOverrides?.dataCell || {}),
-                            minWidth: column.extraWide ? 200 : undefined,
-                            ...column.sx,
-                          }}
-                        >
-                          {column.render
-                            ? column.render(row[column.key], row)
-                            : row[column.key]}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
+                {displayData.map((row) => {
+                  const rowId = getRowId(row);
+                  const isSelected = expandedRowIds?.has(rowId);
+                  return (
+                    <Fragment key={rowId}>
+                      {/* --- Main Row --- */}
+                      <TableRow
+                        hover={!!onRowClick}
+                        onClick={() => onRowClick?.(row)}
+                        sx={{
+                          cursor: onRowClick ? "pointer" : "default",
+                        }}
+                      >
+                        {flatColumns.map((column, index) => {
+                          const sectionInfo = getSectionInfo(columns, index);
+                          const minW = getMinWidth(column);
+                          return (
+                            <TableCell
+                              key={column.key}
+                              align={column.align}
+                              data-section={sectionInfo.name.toLowerCase()}
+                              data-first-in-section={sectionInfo.isFirst}
+                              sx={{
+                                ...(theme.components?.MuiDynamicTable
+                                  ?.styleOverrides?.dataCell || {}),
+                                minWidth: minW,
+                                ...column.sx,
+                              }}
+                            >
+                              {column.render
+                                ? column.render(row[column.key], row)
+                                : row[column.key]}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                      {/* --- Expanded Content Row(s) --- */}
+                      {renderExpandedRow &&
+                        isSelected &&
+                        renderExpandedRow(row, flatColumns)}
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

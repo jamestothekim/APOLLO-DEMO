@@ -572,8 +572,8 @@ export const formatGuidanceValue = (
 
   // For other number values
   const formattedValue = roundedValue.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
   });
 
   // Return colored text for negative values
@@ -643,4 +643,121 @@ export const getGuidanceDataForSidebar = (
   });
 
   return sidebarGuidanceData;
+};
+
+// --- Function to calculate monthly data for a single row guidance ---
+export const calculateRowGuidanceMonthlyData = (
+  rowData: ExtendedForecastData,
+  guidance: Guidance // Uses local Guidance type from this file
+): { [month: string]: number } | null => {
+  // Direct Value (e.g., py_case_equivalent_volume)
+  if (typeof guidance.value === "string") {
+    const fieldName = guidance.value;
+    // Assumes convention like 'py_case_equivalent_volume_months' exists on rowData if applicable
+    const monthlyDataSource = `${fieldName}_months`;
+
+    if (
+      rowData[monthlyDataSource] &&
+      typeof rowData[monthlyDataSource] === "object"
+    ) {
+      const monthlyData: { [month: string]: number } = {};
+      MONTH_NAMES.forEach((month) => {
+        monthlyData[month] = rowData[monthlyDataSource][month]?.value || 0;
+      });
+      return monthlyData;
+    } else {
+      // Distribute total if monthly source doesn't exist (less accurate)
+      console.warn(
+        `Monthly data source ${monthlyDataSource} not found for row ${rowData.id}. Distributing total.`
+      );
+      const totalValue = Number(rowData[fieldName]) || 0;
+      const monthlyValue = totalValue / 12;
+      const monthlyData: { [month: string]: number } = {};
+      MONTH_NAMES.forEach((month) => {
+        monthlyData[month] = monthlyValue;
+      });
+      return monthlyData;
+    }
+  }
+
+  // Calculated Value (Difference or Percentage)
+  const guidanceValue = guidance.value as GuidanceValue; // Use local GuidanceValue type
+  const currentMonths = rowData.months;
+
+  // Helper to get monthly values, prioritizing specific monthly fields
+  const getMonthlyValue = (fieldName: string, month: string): number => {
+    const monthlyDataSource = `${fieldName}_months`;
+    if (
+      rowData[monthlyDataSource] &&
+      typeof rowData[monthlyDataSource] === "object" &&
+      rowData[monthlyDataSource][month]
+    ) {
+      return rowData[monthlyDataSource][month]?.value || 0;
+    } else {
+      // Fallback calculations for specific fields if monthly breakdown isn't directly available
+      if (fieldName === "gross_sales_value") {
+        // Estimate monthly GSV based on volume share
+        const monthVolume = currentMonths[month]?.value || 0;
+        const totalVolume = rowData.case_equivalent_volume || 1; // Avoid division by zero
+        const totalGSV = rowData.gross_sales_value || 0;
+        return (monthVolume / totalVolume) * totalGSV;
+      }
+      if (fieldName === "py_gross_sales_value") {
+        // Estimate monthly PY GSV based on PY volume share
+        const pyMonthVolume =
+          rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
+        const pyTotalVolume = rowData.py_case_equivalent_volume || 1; // Avoid division by zero
+        const pyTotalGSV = rowData.py_gross_sales_value || 0;
+        return (pyMonthVolume / pyTotalVolume) * pyTotalGSV;
+      }
+      if (fieldName === "py_case_equivalent_volume") {
+        return rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
+      }
+      if (fieldName === "case_equivalent_volume") {
+        // Current forecast volume for the month
+        return currentMonths[month]?.value || 0;
+      }
+      console.warn(
+        `Cannot determine monthly value for ${fieldName} in ${month}`
+      );
+      return 0;
+    }
+  };
+
+  const resultMonthlyData: { [month: string]: number } = {};
+
+  if (guidance.calculation.type === "difference" && guidanceValue.expression) {
+    const expressionParts = guidanceValue.expression.split(" - ");
+    const field1 = expressionParts[0].trim();
+    const field2 = expressionParts[1].trim();
+
+    MONTH_NAMES.forEach((month) => {
+      const value1 = getMonthlyValue(field1, month);
+      const value2 = getMonthlyValue(field2, month);
+      resultMonthlyData[month] = value1 - value2;
+    });
+    return resultMonthlyData;
+  } else if (
+    guidance.calculation.type === "percentage" &&
+    guidanceValue.numerator &&
+    guidanceValue.denominator
+  ) {
+    const numeratorParts = guidanceValue.numerator.split(" - ");
+    const numerField1 = numeratorParts[0].trim();
+    const numerField2 = numeratorParts[1].trim();
+    const denomField = guidanceValue.denominator.trim();
+
+    MONTH_NAMES.forEach((month) => {
+      const numerValue1 = getMonthlyValue(numerField1, month);
+      const numerValue2 = getMonthlyValue(numerField2, month);
+      const denomValue = getMonthlyValue(denomField, month);
+
+      const numerator = numerValue1 - numerValue2;
+      resultMonthlyData[month] = denomValue === 0 ? 0 : numerator / denomValue;
+    });
+    return resultMonthlyData;
+  }
+
+  console.error("Unhandled guidance calculation type or structure:", guidance);
+  return null; // Indicate calculation failed or wasn't applicable
 };

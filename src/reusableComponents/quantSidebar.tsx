@@ -15,6 +15,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useState, useMemo } from "react";
 import { InteractiveGraph } from "./interactiveGraph";
 import { MonthlyValues } from "./monthlyValues";
+import { formatGuidanceValue } from "../volume/depletions/util/depletionsUtil";
 
 interface MonthData {
   value: number;
@@ -73,6 +74,8 @@ interface QuantSidebarProps {
   onMonthValueChange: (month: string, value: string) => void;
   // GSV rate props
   gsvRate?: number;
+  // Add prop for Total LY Volume
+  pyTotalVolume?: number;
   // Commentary
   commentary?: string;
   onCommentaryChange?: (value: string) => void;
@@ -110,11 +113,33 @@ export const QuantSidebar = ({
   months,
   onMonthValueChange,
   gsvRate,
+  pyTotalVolume,
   commentary,
   onCommentaryChange,
   footerButtons = [],
 }: QuantSidebarProps) => {
   const [selectedTrendLines, setSelectedTrendLines] = useState<string[]>([]);
+
+  // Calculate Total TY Forecast
+  const totalTYForecast = useMemo(() => {
+    return Object.values(months).reduce(
+      (acc, curr: MonthData) => acc + (curr.value || 0),
+      0
+    );
+  }, [months]);
+
+  // Calculate derived yearly guidance metrics
+  const yearlyGuidance = useMemo(() => {
+    if (typeof pyTotalVolume !== "number" || pyTotalVolume <= 0) {
+      return null;
+    }
+    const delta = totalTYForecast - pyTotalVolume;
+    const percentChange = delta / pyTotalVolume;
+    return {
+      delta,
+      percentChange,
+    };
+  }, [totalTYForecast, pyTotalVolume]);
 
   // Generate trend lines from benchmark options
   const trendLines = useMemo(() => {
@@ -254,13 +279,6 @@ export const QuantSidebar = ({
     setSelectedTrendLines((prev) => prev.filter((id) => id !== trendLineId));
   };
 
-  const calculateTotal = () => {
-    return Object.values(months).reduce(
-      (acc, curr: MonthData) => acc + curr.value,
-      0
-    );
-  };
-
   return (
     <Drawer
       anchor="right"
@@ -275,22 +293,113 @@ export const QuantSidebar = ({
         },
       }}
     >
-      <Box sx={{ p: 3, flex: 1, overflow: "auto" }}>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 3,
-          }}
-        >
-          <Typography variant="h6">{title}</Typography>
-          <IconButton onClick={onClose}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
+      {/* Header Box (Title + Close Button) - Stays at top */}
+      <Box
+        sx={{
+          p: 3,
+          pb: 1, // Reduce bottom padding
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "1px solid", // Add separator
+          borderColor: "divider",
+        }}
+      >
+        <Typography variant="h6">{title}</Typography>
+        <IconButton onClick={onClose}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
 
-        <Grid container spacing={3}>
+      {/* Top Info Section (Non-scrolling - ONLY Guidance Summary now) */}
+      <Box
+        sx={{
+          px: 3,
+          pt: 2,
+          pb: 2,
+          flexShrink: 0,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        {/* Guidance Summary Grid */}
+        {yearlyGuidance && pyTotalVolume !== undefined && (
+          <Grid
+            item
+            xs={12}
+            sx={{
+              p: 1.5,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+            }}
+          >
+            <Typography
+              variant="overline"
+              display="block"
+              gutterBottom
+              sx={{ mb: 1.5, color: "primary.main", fontWeight: "bold" }}
+            >
+              GUIDANCE SUMMARY
+            </Typography>
+            <Grid container spacing={1}>
+              {/* TY Forecast */}
+              <Grid item xs={6} sm={3}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    TY Forecast
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {formatGuidanceValue(totalTYForecast)}
+                  </Typography>
+                </Box>
+              </Grid>
+              {/* LY Actual */}
+              <Grid item xs={6} sm={3}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    LY Actual
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {formatGuidanceValue(pyTotalVolume)}
+                  </Typography>
+                </Box>
+              </Grid>
+              {/* Delta */}
+              <Grid item xs={6} sm={3}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    TY vs LY
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {formatGuidanceValue(yearlyGuidance.delta)}
+                  </Typography>
+                </Box>
+              </Grid>
+              {/* % Change */}
+              <Grid item xs={6} sm={3}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    TY vs LY %
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {formatGuidanceValue(
+                      yearlyGuidance.percentChange,
+                      "percent"
+                    )}
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </Grid>
+        )}
+      </Box>
+
+      {/* Scrollable Content Section (Market/Item/Logic + Graph etc.) */}
+      <Box sx={{ p: 3, pt: 2, flex: 1, overflow: "auto" }}>
+        {/* MOVED Market/Item/Logic Here */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {/* Market/Customer/Item Grids */}
           {(marketName || customerName) && (
             <Grid item xs={12}>
               <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
@@ -301,7 +410,6 @@ export const QuantSidebar = ({
               </Box>
             </Grid>
           )}
-
           {productName && (
             <Grid item xs={12}>
               <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
@@ -310,7 +418,7 @@ export const QuantSidebar = ({
               </Box>
             </Grid>
           )}
-
+          {/* Logic Grid */}
           {forecastLogic && forecastOptions && onForecastLogicChange && (
             <Grid item xs={12}>
               <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
@@ -330,7 +438,11 @@ export const QuantSidebar = ({
               </Box>
             </Grid>
           )}
+        </Grid>
 
+        {/* Graph, Monthly, Commentary */}
+        <Grid container spacing={3}>
+          {/* Graph Grid */}
           <Grid item xs={12}>
             <InteractiveGraph
               datasets={combinedGraphData}
@@ -342,6 +454,7 @@ export const QuantSidebar = ({
             />
           </Grid>
 
+          {/* MonthlyValues Grid */}
           <Grid item xs={12}>
             <MonthlyValues
               quarterGroups={QUARTER_GROUPS.map(
@@ -365,6 +478,7 @@ export const QuantSidebar = ({
             />
           </Grid>
 
+          {/* Commentary Grid */}
           {onCommentaryChange !== undefined && (
             <Grid item xs={12}>
               <TextField
@@ -378,18 +492,10 @@ export const QuantSidebar = ({
               />
             </Grid>
           )}
-
-          <Grid item xs={12}>
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-              <Typography sx={{ fontWeight: 700 }}>Total:</Typography>
-              <Typography variant="h6">
-                {calculateTotal().toLocaleString()}
-              </Typography>
-            </Box>
-          </Grid>
         </Grid>
       </Box>
 
+      {/* Footer Buttons - Stays at bottom */}
       {footerButtons.length > 0 && (
         <Box
           sx={{
