@@ -129,6 +129,7 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
   const [expandedGuidanceRowIds, setExpandedGuidanceRowIds] = useState<
     Set<string>
   >(new Set());
+  const [lastActualMonthIndex, setLastActualMonthIndex] = useState<number>(-1);
 
   const MAX_CHIPS_VISIBLE = 3; // Define how many chips to show
 
@@ -225,6 +226,22 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
         );
 
         const fetchedData: any[] = response.data;
+
+        // Determine the last actual month index from raw data
+        let maxActualIndex = -1;
+        fetchedData.forEach((item) => {
+          if (item?.data_type?.includes("actual")) {
+            const monthIndex = item.month - 1;
+            if (
+              monthIndex >= 0 &&
+              monthIndex < 12 &&
+              monthIndex > maxActualIndex
+            ) {
+              maxActualIndex = monthIndex;
+            }
+          }
+        });
+        setLastActualMonthIndex(maxActualIndex);
 
         const rawForecastData = fetchedData.filter(
           (row) =>
@@ -726,9 +743,10 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
 
     // Month Columns
     const monthColumns: Column[] = MONTH_NAMES.map(
-      (month): Column => ({
+      (month, index): Column => ({
         key: `months.${month}`,
         header: month,
+        subHeader: index <= lastActualMonthIndex ? "ACT" : "FCST",
         align: "right" as const,
         sortable: false,
         render: (_value: any, row: DisplayRow) => {
@@ -787,6 +805,7 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
     handleBrandExpandClick,
     handleGuidanceExpandClick,
     isDataLoading,
+    lastActualMonthIndex,
   ]);
 
   const handleColumns = () => setColumnsDialogOpen(true);

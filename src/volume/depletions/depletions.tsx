@@ -520,6 +520,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   );
 
   // Use loadForecastData in useEffect, handling initial loading and placeholders
+  // TO DO: don't make it lean on placeholder data because loadingProgress should be showing
   useEffect(() => {
     // Function to set placeholders if data is empty
     const setPlaceholders = () => {

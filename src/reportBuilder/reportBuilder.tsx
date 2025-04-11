@@ -1,6 +1,6 @@
 import { Box, Paper, Typography } from "@mui/material";
 
-const ProfitModel = () => {
+const ReportBuilder = () => {
   return (
     <Paper elevation={3}>
       <Box
@@ -13,11 +13,11 @@ const ProfitModel = () => {
         }}
       >
         <Typography variant="h4" sx={{ fontWeight: 500 }}>
-          Profit Model - Coming Soon
+          Report Builder - Coming Soon
         </Typography>
       </Box>
     </Paper>
   );
 };
 
-export default ProfitModel;
+export default ReportBuilder;
