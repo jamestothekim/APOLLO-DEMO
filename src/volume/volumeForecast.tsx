@@ -25,6 +25,8 @@ import { GuidanceDialog } from "./components/guidance";
 import type { Guidance } from "./components/guidance";
 import axios from "axios";
 
+const MAX_CHIPS_VISIBLE = 3; // Define how many chips to show
+
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -323,8 +325,16 @@ export const VolumeForecast: React.FC = () => {
                     />
                   }
                   renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "nowrap", // Prevent chips from wrapping
+                        gap: 0.5,
+                        overflow: "hidden", // Hide overflowing chips
+                        alignItems: "flex-end", // Align counter baseline
+                      }}
+                    >
+                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => (
                         <Chip
                           key={value}
                           label={(() => {
@@ -351,6 +361,7 @@ export const VolumeForecast: React.FC = () => {
                           sx={{
                             borderRadius: "16px",
                             backgroundColor: "transparent",
+                            flexShrink: 0, // Prevent chips from shrinking
                             "& .MuiChip-label": { px: 1 },
                           }}
                           onDelete={() =>
@@ -360,6 +371,17 @@ export const VolumeForecast: React.FC = () => {
                           }
                         />
                       ))}
+                      {selected.length > MAX_CHIPS_VISIBLE && (
+                        <Typography
+                          variant="body2"
+                          sx={{ pl: 0.5, flexShrink: 0, pb: 0.25 }}
+                        >
+                          +{selected.length - MAX_CHIPS_VISIBLE} more
+                        </Typography>
+                      )}
+                      {selected.length === 0 && (
+                        <Box sx={{ minHeight: "24px" }} /> // Placeholder to maintain height
+                      )}
                     </Box>
                   )}
                 >
@@ -384,8 +406,16 @@ export const VolumeForecast: React.FC = () => {
                   onChange={handleBrandChange}
                   input={<OutlinedInput label="Select Brands" />}
                   renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "nowrap",
+                        gap: 0.5,
+                        overflow: "hidden",
+                        alignItems: "flex-end",
+                      }}
+                    >
+                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => (
                         <Chip
                           key={value}
                           label={value}
@@ -395,6 +425,7 @@ export const VolumeForecast: React.FC = () => {
                           sx={{
                             borderRadius: "16px",
                             backgroundColor: "transparent",
+                            flexShrink: 0,
                             "& .MuiChip-label": { px: 1 },
                           }}
                           onDelete={() =>
@@ -404,6 +435,17 @@ export const VolumeForecast: React.FC = () => {
                           }
                         />
                       ))}
+                      {selected.length > MAX_CHIPS_VISIBLE && (
+                        <Typography
+                          variant="body2"
+                          sx={{ pl: 0.5, flexShrink: 0, pb: 0.25 }}
+                        >
+                          +{selected.length - MAX_CHIPS_VISIBLE} more
+                        </Typography>
+                      )}
+                      {selected.length === 0 && (
+                        <Box sx={{ minHeight: "24px" }} />
+                      )}
                     </Box>
                   )}
                 >
