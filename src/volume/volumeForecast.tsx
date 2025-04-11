@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   FormControl,
@@ -88,6 +88,7 @@ export const VolumeForecast: React.FC = () => {
     Guidance[]
   >([]);
   const [availableGuidance, setAvailableGuidance] = useState<Guidance[]>([]);
+  const prefsLoadedRef = useRef(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -142,45 +143,43 @@ export const VolumeForecast: React.FC = () => {
     fetchGuidance();
   }, []);
 
-  // Load user's guidance preferences when availableGuidance are loaded
+  // Load user's guidance preferences ONCE when availableGuidance/user are loaded
   useEffect(() => {
     const loadUserGuidancePreferences = () => {
-      if (!user?.user_settings || availableGuidance.length === 0) return;
+      // Only load if prefs haven't been loaded AND necessary data exists
+      if (
+        !prefsLoadedRef.current &&
+        availableGuidance.length > 0 &&
+        user?.user_settings
+      ) {
+        console.log("Attempting to load user guidance preferences..."); // Debug log
+        const { guidance_columns, guidance_rows } = user.user_settings;
 
-      const { guidance_columns, guidance_rows } = user.user_settings;
-
-      // Load Column Preferences
-      if (guidance_columns && Array.isArray(guidance_columns)) {
-        const userSelectedColumns = guidance_columns
-          .map((id) => availableGuidance.find((g) => g.id === id))
-          .filter(Boolean) as Guidance[]; // Filter out undefined if an ID is invalid
-
-        if (userSelectedColumns.length > 0) {
+        // Load Column Preferences
+        if (guidance_columns && Array.isArray(guidance_columns)) {
+          const userSelectedColumns = guidance_columns
+            .map((id) => availableGuidance.find((g) => g.id === id))
+            .filter(Boolean) as Guidance[];
+          console.log("Loading columns:", userSelectedColumns); // Debug log
           setSelectedGuidance(userSelectedColumns);
-        } else {
-          // Optional: Set default columns if none saved or invalid?
-          // setSelectedGuidance([defaultColumnGuidance]);
         }
-      }
 
-      // Load Row Preferences
-      if (guidance_rows && Array.isArray(guidance_rows)) {
-        const userSelectedRows = guidance_rows
-          .map((id) => availableGuidance.find((g) => g.id === id))
-          .filter(Boolean) as Guidance[]; // Filter out undefined
-
-        if (userSelectedRows.length > 0) {
+        // Load Row Preferences
+        if (guidance_rows && Array.isArray(guidance_rows)) {
+          const userSelectedRows = guidance_rows
+            .map((id) => availableGuidance.find((g) => g.id === id))
+            .filter(Boolean) as Guidance[];
+          console.log("Loading rows:", userSelectedRows); // Debug log
           setSelectedRowGuidanceState(userSelectedRows);
-        } else {
-          // Optional: Set default rows if none saved or invalid?
-          // setSelectedRowGuidanceState([defaultRowGuidance]);
         }
+        prefsLoadedRef.current = true; // Mark preferences as loaded
+        console.log("Preferences loaded, ref set to true."); // Debug log
       }
     };
 
     loadUserGuidancePreferences();
-    // Depend on the specific settings keys if possible, or the whole user object
-  }, [user?.user_settings, availableGuidance]);
+    // Only re-run if availableGuidance or the user identity changes, NOT on settings change
+  }, [availableGuidance, user]); // Updated dependencies
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

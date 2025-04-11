@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Box } from "@mui/material";
 import { Summary } from "./summary";
 import { LoadingProgress } from "../reusableComponents/loadingProgress";
@@ -6,6 +6,10 @@ import { VolumeForecast } from "./volumeForecast";
 
 export const VolumeView = () => {
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   return (
     <Box sx={{ position: "relative" }}>

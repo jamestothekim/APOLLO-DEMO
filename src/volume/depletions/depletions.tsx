@@ -813,18 +813,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   };
 
-  // Handler for toggling individual guidance row icons
-  // const handleGuidanceToggleClick = (
-  //   e: React.MouseEvent,
-  //   guidanceId: string
-  // ) => {
-  //   e.stopPropagation(); // Prevent interfering with other clicks
-  //   setExpandedGuidanceStates(prev => ({
-  //     ...prev,
-  //     [guidanceId]: !prev[guidanceId]
-  //   }));
-  // };
-
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
@@ -959,14 +947,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     if (!selectedDataState) return;
 
     try {
-      // If there's a comment in the dialog, update the selectedDataState
-      // (This logic seems like it might belong inside handleSidebarSave or be redundant? Check later)
-      // if (commentDialogOpen && comment) {
-      //   setSelectedDataState((prev) =>
-      //     prev ? { ...prev, commentary: comment } : prev
-      //   );
-      // }
-
       await handleSidebarSave(selectedDataState);
       setHasChanges(false);
       // setCommentDialogOpen(false); // Likely not needed if sidebar closes
@@ -1024,6 +1004,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         align: "right" as const,
         sx: cellPaddingSx, // Apply consistent padding
         render: (_: any, row: ExtendedForecastData) => {
+          // Check if the entire row is loading
           if (row.isLoading) {
             return (
               <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -1031,30 +1012,33 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               </Box>
             );
           }
+
+          // Check if the specific benchmark value exists on the row
           let value: number | undefined;
           const valueKey =
             typeof benchmark.value === "string"
               ? benchmark.value
               : `benchmark_${benchmark.id}`;
+
           if (
             valueKey in row &&
             typeof row[valueKey as keyof ExtendedForecastData] === "number"
           ) {
             value = row[valueKey as keyof ExtendedForecastData] as number;
+            // Value exists, format and return it
+            return formatGuidanceValue(
+              value,
+              benchmark.calculation?.format,
+              benchmark.label
+            );
           } else {
+            // Value doesn't exist yet for this row, show loader
             return (
-              <Box
-                sx={{ display: "flex", justifyContent: "center", opacity: 0.5 }}
-              >
-                -
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={16} thickness={4} />
               </Box>
             );
           }
-          return formatGuidanceValue(
-            value,
-            benchmark.calculation?.format,
-            benchmark.label
-          );
         },
       })) || [];
 

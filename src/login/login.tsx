@@ -54,11 +54,7 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      console.log("Attempting login with email:", formData.email); // Don't log password in production
       const success = await login(formData.email, formData.password);
-
-      console.log("Login response:", success); // Add this to see the actual response
-
       if (success) {
         setNotification({
           open: true,

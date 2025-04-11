@@ -24,9 +24,9 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
   const navigationItems = [
     { text: "Dashboard", icon: <DashboardIcon />, path: "/" },
     {
-      text: "P&L Model",
+      text: "Report Builder",
       icon: <AccountBalanceWalletIcon />,
-      path: "/P&LModel",
+      path: "/report-builder",
     },
     { text: "Volume", icon: <ShowChartIcon />, path: "/volume" },
     { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
