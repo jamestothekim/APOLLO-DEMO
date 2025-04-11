@@ -31,7 +31,7 @@ import {
   DynamicTable,
   type Column,
 } from "../../reusableComponents/dynamicTable";
-import { useUser, MarketAccess } from "../../userContext";
+import { useUser } from "../../userContext";
 import {
   FORECAST_OPTIONS,
   MONTH_NAMES,
@@ -52,6 +52,7 @@ import {
   Publish as PublishIcon,
   Comment as CommentIcon,
   DescriptionOutlined as DescriptionOutlinedIcon,
+  ViewHeadlineOutlined as ViewHeadlineOutlinedIcon,
 } from "@mui/icons-material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -176,7 +177,7 @@ const processRawData = (
         acc[key].months[month] = {
           value: 0,
           isActual: shouldBeActual,
-          isManuallyModified: false,
+          isManuallyModified: false, // Initial state is false
           data_type: shouldBeActual ? "actual_complete" : "forecast",
         };
       });
@@ -185,21 +186,28 @@ const processRawData = (
     // Process month data as it comes in
     const monthName = MONTH_NAMES[item.month - 1];
     if (monthName) {
+      const isActual = Boolean(item.data_type?.includes("actual"));
+      const isManualInputFromDB = Boolean(item.is_manual_input);
+
       // Process current year data
       if (acc[key].months[monthName]) {
+        // If month exists, add value and update manual status if this item is manual
         acc[key].months[monthName].value +=
           Math.round(item.case_equivalent_volume * 100) / 100;
+        // Set isManuallyModified to true if it's already true OR if the current DB item is manual
+        acc[key].months[monthName].isManuallyModified =
+          acc[key].months[monthName].isManuallyModified || isManualInputFromDB;
       } else {
-        const isActual = Boolean(item.data_type?.includes("actual"));
+        // If month doesn't exist, create it, setting manual status from DB item
         acc[key].months[monthName] = {
           value: Math.round(item.case_equivalent_volume * 100) / 100,
           isActual,
-          isManuallyModified: item.is_manual_input || false,
+          isManuallyModified: isManualInputFromDB, // Set based on DB flag
           data_type: isActual ? "actual_complete" : "forecast",
         };
       }
 
-      // Process historical (last year) data
+      // Process historical (last year) data - LY data is never considered manually modified
       if (item.py_case_equivalent_volume !== undefined) {
         if (acc[key].py_case_equivalent_volume_months[monthName]) {
           acc[key].py_case_equivalent_volume_months[monthName].value +=
@@ -208,7 +216,7 @@ const processRawData = (
           acc[key].py_case_equivalent_volume_months[monthName] = {
             value: Math.round(item.py_case_equivalent_volume * 100) / 100,
             isActual: true, // Historical data is always actual
-            isManuallyModified: false,
+            isManuallyModified: false, // PY data is never manually modified
             data_type: "actual_complete",
           };
         }
@@ -254,17 +262,24 @@ const processRawData = (
     });
   });
 
-  // Apply any logged changes
+  // Apply any logged changes from Redis (these will overwrite initial DB values, including isManuallyModified)
   loggedChanges.forEach((change) => {
     const key = isCustomerView
       ? `forecast:${change.customer_id}:${change.variant_size_pack_desc}:${change.customer_id}`
       : `forecast:${change.market_id}:${change.variant_size_pack_desc}`;
+
     if (groupedData[key]) {
+      // Overwrite forecast logic and months object entirely from Redis log
+      // This ensures the latest state (including isManuallyModified flags set via UI) is shown
       groupedData[key].forecastLogic = change.forecastType;
       groupedData[key].months = change.months;
       if (change.comment) {
         groupedData[key].commentary = change.comment;
       }
+    } else {
+      // Key from Redis log not found in current data, maybe filtered out?
+      // Or potentially a mismatch in key generation/data.
+      // console.warn(`Key '${key}' from logged change not found in current dataset.`);
     }
   });
 
@@ -339,6 +354,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     string | null
   >(null);
   const [selectedDataState, setSelectedDataState] =
+    useState<ExtendedForecastData | null>(null);
+  const [initialSidebarState, setInitialSidebarState] =
     useState<ExtendedForecastData | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(15);
@@ -415,29 +432,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const loadForecastData = useMemo(
     () => async () => {
       try {
-        // Set initial loading state by creating placeholder rows
-        if (forecastData.length === 0) {
-          // Only set placeholders if no data exists yet
-          const placeholders = marketMetadata.slice(0, 3).map(
-            (market, idx) =>
-              ({
-                id: `loading-${idx}`,
-                market_id: market.market_id,
-                market_name: market.market_name,
-                product: "Loading...",
-                brand: "Loading...",
-                variant: "Loading...",
-                variant_id: `loading-${idx}`,
-                variant_size_pack_id: `loading-${idx}`,
-                variant_size_pack_desc: "Loading...",
-                forecastLogic: "flat",
-                isLoading: true,
-                months: {},
-              } as ExtendedForecastData)
-          );
-
-          setForecastData(placeholders);
-        }
+        // Placeholder logic is removed from here, will be handled in useEffect
 
         const allIds = isCustomerView
           ? marketMetadata
@@ -448,24 +443,24 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               .filter((market) => market.settings?.managed_by === "Market")
               .map((market) => market.market_id);
 
+        const marketsToFetch = isCustomerView
+          ? []
+          : selectedMarkets.length > 0
+          ? selectedMarkets
+          : allIds;
+        const customersToFetch = isCustomerView
+          ? selectedMarkets.length > 0
+            ? selectedMarkets
+            : allIds
+          : [];
+
+        // Fetch forecast data and logged changes concurrently
         const [forecastResponse, loggedChanges] = await Promise.all([
           axios.get(
             `${import.meta.env.VITE_API_URL}/volume/depletions-forecast?` +
               `isMarketView=${!isCustomerView}` +
-              `&markets=${JSON.stringify(
-                isCustomerView
-                  ? []
-                  : selectedMarkets.length > 0
-                  ? selectedMarkets
-                  : allIds
-              )}` +
-              `&customers=${JSON.stringify(
-                isCustomerView
-                  ? selectedMarkets.length > 0
-                    ? selectedMarkets
-                    : allIds
-                  : []
-              )}`,
+              `&markets=${JSON.stringify(marketsToFetch)}` +
+              `&customers=${JSON.stringify(customersToFetch)}`,
             {
               headers: {
                 Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -474,36 +469,42 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           ),
           fetchLoggedForecastChanges(),
         ]);
-        console.log(forecastResponse.data);
 
         if (!forecastResponse.data) {
           throw new Error("Failed to fetch forecast data");
         }
 
+        // Process the raw data, applying logged changes
         const processedData = processRawData(
           forecastResponse.data,
           loggedChanges,
           isCustomerView ?? false,
           selectedGuidance
         );
+
+        // Filter out rows with zero total volume and remove loading state
         const nonZeroData = processedData
           .filter(hasNonZeroTotal)
           .map((row) => ({
             ...row,
-            isLoading: false,
+            isLoading: false, // Ensure loading state is off
           }));
+
         setForecastData(nonZeroData);
 
+        // Update available brands based on the fetched data
         const brands = Array.from(
           new Set(nonZeroData.map((row) => row.brand))
         ).sort();
         setAvailableBrands(brands);
       } catch (error) {
         console.error("Error loading forecast data:", error);
-        // Clear loading indicators on error
-        setForecastData((prevData) =>
-          prevData.map((row) => ({ ...row, isLoading: false }))
+        // Clear data and loading indicators on error
+        setForecastData(
+          (prevData) => prevData.map((row) => ({ ...row, isLoading: false })) // Clear loading from any placeholders
         );
+        // Optionally show an error message to the user
+        showSnackbar("Failed to load forecast data.", "error");
       }
     },
     [
@@ -511,14 +512,42 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       isCustomerView,
       selectedMarkets,
       selectedGuidance,
-      forecastData.length,
+      // Removed forecastData.length dependency
+      // Dependencies should reflect what causes data to need reloading
+      setForecastData, // Include state setters used inside
+      setAvailableBrands,
     ]
   );
 
-  // Use loadForecastData in useEffect
+  // Use loadForecastData in useEffect, handling initial loading and placeholders
   useEffect(() => {
-    loadForecastData();
-  }, [loadForecastData]);
+    // Function to set placeholders if data is empty
+    const setPlaceholders = () => {
+      if (forecastData.length === 0) {
+        const placeholders = marketMetadata.slice(0, 3).map(
+          (market, idx) =>
+            ({
+              id: `loading-${idx}`,
+              market_id: market.market_id,
+              market_name: market.market_name,
+              product: "Loading...",
+              brand: "Loading...",
+              variant: "Loading...",
+              variant_id: `loading-${idx}`,
+              variant_size_pack_id: `loading-${idx}`,
+              variant_size_pack_desc: "Loading...",
+              forecastLogic: "flat",
+              isLoading: true,
+              months: {},
+            } as ExtendedForecastData)
+        );
+        setForecastData(placeholders);
+      }
+    };
+
+    setPlaceholders(); // Set placeholders immediately if needed
+    loadForecastData(); // Then trigger the actual data load
+  }, [loadForecastData, marketMetadata]); // Keep loadForecastData, add marketMetadata for placeholder logic
 
   // Update handleUndo to handle the new history information
   const handleUndo = useCallback(async () => {
@@ -623,7 +652,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setSelectedRowForSidebar(row.id);
     const selectedData = filteredData.find((r) => r.id === row.id); // Make sure filteredData is accessible
     if (selectedData) {
-      setSelectedDataState(selectedData);
+      // Deep clone to prevent mutation issues
+      const clonedData = JSON.parse(JSON.stringify(selectedData));
+      setSelectedDataState(clonedData); // Set the editable state
+      setInitialSidebarState(clonedData); // Set the initial state for comparison/undo logging
+    } else {
+      setSelectedDataState(null);
+      setInitialSidebarState(null);
     }
   };
 
@@ -805,30 +840,32 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Update handleSidebarSave to use initialSidebarState
   const handleSidebarSave = async (editedData: ExtendedForecastData) => {
-    if (!user) return;
+    if (!user || !initialSidebarState) return; // Add check for initialSidebarState
 
     try {
       // Use the initial state we captured when the sidebar was opened
-      const initialState = {
+      const stateToLogForUndo = {
         userId: user.id,
         market_id: isCustomerView
-          ? editedData.customer_id
-          : editedData.market_id,
+          ? initialSidebarState.customer_id // Use initial state here
+          : initialSidebarState.market_id, // Use initial state here
         market_name: isCustomerView
-          ? editedData.customer_name
-          : editedData.market_name,
-        variant_size_pack_desc: editedData.variant_size_pack_desc,
-        variant_size_pack_id: editedData.variant_size_pack_id,
-        brand: editedData.brand,
-        variant: editedData.variant,
-        variant_id: editedData.variant_id,
-        customer_id: isCustomerView ? editedData.customer_id : null,
-        customer_name: isCustomerView ? editedData.customer_name : null,
-        forecastType: editedData.forecastLogic,
-        months: JSON.parse(JSON.stringify(editedData.months)),
+          ? initialSidebarState.customer_name // Use initial state here
+          : initialSidebarState.market_name, // Use initial state here
+        variant_size_pack_desc: initialSidebarState.variant_size_pack_desc, // Use initial state here
+        variant_size_pack_id: initialSidebarState.variant_size_pack_id, // Use initial state here
+        brand: initialSidebarState.brand, // Use initial state here
+        variant: initialSidebarState.variant, // Use initial state here
+        variant_id: initialSidebarState.variant_id, // Use initial state here
+        customer_id: isCustomerView ? initialSidebarState.customer_id : null, // Use initial state here
+        customer_name: isCustomerView
+          ? initialSidebarState.customer_name
+          : null, // Use initial state here
+        forecastType: initialSidebarState.forecastLogic, // Use initial forecast logic
+        months: JSON.parse(JSON.stringify(initialSidebarState.months)), // Use initial months data
       };
 
-      // First update the forecast
+      // First update the forecast (still uses editedData for the actual change)
       const forecastResponse = await axios.post(
         `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
         {
@@ -850,12 +887,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         throw new Error("Failed to update forecast");
       }
 
-      // Then log to Redis with the complete state
+      // Then log to Redis with the correct initial state for undo
+      // and the current edited state for the actual log entry
       await axios.post(
         `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
         {
           userId: user.id,
-          market_id: isCustomerView
+          market_id: isCustomerView // Log current market/customer
             ? editedData.customer_id
             : editedData.market_id,
           market_name: isCustomerView
@@ -868,11 +906,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           variant_id: editedData.variant_id,
           customer_id: isCustomerView ? editedData.customer_id : null,
           customer_name: isCustomerView ? editedData.customer_name : null,
-          forecastType: editedData.forecastLogic,
-          months: JSON.parse(JSON.stringify(editedData.months)),
-          initialState,
-          isManualEdit: false,
-          comment: editedData.commentary || null,
+          forecastType: editedData.forecastLogic, // Log current forecast logic
+          months: JSON.parse(JSON.stringify(editedData.months)), // Log current months
+          initialState: stateToLogForUndo, // <<< Pass the correctly captured initial state
+          isManualEdit: true, // <<< Flag this as a manual edit
+          comment: editedData.commentary || null, // Log current comment
         },
         {
           headers: {
@@ -882,14 +920,20 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       );
 
       // Recalculate benchmarks if they exist
+      let finalEditedData = editedData;
       if (selectedGuidance && selectedGuidance.length > 0) {
-        editedData = recalculateGuidance(editedData, selectedGuidance);
+        finalEditedData = recalculateGuidance(editedData, selectedGuidance);
       }
 
       // Update local state
       setForecastData((prevData) =>
-        prevData.map((item) => (item.id === editedData.id ? editedData : item))
+        prevData.map((item) =>
+          item.id === finalEditedData.id ? finalEditedData : item
+        )
       );
+
+      // Clear the initial state reference after successful save
+      setInitialSidebarState(null);
     } catch (error) {
       console.error("Error saving changes:", error);
     }
@@ -900,11 +944,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setSelectedComment(commentary);
     setComment(commentary || "");
     setCommentDialogOpen(true);
-  };
-
-  // Add this helper function near the top of the component
-  const hasAnyComments = () => {
-    return filteredData.some((row) => row.commentary);
   };
 
   const handleCommentaryChange = (value: string) => {
@@ -935,7 +974,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       // *** Close sidebar after successful save ***
       setSelectedRowForSidebar(null);
-      setSelectedDataState(null); // Clear selected data state as well
+      setSelectedDataState(null);
+      setInitialSidebarState(null); // Clear initial state on close as well
     } catch (error) {
       console.error("Error saving changes:", error);
       showSnackbar("Failed to save changes", "error");
@@ -944,344 +984,390 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   };
 
   const columns: Column[] = useMemo(() => {
-    const baseColumns: Column[] = [
-      // --- Control Section ---
-      {
-        key: "control_section",
-        header: "CONTROL",
-        columnGroup: true,
-        columns: [
-          {
-            key: "market",
-            header: "MARKET",
-            align: "center" as const,
-            sx: { minWidth: 160 },
-            render: (_: any, row: ExtendedForecastData) => {
-              const marketName = (() => {
-                const { user } = useUser();
-                const marketInfo = user?.user_access?.Markets?.find(
-                  (m: MarketAccess) => m.market_code === row.market_name
-                );
-                return marketInfo?.market || row.market_name;
-              })();
+    const hasRowGuidance =
+      rowGuidanceSelections && rowGuidanceSelections.length > 0;
 
+    // Consistent vertical padding for table cells
+    const cellPaddingSx = { py: "6px" }; // Adjust this value as needed
+
+    // Define the VOL 9L TY column configuration
+    const volTyColumn: Column = {
+      key: "total",
+      header: "VOL 9L",
+      subHeader: "TY",
+      align: "right" as const,
+      sx: cellPaddingSx, // Apply consistent padding
+      render: (_: any, row: ExtendedForecastData) => {
+        if (row.isLoading) {
+          return (
+            <Box sx={{ display: "flex", justifyContent: "center" }}>
+              <CircularProgress size={16} thickness={4} />
+            </Box>
+          );
+        }
+        const total = calculateTotal(row.months);
+        return isNaN(total)
+          ? "-"
+          : (Math.round(total * 10) / 10).toLocaleString(undefined, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            });
+      },
+    };
+
+    // Define Benchmark columns (mapping over selectedGuidance)
+    const benchmarkColumns: Column[] =
+      selectedGuidance?.map((benchmark) => ({
+        key: `benchmark_${benchmark.id}`,
+        header: benchmark.label,
+        subHeader: benchmark.sublabel,
+        align: "right" as const,
+        sx: cellPaddingSx, // Apply consistent padding
+        render: (_: any, row: ExtendedForecastData) => {
+          if (row.isLoading) {
+            return (
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={16} thickness={4} />
+              </Box>
+            );
+          }
+          let value: number | undefined;
+          const valueKey =
+            typeof benchmark.value === "string"
+              ? benchmark.value
+              : `benchmark_${benchmark.id}`;
+          if (
+            valueKey in row &&
+            typeof row[valueKey as keyof ExtendedForecastData] === "number"
+          ) {
+            value = row[valueKey as keyof ExtendedForecastData] as number;
+          } else {
+            return (
+              <Box
+                sx={{ display: "flex", justifyContent: "center", opacity: 0.5 }}
+              >
+                -
+              </Box>
+            );
+          }
+          return formatGuidanceValue(
+            value,
+            benchmark.calculation?.format,
+            benchmark.label
+          );
+        },
+      })) || [];
+
+    // Define Control Section
+    const controlSection: Column = {
+      key: "control_section",
+      header: "CONTROL",
+      columnGroup: true,
+      columns: [
+        {
+          key: "market",
+          header: "MARKET",
+          align: "center" as const,
+          sx: { ...cellPaddingSx, minWidth: 150 }, // Apply padding, slightly reduce minWidth
+          render: (_: any, row: ExtendedForecastData) => {
+            const marketName = row.market_name;
+            return (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {isCustomerView ? row.market_name : marketName}
+              </Box>
+            );
+          },
+        },
+        ...(isCustomerView
+          ? [
+              {
+                key: "customer",
+                header: "CUSTOMER",
+                align: "left" as const,
+                sx: cellPaddingSx, // Apply padding
+                render: (_: any, row: ExtendedForecastData) =>
+                  row.customer_name || "-",
+              },
+            ]
+          : []),
+        {
+          key: "product",
+          header: "PRODUCT",
+          align: "center" as const,
+          extraWide: true,
+          sx: cellPaddingSx, // Apply padding
+          render: (_: any, row: ExtendedForecastData) => {
+            if (!row.product) return "-";
+            const parts = row.product.split(" - ");
+            return parts.length > 1 ? parts[1] : row.product;
+          },
+        },
+        {
+          key: "forecastLogic",
+          header: "LOGIC",
+          align: "left" as const,
+          sx: {
+            ...cellPaddingSx,
+            borderRight: "1px solid rgba(224, 224, 224, 1)",
+            minWidth: 130,
+          }, // Apply padding, increase minWidth
+          render: (value: string, row: ExtendedForecastData) => (
+            <Select
+              value={value}
+              onChange={(e) => handleLogicChange(e, row.id)}
+              onClick={(e) => e.stopPropagation()}
+              size="small"
+              sx={{ fontSize: "inherit", minWidth: 130 }} // Increase minWidth here as well
+              disabled={row.isLoading}
+            >
+              {FORECAST_OPTIONS.map((option) => (
+                <MenuItem key={option.id} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          ),
+        },
+      ],
+    };
+
+    // Define Phasing Columns (Months + Commentary)
+    const monthAndCommentaryColumns: Column[] = [
+      ...MONTH_NAMES.map((month) => {
+        const isActualMonth = forecastData.some(
+          (row) => row.months[month]?.isActual
+        );
+        return {
+          key: `months.${month}`,
+          header: month,
+          subHeader: isActualMonth ? "ACT" : "FCST",
+          align: "right" as const,
+          sx: { ...cellPaddingSx, minWidth: 65 }, // Apply padding, set minWidth for months
+          render: (_: any, row: ExtendedForecastData) => {
+            if (row.isLoading) {
               return (
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {marketName}
+                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <CircularProgress size={16} thickness={4} />
                 </Box>
               );
-            },
+            }
+            if (!row?.months?.[month]) return "-";
+            const data = row.months[month];
+            const value = data.value ?? 0;
+
+            return (
+              <div style={{ position: "relative" }}>
+                <Box
+                  component="span"
+                  sx={{
+                    color: data.isActual ? "primary.main" : "inherit",
+                    cursor: data.isActual ? "pointer" : "inherit",
+                  }}
+                  onClick={(event) => {
+                    if (data.isActual) {
+                      event.stopPropagation();
+                      const marketInfo = marketMetadata.find(
+                        (m) => m.market_id === row.market_id
+                      );
+                      const stateCode =
+                        marketInfo?.market_code?.substring(0, 2) || "";
+                      const currentYear = new Date().getFullYear();
+                      setSelectedDetails({
+                        market: stateCode,
+                        product: row.product,
+                        value:
+                          value === 0 && data.isActual ? -1 : Math.round(value),
+                        month: MONTH_MAPPING[month],
+                        year: currentYear,
+                        variant_size_pack_id: row.variant_size_pack_id,
+                        variant_size_pack_desc: row.variant_size_pack_desc,
+                      });
+                      setDetailsOpen(true);
+                    }
+                  }}
+                >
+                  {(Math.round(value * 10) / 10).toLocaleString(undefined, {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })}
+                </Box>
+                {data.isManuallyModified && (
+                  <Tooltip title="Manually Edited">
+                    <EditIcon
+                      sx={{
+                        fontSize: "0.875rem",
+                        position: "absolute",
+                        right: "-16px", // Position relative to number
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "secondary.main",
+                        opacity: 0.7,
+                      }}
+                    />
+                  </Tooltip>
+                )}
+              </div>
+            );
           },
-          ...(isCustomerView
-            ? [
-                {
-                  key: "customer",
-                  header: "CUSTOMER",
-                  align: "left" as const,
-                  render: (_: any, row: ExtendedForecastData) =>
-                    row.customer_name || "-",
-                },
-              ]
-            : []),
-          {
-            key: "product",
-            header: "PRODUCT",
-            align: "center" as const,
-            extraWide: true,
-            render: (_: any, row: ExtendedForecastData) => {
-              if (!row.product) return "-";
-              const parts = row.product.split(" - ");
-              return parts.length > 1 ? parts[1] : row.product;
-            },
-          },
-          {
-            key: "forecastLogic",
-            header: "LOGIC",
-            align: "left" as const,
-            sx: { borderRight: "1px solid rgba(224, 224, 224, 1)" },
-            render: (value: string, row: ExtendedForecastData) => (
-              <Select
-                value={value}
-                onChange={(e) => handleLogicChange(e, row.id)}
-                onClick={(e) => e.stopPropagation()}
-                size="small"
-                sx={{ minWidth: 120, fontSize: "inherit" }}
-              >
-                {FORECAST_OPTIONS.map((option) => (
-                  <MenuItem key={option.id} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            ),
-          },
-        ],
+        };
+      }),
+      // Commentary Column
+      {
+        key: "commentary",
+        header: <DescriptionOutlinedIcon fontSize="small" />,
+        align: "center" as const,
+        sx: cellPaddingSx, // Apply padding
+        render: (commentary: string | undefined) => {
+          return (
+            <Box
+              onClick={(e) => {
+                if (commentary) {
+                  handleCommentClick(e, commentary);
+                } else {
+                  e.stopPropagation();
+                }
+              }}
+              sx={{
+                cursor: commentary ? "pointer" : "default",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                minHeight: "24px", // Keep min-height for consistency when empty
+              }}
+            >
+              {commentary ? (
+                <Tooltip title="View Comment">
+                  <CommentIcon fontSize="small" color="primary" />
+                </Tooltip>
+              ) : (
+                <Box sx={{ width: "16px" }} />
+              )}
+            </Box>
+          );
+        },
       },
-      // --- Column Guidance Section ---
+    ];
+
+    // Create the base guidance columns
+    let guidanceColumns = [volTyColumn, ...benchmarkColumns];
+
+    // Define the row guidance label column if needed, making it non-sticky and compact
+    if (hasRowGuidance) {
+      const rowGuidanceLabelColumn: Column = {
+        key: "row_guidance_label",
+        header: <ViewHeadlineOutlinedIcon fontSize="small" />,
+        align: "center" as const,
+        sx: {
+          ...cellPaddingSx, // Apply consistent padding
+          minWidth: 120, // Ensure minimum width to prevent text wrapping
+        },
+        render: (_: any, row: ExtendedForecastData) => {
+          const isExpanded = expandedRowIds.has(row.id);
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+                height: "100%",
+                width: "100%",
+              }}
+            >
+              <Box sx={{ textAlign: "center" }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: "bold", lineHeight: 1.2 }}
+                >
+                  VOL 9L
+                </Typography>
+                <Typography
+                  variant="caption"
+                  display="block"
+                  sx={{ fontStyle: "italic", lineHeight: 1.1 }}
+                >
+                  TY
+                </Typography>
+              </Box>
+              <IconButton
+                aria-label="expand row"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleExpandClick(row.id);
+                }}
+                className="row-expand-button"
+                sx={{
+                  position: "absolute",
+                  right: -10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  p: 0.25,
+                  visibility: "hidden",
+                  ".MuiTableRow-root:hover &": { visibility: "visible" },
+                }}
+              >
+                {isExpanded ? (
+                  <KeyboardArrowDownIcon fontSize="inherit" />
+                ) : (
+                  <ChevronRightIcon fontSize="inherit" />
+                )}
+              </IconButton>
+            </Box>
+          );
+        },
+      };
+      guidanceColumns.push(rowGuidanceLabelColumn);
+    }
+
+    // Apply the main right border to the actual last column of the guidance section
+    if (guidanceColumns.length > 0) {
+      const lastGuidanceIndex = guidanceColumns.length - 1;
+      const lastColumn = guidanceColumns[lastGuidanceIndex];
+      // Ensure sx exists before spreading, and apply border
+      guidanceColumns[lastGuidanceIndex] = {
+        ...lastColumn,
+        sx: {
+          ...(lastColumn.sx || {}), // Safely spread existing sx or an empty object
+          borderRight: "1px solid rgba(224, 224, 224, 1)",
+        },
+      };
+    }
+
+    // Define the final base structure
+    let baseColumns: Column[] = [
+      controlSection,
       {
         key: "guidance_section",
         header: "GUIDANCE",
         columnGroup: true,
-        columns: [
-          {
-            key: "total",
-            header: "VOL 9L",
-            subHeader: "TY",
-            align: "right" as const,
-            render: (_: any, row: ExtendedForecastData) => {
-              if (row.isLoading) {
-                return (
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <CircularProgress size={16} thickness={4} />
-                  </Box>
-                );
-              }
-
-              return (
-                Math.round(calculateTotal(row.months) * 10) / 10
-              ).toLocaleString(undefined, {
-                minimumFractionDigits: 1,
-                maximumFractionDigits: 1,
-              });
-            },
-          },
-          ...(selectedGuidance?.map((benchmark, index, array) => ({
-            key: `benchmark_${benchmark.id}`,
-            header: benchmark.label,
-            subHeader: benchmark.sublabel,
-            align: "right" as const,
-            sx:
-              index === array.length - 1
-                ? { borderRight: "1px solid rgba(224, 224, 224, 1)" }
-                : undefined,
-            render: (_: any, row: ExtendedForecastData) => {
-              if (row.isLoading) {
-                return (
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <CircularProgress size={16} thickness={4} />
-                  </Box>
-                );
-              }
-
-              let value: number | undefined;
-
-              if (typeof benchmark.value === "string") {
-                value = row[
-                  benchmark.value as keyof ExtendedForecastData
-                ] as number;
-              } else {
-                value = row[`benchmark_${benchmark.id}`] as number;
-              }
-
-              if (value === undefined) {
-                return (
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <CircularProgress size={16} thickness={4} />
-                  </Box>
-                );
-              }
-
-              return formatGuidanceValue(
-                value,
-                benchmark.calculation?.format,
-                benchmark.label
-              );
-            },
-          })) || []),
-        ],
+        columns: guidanceColumns,
       },
-      // --- Phasing Section ---
       {
         key: "months_section",
         header: "PHASING",
         columnGroup: true,
-        columns: [
-          // --- Conditionally add GUIDANCE Label Column ---
-          ...(rowGuidanceSelections && rowGuidanceSelections.length > 0
-            ? [
-                {
-                  key: "row_guidance_label",
-                  header: "GUIDANCE",
-                  align: "center" as const,
-                  wide: true,
-                  render: (_: any, row: ExtendedForecastData) => {
-                    const isExpanded = expandedRowIds.has(row.id);
-                    return (
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          position: "relative",
-                        }}
-                      >
-                        {/* Label Box */}
-                        <Box sx={{ textAlign: "center", flexGrow: 1 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{ fontWeight: "bold" }}
-                          >
-                            VOL 9L
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            display="block"
-                            sx={{
-                              fontStyle: "italic",
-                              marginTop: "2px",
-                            }}
-                          >
-                            TY
-                          </Typography>
-                        </Box>
-                        {/* Icon Button */}
-                        <IconButton
-                          aria-label="expand row"
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleExpandClick(row.id);
-                          }}
-                          className="row-expand-button"
-                          sx={{ ml: 0.5, visibility: "hidden" }}
-                        >
-                          {isExpanded ? (
-                            <KeyboardArrowDownIcon fontSize="inherit" />
-                          ) : (
-                            <ChevronRightIcon fontSize="inherit" />
-                          )}
-                        </IconButton>
-                      </Box>
-                    );
-                  },
-                },
-              ]
-            : []),
-          // --- Month Columns ---
-          ...MONTH_NAMES.map((month) => {
-            const isActualMonth = forecastData.some(
-              (row) => row.months[month]?.isActual
-            );
-            return {
-              key: `months.${month}`,
-              header: month,
-              subHeader: isActualMonth ? "ACT" : "FCST",
-              align: "right" as const,
-              render: (_: any, row: ExtendedForecastData) => {
-                if (row.isLoading) {
-                  return (
-                    <Box sx={{ display: "flex", justifyContent: "center" }}>
-                      <CircularProgress size={16} thickness={4} />
-                    </Box>
-                  );
-                }
-                if (!row?.months?.[month]) return "-";
-                const data = row.months[month];
-                return (
-                  <div style={{ position: "relative" }}>
-                    <Box
-                      component="span"
-                      sx={{
-                        color: data.isActual ? "primary.main" : "inherit",
-                        cursor: data.isActual ? "pointer" : "inherit",
-                      }}
-                      onClick={(event) => {
-                        if (data.isActual) {
-                          event.stopPropagation();
-                          const marketInfo = marketMetadata.find(
-                            (m) => m.market_id === row.market_id
-                          );
-                          const stateCode =
-                            marketInfo?.market_code?.substring(0, 2) || "";
-
-                          // Define the current year (adjust if needed dynamically later)
-                          const currentYear = new Date().getFullYear(); // Assuming current year for TY actuals
-
-                          setSelectedDetails({
-                            market: stateCode,
-                            product: row.product, // Keep original product identifier
-                            value:
-                              data.value === 0 && data.isActual
-                                ? -1
-                                : Math.round(data.value), // Keep original value logic
-                            month: MONTH_MAPPING[month],
-                            year: currentYear, // Pass the correct year
-                            variant_size_pack_id: row.variant_size_pack_id, // Pass variant info
-                            variant_size_pack_desc: row.variant_size_pack_desc, // Pass variant info
-                          });
-                          setDetailsOpen(true);
-                        }
-                      }}
-                    >
-                      {((data.value * 10) / 10).toLocaleString(undefined, {
-                        minimumFractionDigits: 1,
-                        maximumFractionDigits: 1,
-                      })}
-                    </Box>
-                    {data.isManuallyModified && (
-                      <EditIcon
-                        sx={{
-                          fontSize: "0.875rem",
-                          position: "absolute",
-                          right: "-16px",
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          color: "secondary.main",
-                        }}
-                      />
-                    )}
-                  </div>
-                );
-              },
-            };
-          }),
-          // --- Commentary Column ---
-          ...(hasAnyComments()
-            ? [
-                {
-                  key: "commentary",
-                  header: <DescriptionOutlinedIcon fontSize="small" />,
-                  align: "center" as const,
-                  render: (
-                    commentary: string | undefined,
-                    _row: ExtendedForecastData
-                  ) =>
-                    commentary ? (
-                      <Box
-                        onClick={(e) => handleCommentClick(e, commentary)}
-                        sx={{ cursor: "pointer" }}
-                      >
-                        <Tooltip title="View Comment">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => handleCommentClick(e, commentary)}
-                          >
-                            <CommentIcon fontSize="small" color="primary" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    ) : null,
-                },
-              ]
-            : []),
-        ],
+        columns: monthAndCommentaryColumns,
       },
     ];
+
     return baseColumns;
   }, [
     selectedGuidance,
     rowGuidanceSelections,
     expandedRowIds,
-    isCustomerView, // Added as it affects control columns
-    forecastData, // Needed for isActualMonth check
-    marketMetadata, // Add marketMetadata as dependency for marketInfo lookup
-    // Note: handleExpandClick doesn't need to be a dependency if defined outside useMemo
+    isCustomerView,
+    forecastData,
+    marketMetadata,
+    handleLogicChange,
+    handleExpandClick,
+    handleCommentClick,
   ]);
 
   // --- Function to render the expanded content ---
@@ -1291,16 +1377,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     flatColumns: Column[]
   ) => {
     if (!rowGuidanceSelections || rowGuidanceSelections.length === 0) {
-      return null; // Don't render anything if no row guidance selected
+      return null;
     }
-
-    // Calculate monthly data for each selected row guidance
     const guidanceData = rowGuidanceSelections
       .map((guidance) => ({
         guidance,
         monthlyData: calculateRowGuidanceMonthlyData(row, guidance),
       }))
-      .filter((item) => item.monthlyData); // Filter out any null results
+      .filter((item) => item.monthlyData);
 
     if (guidanceData.length === 0) {
       return (
@@ -1314,32 +1398,30 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       );
     }
 
-    // Define the current year to calculate the previous year
     const currentYear = new Date().getFullYear();
     const previousYear = currentYear - 1;
+    const cellPaddingSx = { py: "6px" }; // Use the same padding as main rows
 
-    // Map each selected guidance to a TableRow
     return guidanceData.map(({ guidance, monthlyData }) => {
-      // Determine if this guidance row represents Last Year (LY) data
-      const isLYGuidance = guidance.value === "py_case_equivalent_volume"; // Adjust if LY identifier changes
+      const isLYGuidance = guidance.value === "py_case_equivalent_volume";
 
       return (
         <TableRow
           key={`${row.id}-${guidance.id}`}
           sx={{ backgroundColor: "action.hover" }}
         >
-          {/* Render cells matching the main table's flatColumns structure */}
           {flatColumns.map((col) => {
-            let cellContent: React.ReactNode = null; // Default empty cell
+            let cellContent: React.ReactNode = null;
 
-            // Special rendering for specific columns in the expanded row
             if (col.key === "expand") {
-              cellContent = null; // No expand icon in sub-rows
+              cellContent = null;
             } else if (col.key === "row_guidance_label") {
-              // Replicate column header format (only the label part)
               cellContent = (
                 <Box sx={{ textAlign: "center" }}>
-                  <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: "bold", lineHeight: 1.2 }}
+                  >
                     {guidance.label}
                   </Typography>
                   {guidance.sublabel && (
@@ -1348,7 +1430,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                       display="block"
                       sx={{
                         fontStyle: "italic",
-                        marginTop: "2px",
+                        lineHeight: 1.1,
                       }}
                     >
                       {guidance.sublabel}
@@ -1357,25 +1439,21 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 </Box>
               );
             } else if (col.key.startsWith("months.")) {
-              // Render the calculated monthly guidance value
               const month = col.key.split(".")[1];
-              const value = monthlyData![month];
-
-              // Use formatGuidanceValue initially for consistent formatting
+              const value = monthlyData ? monthlyData[month] : undefined;
               const formattedValue = formatGuidanceValue(
                 value,
                 guidance.calculation.format
               );
 
               if (isLYGuidance) {
-                // Make LY values clickable
                 cellContent = (
                   <Box
                     component="span"
                     sx={{
-                      color: "primary.main", // Highlight LY values
+                      color: "primary.main",
                       cursor: "pointer",
-                      display: "inline-block", // Ensure Box takes space for click
+                      display: "inline-block",
                     }}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -1388,9 +1466,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                       setSelectedDetails({
                         market: stateCode,
                         product: row.product,
-                        value: value === 0 ? -1 : Math.round(value), // Use raw value for details
+                        value: value === 0 ? -1 : Math.round(value || 0),
                         month: MONTH_MAPPING[month],
-                        year: previousYear, // Use previous year for LY
+                        year: previousYear,
                         variant_size_pack_id: row.variant_size_pack_id,
                         variant_size_pack_desc: row.variant_size_pack_desc,
                       });
@@ -1401,17 +1479,16 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   </Box>
                 );
               } else {
-                // Non-clickable guidance values
                 cellContent = formattedValue;
               }
             }
-            // Other columns (Control, Column Guidance) will be empty in the sub-row
 
             return (
               <TableCell
                 key={`${row.id}-${guidance.id}-${col.key}`}
                 align={col.align || "left"}
-                sx={{ ...col.sx }}
+                // Apply consistent padding and original column sx
+                sx={{ ...cellPaddingSx, ...col.sx }}
               >
                 {cellContent}
               </TableCell>
@@ -1556,16 +1633,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     );
   }, [selectedDataState]);
 
-  // Log row guidance selections when they change
-  useEffect(() => {
-    if (rowGuidanceSelections) {
-      console.log(
-        "Depletions received Row Guidance Selections:",
-        rowGuidanceSelections
-      );
-    }
-  }, [rowGuidanceSelections]);
-
   return (
     <Box>
       <DynamicTable
@@ -1607,6 +1674,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         onClose={() => {
           setSelectedRowForSidebar(null);
           setSelectedDataState(null);
+          setInitialSidebarState(null); // Clear initial state on close
         }}
         title="Forecast Details"
         marketName={selectedDataState?.market_name}
