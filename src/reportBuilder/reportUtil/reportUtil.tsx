@@ -372,7 +372,6 @@ const generateReportCSVContent = (
     valueFormat,
   } = aggregationResult;
   const rowDimLabel = rowDimension?.label || "Row";
-  const colDimLabel = columnDimension?.label || "Column";
 
   const csvRows: string[] = [];
 
