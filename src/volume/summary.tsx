@@ -614,7 +614,16 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
       subHeader: "TY",
       align: "right" as const,
       sortable: false,
-      render: (value: number) => value?.toLocaleString() ?? "0",
+      render: (value: number) => {
+        if (isDataLoading) {
+          return (
+            <Box sx={{ display: "flex", justifyContent: "center" }}>
+              <CircularProgress size={16} thickness={4} />
+            </Box>
+          );
+        }
+        return value?.toLocaleString() ?? "0";
+      },
     };
 
     // Benchmark Columns
@@ -628,12 +637,25 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
         sx: {
           minWidth: 90,
         },
-        render: (_value: any, row: DisplayRow) =>
-          formatGuidanceValue(
-            row[`benchmark_${benchmark.id}`],
+        render: (_value: any, row: DisplayRow) => {
+          const benchmarkKey = `benchmark_${benchmark.id}`;
+          const valueExists = benchmarkKey in row;
+
+          // Show spinner if loading OR if the specific benchmark value hasn't been calculated yet
+          if (isDataLoading || !valueExists) {
+            return (
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={16} thickness={4} />
+              </Box>
+            );
+          }
+          // If not loading AND value exists, format the value
+          return formatGuidanceValue(
+            row[benchmarkKey],
             benchmark.calculation.format,
             benchmark.label
-          ),
+          );
+        },
       })
     );
 
@@ -709,8 +731,16 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
         header: month,
         align: "right" as const,
         sortable: false,
-        render: (_value: any, row: DisplayRow) =>
-          row.months?.[month]?.toLocaleString() ?? "0",
+        render: (_value: any, row: DisplayRow) => {
+          if (isDataLoading) {
+            return (
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={16} thickness={4} />
+              </Box>
+            );
+          }
+          return row.months?.[month]?.toLocaleString() ?? "0";
+        },
       })
     );
 
@@ -756,6 +786,7 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
     expandedGuidanceRowIds,
     handleBrandExpandClick,
     handleGuidanceExpandClick,
+    isDataLoading,
   ]);
 
   const handleColumns = () => setColumnsDialogOpen(true);
@@ -1224,11 +1255,8 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
               />
             </Box>
 
-            {isDataLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : viewType === "table" ? (
+            {/* View Toggle Logic */}
+            {viewType === "table" ? (
               <DynamicTable
                 data={displayData}
                 columns={columns}
@@ -1245,7 +1273,11 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
                 renderExpandedRow={renderExpandedRowContent}
               />
             ) : (
-              <Box sx={{ width: "100%", height: 400, p: 2 }}>
+              // Graph View Container
+              <Box
+                sx={{ width: "100%", height: 400, p: 2, position: "relative" }}
+              >
+                {/* Render chart or 'no data' message, but keep container */}
                 {brandLevelAggregates.size > 0 ? (
                   <LineChart
                     xAxis={[
@@ -1279,11 +1311,37 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
                     }}
                   />
                 ) : (
-                  <Typography
-                    sx={{ textAlign: "center", color: "text.secondary", mt: 4 }}
+                  // Show 'no data' only if not loading
+                  !isDataLoading && (
+                    <Typography
+                      sx={{
+                        textAlign: "center",
+                        color: "text.secondary",
+                        mt: 4,
+                      }}
+                    >
+                      No data available for the selected filters.
+                    </Typography>
+                  )
+                )}
+                {/* Loading Spinner Overlay */}
+                {isDataLoading && (
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: "rgba(255, 255, 255, 0.7)", // Optional overlay
+                      zIndex: 1, // Ensure spinner is on top
+                    }}
                   >
-                    No data available for the selected filters.
-                  </Typography>
+                    <CircularProgress />
+                  </Box>
                 )}
               </Box>
             )}

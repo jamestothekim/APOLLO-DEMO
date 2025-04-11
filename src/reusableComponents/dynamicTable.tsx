@@ -14,9 +14,9 @@ import {
   SxProps,
   Theme,
   TableSortLabel,
-  CircularProgress,
   useTheme,
 } from "@mui/material";
+import { LoadingProgress } from "./loadingProgress";
 
 type SortDirection = "asc" | "desc";
 
@@ -275,10 +275,10 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            height: "100%",
+            minHeight: "300px",
           }}
         >
-          <CircularProgress />
+          <LoadingProgress onComplete={() => {}} />
         </Box>
       ) : (
         <>
