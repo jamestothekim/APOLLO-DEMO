@@ -968,7 +968,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       rowGuidanceSelections && rowGuidanceSelections.length > 0;
 
     // Consistent vertical padding for table cells
-    const cellPaddingSx = { py: "6px" }; // Adjust this value as needed
+    const cellPaddingSx = { py: "6px", px: "16px" }; // Explicitly set horizontal padding
 
     // Define the VOL 9L TY column configuration
     const volTyColumn: Column = {
@@ -1318,7 +1318,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       guidanceColumns[lastGuidanceIndex] = {
         ...lastColumn,
         sx: {
-          ...(lastColumn.sx || {}), // Safely spread existing sx or an empty object
+          ...(lastColumn.sx || {}), // Safely spread existing sx (which includes cellPaddingSx)
           borderRight: "1px solid rgba(224, 224, 224, 1)",
         },
       };
@@ -1384,7 +1384,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
     const currentYear = new Date().getFullYear();
     const previousYear = currentYear - 1;
-    const cellPaddingSx = { py: "6px" }; // Use the same padding as main rows
+    const cellPaddingSx = { py: "6px", px: "16px" };
 
     return guidanceData.map(({ guidance, monthlyData }) => {
       const isLYGuidance = guidance.value === "py_case_equivalent_volume";
@@ -1472,7 +1472,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 key={`${row.id}-${guidance.id}-${col.key}`}
                 align={col.align || "left"}
                 // Apply consistent padding and original column sx
-                sx={{ ...cellPaddingSx, ...col.sx }}
+                sx={{ ...col.sx, ...cellPaddingSx }}
               >
                 {cellContent}
               </TableCell>
