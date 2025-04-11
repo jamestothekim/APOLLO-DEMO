@@ -696,19 +696,30 @@ export const calculateRowGuidanceMonthlyData = (
     } else {
       // Fallback calculations for specific fields if monthly breakdown isn't directly available
       if (fieldName === "gross_sales_value") {
-        // Estimate monthly GSV based on volume share
+        // Estimate monthly TY GSV using LY Rate applied to TY Volume
         const monthVolume = currentMonths[month]?.value || 0;
-        const totalVolume = rowData.case_equivalent_volume || 1; // Avoid division by zero
-        const totalGSV = rowData.gross_sales_value || 0;
-        return (monthVolume / totalVolume) * totalGSV;
+        const pyTotalVolume = rowData.py_case_equivalent_volume || 1; // Avoid div by zero
+        const pyTotalGSV = rowData.py_gross_sales_value || 0;
+        const lyRate = pyTotalVolume === 0 ? 0 : pyTotalGSV / pyTotalVolume;
+        return monthVolume * lyRate; // Apply LY rate to TY monthly volume
       }
       if (fieldName === "py_gross_sales_value") {
-        // Estimate monthly PY GSV based on PY volume share
+        // Estimate monthly PY GSV: Prioritize specific monthly PY GSV if available, else use LY Rate applied to PY Volume
+        const pyMonthlyDataSource = "py_gross_sales_value_months";
+        if (
+          rowData[pyMonthlyDataSource] &&
+          typeof rowData[pyMonthlyDataSource] === "object" &&
+          rowData[pyMonthlyDataSource][month]
+        ) {
+          return rowData[pyMonthlyDataSource][month]?.value || 0;
+        }
+        // Fallback: Use the overall LY rate applied to the PY monthly volume
         const pyMonthVolume =
           rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
-        const pyTotalVolume = rowData.py_case_equivalent_volume || 1; // Avoid division by zero
+        const pyTotalVolume = rowData.py_case_equivalent_volume || 1; // Avoid div by zero
         const pyTotalGSV = rowData.py_gross_sales_value || 0;
-        return (pyMonthVolume / pyTotalVolume) * pyTotalGSV;
+        const lyRate = pyTotalVolume === 0 ? 0 : pyTotalGSV / pyTotalVolume;
+        return pyMonthVolume * lyRate; // Apply LY rate to PY monthly volume
       }
       if (fieldName === "py_case_equivalent_volume") {
         return rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
