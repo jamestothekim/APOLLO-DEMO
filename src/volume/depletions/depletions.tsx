@@ -27,6 +27,12 @@ import type { MarketData } from "../volumeForecast";
 import type { Guidance } from "../components/guidance";
 import axios from "axios";
 
+// --- Redux Imports ---
+import { useDispatch } from "react-redux";
+import { triggerSync } from "../../redux/syncSlice"; // Import the action creator
+import type { AppDispatch } from "../../redux/store"; // Optional: for typed dispatch
+// ---------------------
+
 import {
   DynamicTable,
   type Column,
@@ -346,6 +352,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 }) => {
   const { user } = useUser();
   const theme = useTheme();
+  const dispatch: AppDispatch = useDispatch(); // <-- Get the dispatch function
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [availableMarkets, setAvailableMarkets] = useState<string[]>([]);
@@ -774,6 +781,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             },
           }
         );
+        dispatch(triggerSync()); // <-- Dispatch the Redux action
       }
 
       return updatedRow;
@@ -923,6 +931,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       // Clear the initial state reference after successful save
       setInitialSidebarState(null);
+      dispatch(triggerSync()); // <-- Dispatch the Redux action
     } catch (error) {
       console.error("Error saving changes:", error);
     }

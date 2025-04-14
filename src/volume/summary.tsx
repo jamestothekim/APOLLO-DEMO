@@ -42,6 +42,15 @@ import { GuidanceDialog } from "./components/guidance";
 import { LineChart } from "@mui/x-charts";
 import axios from "axios";
 
+// --- Redux Imports ---
+import { useSelector } from "react-redux";
+import type { RootState } from "../redux/store";
+import { useDispatch } from "react-redux";
+import type { AppDispatch } from "../redux/store";
+import { fetchPendingChanges } from "../redux/pendingChangesSlice";
+import type { RestoredState } from "../redux/pendingChangesSlice";
+// ---------------------
+
 interface SummaryVariantAggregateData {
   id: string;
   brand: string;
@@ -98,6 +107,18 @@ interface SummaryProps {
 
 export const Summary = ({ onLoadingComplete }: SummaryProps) => {
   const { user, updateUserSettings } = useUser();
+  const dispatch: AppDispatch = useDispatch();
+  // --- Select state from Redux store ---
+  const lastSyncTrigger = useSelector(
+    (state: RootState) => state.sync.lastSyncTrigger
+  );
+  const pendingChanges = useSelector(
+    (state: RootState) => state.pendingChanges.data
+  );
+  const pendingChangesStatus = useSelector(
+    (state: RootState) => state.pendingChanges.status
+  );
+  // ------------------------------------
   const [isMinimized, setIsMinimized] = useState(false);
   const [viewType, setViewType] = useState<"table" | "graph">("table");
   const theme = useTheme();
@@ -132,6 +153,20 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
   const [lastActualMonthIndex, setLastActualMonthIndex] = useState<number>(-1);
 
   const MAX_CHIPS_VISIBLE = 3; // Define how many chips to show
+
+  // --- Effect to trigger fetching pending changes --- START
+  useEffect(() => {
+    // Dispatch the fetch action whenever filters or the trigger changes
+    // Pass current filters to the thunk
+    dispatch(
+      fetchPendingChanges({
+        markets: selectedMarkets.length > 0 ? selectedMarkets : null,
+        brands: selectedBrands.length > 0 ? selectedBrands : null,
+      })
+    );
+    // Removed the direct fetch logic from here
+  }, [selectedMarkets, selectedBrands, lastSyncTrigger, dispatch]); // Include dispatch
+  // --- Effect to trigger fetching pending changes --- END
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -252,6 +287,27 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
           [variantKey: string]: SummaryVariantAggregateData;
         } = {};
 
+        // --- Create pending changes map only if data is loaded --- START
+        let pendingChangesMap = new Map<string, RestoredState>();
+        if (pendingChangesStatus === "succeeded") {
+          pendingChanges.forEach((change) => {
+            if (change.key) {
+              pendingChangesMap.set(change.key, change);
+            } else {
+              const key = `forecast:${change.customer_id || change.market_id}:${
+                change.variant_size_pack_desc
+              }`;
+              pendingChangesMap.set(key, change);
+            }
+          });
+        } else {
+          console.log(
+            "[SUMMARY DEBUG] Skipping pending changes map creation, status:",
+            pendingChangesStatus
+          );
+        }
+        // --- Create pending changes map only if data is loaded --- END
+
         rawForecastData.forEach((row) => {
           const brand = row.brand;
           const variantName = row.variant;
@@ -268,6 +324,39 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
           const gsv_py = Number(row.py_gross_sales_value) || 0;
           if (monthIndex < 1 || monthIndex > 12) return;
           const monthName = MONTH_NAMES[monthIndex - 1];
+
+          // --- Apply pending changes if map exists --- START
+          let volumeForMonth = volume; // Default to DB volume
+          if (
+            pendingChangesStatus === "succeeded" &&
+            pendingChangesMap.size > 0
+          ) {
+            const potentialRedisKey = `forecast:${row.market_id}:${row.variant_size_pack_desc}`;
+            // --- Targeted Debug Log --- START
+            if (
+              row.variant_size_pack_desc === "BV002 - Balvenie 12 12x750" &&
+              row.market_id === "USANY1" &&
+              false // Keep the condition structure but disable the log
+            ) {
+              const expectedKey = "forecast:USANY1:BV002 - Balvenie 12 12x750";
+              console.log(
+                `[SUMMARY DEBUG LOOP CHECK] Target Row Found! Generated Key: "${potentialRedisKey}", Expected Key: "${expectedKey}", Match: ${
+                  potentialRedisKey === expectedKey
+                }, Map has Expected Key: ${pendingChangesMap.has(expectedKey)}`
+              );
+            }
+            // --- Targeted Debug Log --- END
+            const pendingChange = pendingChangesMap.get(potentialRedisKey);
+
+            if (
+              pendingChange &&
+              pendingChange.months &&
+              pendingChange.months[monthName]
+            ) {
+              volumeForMonth = pendingChange.months[monthName].value;
+            }
+          }
+          // --- Apply pending changes if map exists --- END
 
           if (!variantAggregation[variantKey]) {
             variantAggregation[variantKey] = {
@@ -297,7 +386,7 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
               total_gsv_py: 0,
             };
           }
-          variantAggregation[variantKey].months[monthName] += volume;
+          variantAggregation[variantKey].months[monthName] += volumeForMonth;
           variantAggregation[variantKey].months_py_volume[monthName] +=
             py_volume;
           variantAggregation[variantKey].months_gsv_ty[monthName] += gsv_ty;
@@ -333,9 +422,6 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
                   return variantAggRow.total_gsv_ty;
                 if (fieldName === "py_gross_sales_value")
                   return variantAggRow.total_gsv_py;
-                console.warn(
-                  `Unknown field name in benchmark calculation: ${fieldName}`
-                );
                 return 0;
               };
 
@@ -439,9 +525,6 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
                 return brandAgg.total_gsv_ty;
               if (fieldName === "py_gross_sales_value")
                 return brandAgg.total_gsv_py;
-              console.warn(
-                `Unknown field name in benchmark calculation: ${fieldName}`
-              );
               return 0;
             };
 
@@ -495,6 +578,8 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
     selectedGuidance,
     onLoadingComplete,
     user,
+    pendingChanges,
+    pendingChangesStatus,
   ]);
 
   const handleMarketChange = (event: SelectChangeEvent<string[]>) => {
@@ -806,6 +891,7 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
     handleGuidanceExpandClick,
     isDataLoading,
     lastActualMonthIndex,
+    pendingChangesStatus === "loading",
   ]);
 
   const handleColumns = () => setColumnsDialogOpen(true);
@@ -962,11 +1048,6 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
       if (fieldName === "py_gross_sales_value")
         return row.months_gsv_py?.[month] ?? 0;
 
-      console.warn(
-        `Monthly breakdown for ${fieldName} not directly available on ${
-          row.isBrandRow ? "Brand" : "Variant"
-        } row ${row.id}. Falling back to 0.`
-      );
       return 0;
     };
 
@@ -1330,8 +1411,9 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
                     }}
                   />
                 ) : (
-                  // Show 'no data' only if not loading
-                  !isDataLoading && (
+                  // Show 'no data' only if not loading base data OR pending changes
+                  !isDataLoading &&
+                  pendingChangesStatus !== "loading" && (
                     <Typography
                       sx={{
                         textAlign: "center",
@@ -1343,8 +1425,8 @@ export const Summary = ({ onLoadingComplete }: SummaryProps) => {
                     </Typography>
                   )
                 )}
-                {/* Loading Spinner Overlay */}
-                {isDataLoading && (
+                {/* Loading Spinner Overlay for both data types */}
+                {(isDataLoading || pendingChangesStatus === "loading") && (
                   <Box
                     sx={{
                       position: "absolute",

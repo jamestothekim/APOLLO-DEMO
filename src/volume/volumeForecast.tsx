@@ -71,7 +71,14 @@ interface CustomerData {
   raw: string;
 }
 
-export const VolumeForecast: React.FC = () => {
+// Add prop type for the handler function
+interface VolumeForecastProps {
+  // onPendingChange: () => void; // <-- Remove prop type
+}
+
+export const VolumeForecast: React.FC<
+  VolumeForecastProps
+> = (/* { onPendingChange } */) => {
   const { user, /* saveGuidancePreferences, */ updateUserSettings } = useUser();
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
