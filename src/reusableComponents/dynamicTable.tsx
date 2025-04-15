@@ -63,6 +63,7 @@ export interface DynamicTableProps {
   stickyHeader?: boolean;
   maxHeight?: string | number;
   renderExpandedRow?: (row: any, flatColumns: Column[]) => React.ReactNode;
+  fixedLayout?: boolean;
 }
 
 const getSectionInfo = (columns: Column[], index: number) => {
@@ -109,6 +110,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   stickyHeader = false,
   maxHeight = "70vh",
   renderExpandedRow,
+  fixedLayout = false,
 }) => {
   const theme = useTheme();
   // All hooks must be at the top level and in the same order every time
@@ -200,6 +202,11 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
           aValue = a[sortConfig.key];
           bValue = b[sortConfig.key];
         }
+        // --- Get sortable values --- END
+
+        // --- Comparison Logic --- START
+        // Log the values being compared for this pair
+        console.log(`  Comparing:`, { aValue, bValue });
 
         const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
 
@@ -300,7 +307,10 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
           >
             <Table
               size="small"
-              sx={{ borderCollapse: "collapse", tableLayout: "fixed" }}
+              sx={{
+                borderCollapse: "collapse",
+                ...(fixedLayout && { tableLayout: "fixed" }),
+              }}
             >
               <TableHead>
                 {/* Group header row */}

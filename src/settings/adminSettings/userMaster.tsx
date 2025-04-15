@@ -412,7 +412,12 @@ const UserMaster = () => {
         </Button>
       </Box>
 
-      <DynamicTable data={users} columns={columns} onRowClick={handleEdit} />
+      <DynamicTable
+        data={users}
+        columns={columns}
+        onRowClick={handleEdit}
+        fixedLayout={true}
+      />
 
       <QualSidebar
         open={sidebarOpen}

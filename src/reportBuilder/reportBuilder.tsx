@@ -3,7 +3,6 @@ import {
   Paper,
   Typography,
   Grid,
-  useTheme,
   Chip,
   TableContainer,
   Table,
@@ -216,7 +215,6 @@ interface SnackbarState {
 }
 
 const ReportBuilder = () => {
-  const theme = useTheme();
   const [aggregationResult, setAggregationResult] = useState<AggregationResult>(
     {
       rows: [],

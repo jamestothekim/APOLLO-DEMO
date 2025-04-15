@@ -190,10 +190,11 @@ export const RateMaster = () => {
       <DynamicTable
         data={filteredData}
         columns={columns}
+        getRowId={(row) => row.id}
         onRowClick={handleRowClick}
+        fixedLayout={true}
         rowsPerPageOptions={[25, 50, 100]}
         defaultRowsPerPage={50}
-        getRowId={(row) => row.id}
         page={page}
         onPageChange={(_event, newPage) => setPage(newPage)}
       />

@@ -182,6 +182,7 @@ export const MarketMaster = () => {
           setSelectedMarket(row);
           setSidebarOpen(true);
         }}
+        fixedLayout={true}
       />
 
       <QualSidebar
