@@ -1687,9 +1687,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           setSelectedDataState(null);
           setInitialSidebarState(null); // Clear initial state on close
         }}
-        title="Forecast Details"
+        title={
+          isCustomerView
+            ? "Customer Forecast Details"
+            : "Market Forecast Details"
+        }
         marketName={selectedDataState?.market_name}
-        customerName={selectedDataState?.customer_name}
+        customerName={
+          isCustomerView ? selectedDataState?.customer_name : undefined
+        }
         productName={selectedDataState?.product}
         forecastLogic={selectedDataState?.forecastLogic}
         forecastOptions={FORECAST_OPTIONS}

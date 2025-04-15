@@ -683,38 +683,65 @@ export const Summary = ({
     }
 
     const formattedData: ExportableData[] = displayData.map(
-      (row: DisplayRow) => {
+      (row: DisplayRow): ExportableData => {
         const exportMonths: { [key: string]: { value: number } } = {};
         MONTH_NAMES.forEach((month) => {
           exportMonths[month] = { value: row.months?.[month] || 0 };
         });
 
-        const exportRow: ExportableData = {
-          market_id: "SUMMARY",
-          market_name: "Summary View",
-          product: row.isBrandRow
-            ? "Brand Total"
-            : row.variant || "Variant Total",
+        // Prepare the base export row structure
+        const exportRow: Partial<ExportableData> = {
+          // Add fields required by the updated exportToCSV for summary
+          market_id: "SUMMARY", // Dummy value for summary
+          market_name: "Summary View", // Descriptive name
+          product: row.isBrandRow ? row.brand : row.variant || "", // Use Brand or Variant name
           brand: row.brand,
           variant: row.isBrandRow ? "" : row.variant || "",
           variant_id: row.isBrandRow ? "" : row.variant_id || "",
-          variant_size_pack_id: "",
+          variant_size_pack_id: "", // Not applicable in summary
           variant_size_pack_desc: row.isBrandRow
-            ? "Brand Total"
-            : row.variant || "Variant Total",
-          forecastLogic: "aggregated",
+            ? row.brand
+            : row.variant || "", // Consistent with product
+          forecastLogic: "aggregated", // Fixed value for summary
           months: exportMonths,
-          case_equivalent_volume: row.total ?? 0,
-          py_case_equivalent_volume: row.total_py_volume ?? 0,
-          gross_sales_value: row.total_gsv_ty ?? 0,
-          py_gross_sales_value: row.total_gsv_py ?? 0,
+          case_equivalent_volume: row.total ?? 0, // Total TY Volume
+          py_case_equivalent_volume: row.total_py_volume ?? 0, // Add Total PY Volume
+          gross_sales_value: row.total_gsv_ty ?? 0, // Keep for potential future use or internal consistency
+          py_gross_sales_value: row.total_gsv_py ?? 0, // Keep for potential future use
+          // Include flags needed by the export function
+          isBrandRow: row.isBrandRow, // Pass the flag
         };
 
-        return exportRow;
+        // Merge calculated guidance values into the export row
+        if (selectedGuidance && selectedGuidance.length > 0) {
+          const aggregateKey = row.isBrandRow
+            ? `brand:${row.id}`
+            : `variant:${row.brand}_${row.variant_id || row.variant}`;
+          const rowGuidanceResults = guidanceResults[aggregateKey];
+
+          if (rowGuidanceResults) {
+            selectedGuidance.forEach((guidance) => {
+              const guidanceKey = `guidance_${guidance.id}`;
+              const calculationResult = rowGuidanceResults[guidance.id];
+              // Add the calculated total to the export row using the dynamic key
+              if (calculationResult && calculationResult.total !== undefined) {
+                exportRow[guidanceKey] = calculationResult.total;
+              }
+            });
+          }
+        }
+
+        return exportRow as ExportableData; // Cast to full type
       }
     );
 
-    exportToCSV(formattedData, selectedGuidance);
+    // Call exportToCSV with the summary flag and last actual month index
+    exportToCSV(
+      formattedData,
+      selectedGuidance,
+      true, // isSummaryView = true
+      lastActualMonthIndex
+    );
   };
 
   const series = useMemo(() => {

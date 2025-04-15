@@ -153,131 +153,258 @@ export interface ExportableData {
 
 export const exportToCSV = (
   data: ExportableData[],
-  selectedGuidance?: Guidance[]
+  selectedGuidance?: Guidance[],
+  isSummaryView: boolean = false,
+  lastActualMonthIndex: number = -1
 ) => {
   const monthKeys = MONTH_NAMES;
 
-  // Build a complete set of headers including guidance
-  const baseHeaders = [
-    "Market",
-    ...(data.some((row) => row.customer_name) ? ["Customer"] : []),
-    "Product",
-    "Forecast Logic",
-    "VOL 9L (TY)",
-  ];
+  let baseHeaders: string[];
+  let dataRows: string[][];
 
-  // Add guidance headers
-  const guidanceHeaders =
-    selectedGuidance?.map((guidance) =>
-      guidance.sublabel
-        ? `${guidance.label} (${guidance.sublabel})`
-        : guidance.label
-    ) || [];
+  if (isSummaryView) {
+    // --- Summary View Specific Export Logic ---
+    baseHeaders = ["BRAND / VARIANT", "VOL 9L (TY)", "VOL 9L (LY)"]; // No Market, No Logic
 
-  // Add month headers with ACT/FCST labels
-  const monthHeaders = monthKeys.map((month) => {
-    const firstRow = data[0];
-    const isActual = firstRow?.months[month]?.isActual;
-    return `${month} ${isActual ? "(ACT)" : "(FCST)"}`;
-  });
+    // Add guidance headers
+    const guidanceHeaders =
+      selectedGuidance?.map((guidance) =>
+        guidance.sublabel
+          ? `${guidance.label} (${guidance.sublabel})`
+          : guidance.label
+      ) || [];
 
-  // Combine all headers for CSV
-  const headerRow = [...baseHeaders, ...guidanceHeaders, ...monthHeaders];
-
-  // Format each data row with proper formatting
-  const dataRows = data.map((item) => {
-    // Format the total volume with 2 decimal places (hundredths)
-    const totalVolume = calculateTotal(item.months);
-    const formattedTotal = totalVolume.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+    // Add month headers with ACT/FCST labels based on lastActualMonthIndex
+    const monthHeaders = monthKeys.map((month, index) => {
+      const label = index <= lastActualMonthIndex ? "(ACT)" : "(FCST)";
+      return `${month} ${label}`;
     });
 
-    // Base columns
-    const baseColumns = [
-      item.market_name,
-      ...(data.some((r) => r.customer_name) ? [item.customer_name || ""] : []),
-      item.product.includes(" - ")
-        ? item.product.split(" - ")[1]
-        : item.product,
-      item.forecastLogic,
-      formattedTotal,
+    // Combine all headers for CSV
+    const headerRow = [...baseHeaders, ...guidanceHeaders, ...monthHeaders];
+
+    // Format each data row for Summary View
+    dataRows = data.map((item) => {
+      // BRAND / VARIANT column
+      const brandVariant = item.isBrandRow ? item.brand : item.variant || ""; // Use brand for brand rows, variant otherwise
+
+      // Format the total volume with 0 decimal places (whole numbers)
+      const totalVolumeTY = item.case_equivalent_volume ?? 0;
+      const formattedTotalTY = totalVolumeTY.toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+
+      // Format the total PY volume with 0 decimal places
+      const totalVolumeLY = item.py_case_equivalent_volume ?? 0;
+      const formattedTotalLY = totalVolumeLY.toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+
+      // Base columns for Summary
+      const baseColumns = [brandVariant, formattedTotalTY, formattedTotalLY];
+
+      // Format guidance values (same logic as before, ensure item has the data)
+      const guidanceColumns =
+        selectedGuidance?.map((guidance) => {
+          // Derive the key for the guidance value. This might need adjustment
+          // depending on how guidance results are attached to the 'item' in Summary export.
+          // Assuming the `guidanceResults` are merged into the item for export.
+          const valueKey = `guidance_${guidance.id}`;
+          const value = item[valueKey]; // Access pre-calculated guidance value
+
+          if (value === undefined || isNaN(value)) return "";
+
+          // Apply formatting
+          if (guidance.calculation.format === "percent") {
+            return `${Math.round(value * 100)}%`;
+          } else if (
+            guidance.label.toLowerCase().includes("gsv") &&
+            !guidance.label.toLowerCase().includes("%")
+          ) {
+            return new Intl.NumberFormat("en-US", {
+              style: "currency",
+              currency: "USD",
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            }).format(value);
+          } else {
+            // Standard number format with 0 decimal places for summary non-currency
+            return value.toLocaleString(undefined, {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            });
+          }
+        }) || [];
+
+      // Format month values with 0 decimal places (whole numbers)
+      const monthValues = monthKeys.map((month) => {
+        const value = item.months[month]?.value || 0;
+        return value.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        });
+      });
+
+      // Combine all columns for this row
+      return [...baseColumns, ...guidanceColumns, ...monthValues];
+    });
+
+    // --- Generate CSV for Summary View ---
+    const processedRows = dataRows.map((row) =>
+      row
+        .map((cell) => {
+          const stringCell = String(cell ?? ""); // Handle potential undefined values
+          if (stringCell.includes(",") || stringCell.includes('"')) {
+            return `"${stringCell.replace(/"/g, '""')}"`;
+          }
+          return stringCell;
+        })
+        .join(",")
+    );
+    const csvContent = [headerRow.join(","), ...processedRows].join("\n");
+
+    // --- Trigger Download ---
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "summary_forecast_data.csv"); // Changed filename
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } else {
+    // --- Existing Export Logic (Depletions/Customer) ---
+    baseHeaders = [
+      "Market",
+      ...(data.some((row) => row.customer_name) ? ["Customer"] : []),
+      "Product",
+      "Forecast Logic",
+      "VOL 9L (TY)",
     ];
 
-    // Format guidance values
-    const guidanceColumns =
-      selectedGuidance?.map((guidance) => {
-        // Get guidance value from the row
-        const value =
-          typeof guidance.value === "string"
-            ? item[guidance.value]
-            : item[`guidance_${guidance.id}`];
+    // Add guidance headers
+    const guidanceHeaders =
+      selectedGuidance?.map((guidance) =>
+        guidance.sublabel
+          ? `${guidance.label} (${guidance.sublabel})`
+          : guidance.label
+      ) || [];
 
-        if (value === undefined || isNaN(value)) return "";
+    // Add month headers with ACT/FCST labels
+    const monthHeaders = monthKeys.map((month) => {
+      const firstRow = data[0];
+      // Use lastActualMonthIndex if available, otherwise fallback to checking first row
+      const isActual =
+        lastActualMonthIndex !== -1
+          ? MONTH_NAMES.indexOf(month) <= lastActualMonthIndex
+          : firstRow?.months[month]?.isActual;
+      return `${month} ${isActual ? "(ACT)" : "(FCST)"}`;
+    });
 
-        // Apply appropriate formatting based on guidance type
-        if (guidance.calculation.format === "percent") {
-          return `${Math.round(value * 100)}%`;
-        } else if (
-          guidance.label.toLowerCase().includes("gsv") &&
-          !guidance.label.toLowerCase().includes("%")
-        ) {
-          // Currency format for GSV values
-          return new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: "USD",
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          }).format(value);
-        } else {
-          // Standard number format with 2 decimal places (hundredths)
-          return value.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          });
-        }
-      }) || [];
+    // Combine all headers for CSV
+    const headerRow = [...baseHeaders, ...guidanceHeaders, ...monthHeaders];
 
-    // Format month values with 2 decimal places (hundredths)
-    const monthValues = monthKeys.map((month) => {
-      const value = item.months[month]?.value || 0;
-      return value.toLocaleString(undefined, {
+    // Format each data row with proper formatting
+    dataRows = data.map((item) => {
+      // Format the total volume with 2 decimal places (hundredths)
+      const totalVolume = calculateTotal(item.months);
+      const formattedTotal = totalVolume.toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
+
+      // Base columns
+      const baseColumns = [
+        item.market_name,
+        ...(data.some((r) => r.customer_name)
+          ? [item.customer_name || ""]
+          : []),
+        item.product.includes(" - ")
+          ? item.product.split(" - ")[1]
+          : item.product,
+        item.forecastLogic,
+        formattedTotal,
+      ];
+
+      // Format guidance values
+      const guidanceColumns =
+        selectedGuidance?.map((guidance) => {
+          // Get guidance value from the row
+          const valueKey = `guidance_${guidance.id}`; // Assume calculated guidance is passed in item
+          const value =
+            typeof guidance.value === "string"
+              ? item[guidance.value]
+              : item[valueKey];
+
+          if (value === undefined || isNaN(value)) return "";
+
+          // Apply appropriate formatting based on guidance type
+          if (guidance.calculation.format === "percent") {
+            return `${Math.round(value * 100)}%`;
+          } else if (
+            guidance.label.toLowerCase().includes("gsv") &&
+            !guidance.label.toLowerCase().includes("%")
+          ) {
+            // Currency format for GSV values
+            return new Intl.NumberFormat("en-US", {
+              style: "currency",
+              currency: "USD",
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            }).format(value);
+          } else {
+            // Standard number format with 2 decimal places (hundredths)
+            return value.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            });
+          }
+        }) || [];
+
+      // Format month values with 2 decimal places (hundredths)
+      const monthValues = monthKeys.map((month) => {
+        const value = item.months[month]?.value || 0;
+        return value.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      });
+
+      // Combine all columns for this row
+      return [...baseColumns, ...guidanceColumns, ...monthValues];
     });
 
-    // Combine all columns for this row
-    return [...baseColumns, ...guidanceColumns, ...monthValues];
-  });
+    // Convert rows to CSV format, properly handling commas and quotes
+    const processedRows = dataRows.map((row) =>
+      row
+        .map((cell) => {
+          const stringCell = String(cell ?? ""); // Handle potential undefined values
+          // If cell contains comma or quote, wrap in quotes
+          if (stringCell.includes(",") || stringCell.includes('"')) {
+            // Double up any quotes to escape them
+            return `"${stringCell.replace(/"/g, '""')}"`;
+          }
+          return stringCell;
+        })
+        .join(",")
+    );
 
-  // Convert rows to CSV format, properly handling commas and quotes
-  const processedRows = dataRows.map((row) =>
-    row
-      .map((cell) => {
-        const stringCell = String(cell);
-        // If cell contains comma or quote, wrap in quotes
-        if (stringCell.includes(",") || stringCell.includes('"')) {
-          // Double up any quotes to escape them
-          return `"${stringCell.replace(/"/g, '""')}"`;
-        }
-        return stringCell;
-      })
-      .join(",")
-  );
+    // Create the CSV content and trigger download
+    const csvContent = [headerRow.join(","), ...processedRows].join("\n");
 
-  // Create the CSV content and trigger download
-  const csvContent = [headerRow.join(","), ...processedRows].join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", "forecast_data.csv");
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "forecast_data.csv"); // Original filename
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 };
 
 export const hasNonZeroTotal = (row: ExtendedForecastData): boolean => {
