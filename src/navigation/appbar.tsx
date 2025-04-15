@@ -12,11 +12,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import InfoIcon from "@mui/icons-material/Info";
 import { useUser } from "../userContext";
 import { useNavigate } from "react-router-dom";
-// --- Redux Imports ---
-import { useDispatch } from "react-redux";
-import { store } from "../redux/store"; // Import the store instance
-import { resetGuidanceInitialization } from "../redux/userSettingsSlice"; // Import the reset action
-import type { AppDispatch } from "../redux/store";
+
 // ---------------------
 
 interface AppBarProps {
@@ -24,40 +20,15 @@ interface AppBarProps {
 }
 
 export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
-  // Get sync function from context
-  const { logout, syncGuidanceSettings } = useUser();
+  // REMOVED Get sync function from context
+  const { logout } = useUser();
   const navigate = useNavigate();
-  const dispatch: AppDispatch = useDispatch(); // Get dispatch
 
   const handleLogout = async () => {
     try {
-      // --- Sync Guidance Settings Before Logout --- START
-      if (typeof syncGuidanceSettings === "function") {
-        // Check if sync function exists
-
-        // Get latest pending state directly from store
-        const currentState = store.getState();
-        const guidanceState = currentState.guidanceSettings;
-
-        const payload = {
-          guidance_settings: {
-            summary_cols: guidanceState.pendingSummaryCols,
-            summary_rows: guidanceState.pendingSummaryRows,
-            forecast_cols: guidanceState.pendingForecastCols,
-            forecast_rows: guidanceState.pendingForecastRows,
-          },
-        };
-
-        // Call the sync function from the context
-        await syncGuidanceSettings(payload);
-        console.log("Guidance settings sync complete.");
-
-        // Reset the Redux initialization flag
-        dispatch(resetGuidanceInitialization());
-      } else {
-        console.warn("syncGuidanceSettings function not found in UserContext.");
-      }
-      // --- Sync Guidance Settings Before Logout --- END
+      // REMOVED --- Sync Guidance Settings Before Logout --- START
+      // REMOVED if (typeof syncGuidanceSettings === "function") {
+      // REMOVED   // Check if sync function exists
 
       // Call original logout from context
       await logout();
