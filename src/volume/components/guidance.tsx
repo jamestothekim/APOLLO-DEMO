@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -13,10 +13,13 @@ import {
   IconButton,
   Tooltip,
   TextField,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import ViewColumnOutlinedIcon from "@mui/icons-material/ViewColumnOutlined";
 import ViewHeadlineOutlinedIcon from "@mui/icons-material/ViewHeadlineOutlined";
+import axios from "axios";
 
 export interface Guidance {
   id: number;
@@ -46,6 +49,11 @@ interface GuidanceDialogProps {
   onApplyRows: (rows: Guidance[]) => void;
 }
 
+// Helper to get token
+const getToken = () => {
+  return localStorage.getItem("token");
+};
+
 export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
   open,
   onClose,
@@ -62,6 +70,9 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
   const [selectedRowGuidance, setSelectedRowGuidance] =
     useState<Guidance[]>(initialSelectedRows);
   const [filterText, setFilterText] = useState("");
+  const [isSavingDefault, setIsSavingDefault] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -114,6 +125,46 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
     onApplyRows(selectedRowGuidance);
     onClose();
   };
+
+  // Handler for the new Make Default button
+  const handleMakeDefault = useCallback(async () => {
+    setIsSavingDefault(true);
+    const columnIds = selectedColumnGuidance.map((c) => c.id);
+    const rowIds = selectedRowGuidance.map((r) => r.id);
+    const token = getToken();
+
+    if (!token) {
+      console.error("Make Default Error: No auth token found.");
+      setIsSavingDefault(false);
+      // Consider adding user feedback here (e.g., snackbar)
+      return;
+    }
+
+    // Determine payload structure based on title
+    const isSummary = title.toLowerCase().includes("summary");
+    const payload = {
+      guidance_settings: {
+        [isSummary ? "summary_cols" : "forecast_cols"]: columnIds,
+        [isSummary ? "summary_rows" : "forecast_rows"]: rowIds,
+      },
+    };
+
+    try {
+      await axios.patch(
+        `${import.meta.env.VITE_API_URL}/users/sync-settings`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      // Optional: Show success feedback (e.g., snackbar)
+      setSnackbarMessage("Guidance settings have been set as default");
+      setSnackbarOpen(true);
+    } catch (error) {
+      console.error("Failed to save default guidance settings:", error);
+      // Optional: Show error feedback (e.g., snackbar)
+    } finally {
+      setIsSavingDefault(false);
+    }
+  }, [selectedColumnGuidance, selectedRowGuidance, title]);
 
   const filteredGuidanceOptions = availableGuidance.filter((item) => {
     const lowerFilter = filterText.toLowerCase();
@@ -219,13 +270,35 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
         </List>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="outlined">
+        <Button
+          onClick={handleMakeDefault}
+          variant="outlined"
+          disabled={isSavingDefault}
+        >
+          {isSavingDefault ? "Saving..." : "Make Default"}
+        </Button>
+        <Box sx={{ flexGrow: 1 }} />
+        <Button onClick={onClose} variant="outlined" sx={{ mr: 1 }}>
           Cancel
         </Button>
         <Button onClick={handleApply} variant="contained">
           Apply
         </Button>
       </DialogActions>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity="success"
+          sx={{ width: "100%" }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Dialog>
   );
 };

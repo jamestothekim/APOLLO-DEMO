@@ -3,19 +3,18 @@ import React, {
   useContext,
   useReducer,
   useEffect,
-  useCallback,
   useRef,
 } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-// --- Redux Imports for Initial Fetch --- START
+// REMOVED --- Redux Imports for Initial Fetch --- START
 import { useSelector, useDispatch } from "react-redux";
 import type { AppDispatch, RootState } from "./redux/store";
 import {
   fetchVolumeData,
   selectVolumeDataStatus,
 } from "./redux/depletionSlice";
-// --- Redux Imports for Initial Fetch --- END
+// REMOVED --- Redux Imports for Initial Fetch --- END
 
 // Types
 export interface MarketAccess {
@@ -40,7 +39,7 @@ export interface MarketAccess {
   };
 }
 
-// Add interface for guidance settings
+// REMOVED Add interface for guidance settings
 export interface GuidancePreference {
   id: number;
   order: number;
@@ -99,7 +98,7 @@ const tokenService = {
   },
   setToken(token: string) {
     localStorage.setItem("token", token);
-    // Verify token was set correctly
+    // REMOVED Verify token was set correctly
     const verifyToken = localStorage.getItem("token");
     if (verifyToken) {
       this.setAuthHeader(verifyToken);
@@ -142,11 +141,6 @@ interface UserContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<boolean>;
-  updateUserSettings: (settings: UserSettings) => Promise<boolean>;
-  saveGuidancePreferences: (guidanceIds: number[]) => Promise<boolean>;
-  syncGuidanceSettings: (payload: {
-    guidance_settings: GuidanceSettingsPayload;
-  }) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -209,16 +203,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const navigate = useNavigate();
-  // --- Redux Hooks for Initial Fetch --- START
+  // REMOVED --- Redux Hooks for Initial Fetch --- START
   const appDispatch = useDispatch<AppDispatch>();
   const volumeStatus = useSelector((state: RootState) =>
     selectVolumeDataStatus(state)
   );
-  // --- Redux Hooks for Initial Fetch --- END
+  // REMOVED --- Redux Hooks for Initial Fetch --- END
 
-  // --- Ref to track initial data fetch --- START
+  // REMOVED --- Ref to track initial data fetch --- START
   const initialFetchPerformedRef = useRef(false);
-  // --- Ref to track initial data fetch --- END
+  // REMOVED --- Ref to track initial data fetch --- END
 
   const checkAuth = async (): Promise<boolean> => {
     try {
@@ -229,18 +223,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         return false;
       }
 
-      // Verify token is properly set in axios headers
+      // REMOVED Verify token is properly set in axios headers
       if (!axios.defaults.headers.common["Authorization"]) {
         tokenService.setAuthHeader(token);
       }
 
-      // Add cache-busting parameter to ensure fresh data
+      // REMOVED Add cache-busting parameter to ensure fresh data
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/users/verify-token?_=${Date.now()}`
       );
 
       if (response.data.user) {
-        // Make sure to update the entire user object with fresh data
+        // REMOVED Make sure to update the entire user object with fresh data
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
         return true;
       }
@@ -248,7 +242,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       return false;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        // Keep error handling logic but remove logging
+        // REMOVED Keep error handling logic but remove logging
       }
       dispatch({ type: "LOGOUT" });
       return false;
@@ -285,7 +279,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/users/logout`);
     } catch (error) {
-      // Still logout even if the server call fails
+      // REMOVED Still logout even if the server call fails
     } finally {
       dispatch({ type: "LOGOUT" });
       initialFetchPerformedRef.current = false;
@@ -300,22 +294,22 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     let removalAttempts = 0;
     let lastKnownToken = localStorage.getItem("token");
 
-    // Add storage event listener to detect localStorage changes
+    // REMOVED Add storage event listener to detect localStorage changes
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "token") {
         const currentToken = e.newValue;
 
         if (!currentToken && e.oldValue) {
-          // Token removal detected
+          // REMOVED Token removal detected
           removalAttempts++;
 
           if (removalAttempts > 3) {
-            // Store token in a session variable as backup
+            // REMOVED Store token in a session variable as backup
             if (lastKnownToken) {
               sessionStorage.setItem("token_backup", lastKnownToken);
             }
             setTimeout(() => {
-              // Try to recover from session storage first
+              // REMOVED Try to recover from session storage first
               const backupToken = sessionStorage.getItem("token_backup");
               if (backupToken) {
                 localStorage.setItem("token", backupToken);
@@ -329,10 +323,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
           tokenService.syncToken();
         } else if (currentToken) {
-          // Token set detected
+          // REMOVED Token set detected
           lastKnownToken = currentToken;
           removalAttempts = 0;
-          // Clear backup if it exists
+          // REMOVED Clear backup if it exists
           sessionStorage.removeItem("token_backup");
         }
       }
@@ -340,13 +334,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
     window.addEventListener("storage", handleStorageChange);
 
-    // Add a more frequent check specifically for token presence
+    // REMOVED Add a more frequent check specifically for token presence
     const tokenCheckInterval = setInterval(() => {
       const token = localStorage.getItem("token");
       const authHeader = axios.defaults.headers.common["Authorization"];
       const backupToken = sessionStorage.getItem("token_backup");
 
-      // If token is missing but we have a backup or header, try to recover
+      // REMOVED If token is missing but we have a backup or header, try to recover
       if (!token && (authHeader || backupToken)) {
         if (backupToken) {
           localStorage.setItem("token", backupToken);
@@ -354,10 +348,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           tokenService.syncToken();
         }
       }
-    }, 60000); // Check every minute
+    }, 60000); // REMOVED Check every minute
 
     const authCheckInterval = setInterval(() => {
-      tokenService.syncToken(); // Sync before checking
+      tokenService.syncToken(); // REMOVED Sync before checking
 
       if (!tokenService.verifyTokenPresence()) {
         const token = tokenService.getToken();
@@ -368,7 +362,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
       checkAuth();
-    }, 2 * 60 * 60 * 1000); // 2 hours
+    }, 2 * 60 * 60 * 1000); // REMOVED 2 hours
 
     return () => {
       clearInterval(authCheckInterval);
@@ -377,7 +371,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // Add mutation observer to detect localStorage changes
+  // REMOVED Add mutation observer to detect localStorage changes
   useEffect(() => {
     const observer = new MutationObserver(() => {
       tokenService.syncToken();
@@ -392,32 +386,32 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => observer.disconnect();
   }, []);
 
-  // --- Combined Effect for Market Details and Initial Volume Data Fetch --- START
+  // REMOVED --- Combined Effect for Market Details and Initial Volume Data Fetch --- START
   useEffect(() => {
-    console.log(
-      "[UserProvider] Combined effect hook triggered. Current states:",
-      {
-        isLoggedIn: state.isLoggedIn,
-        hasUser: !!state.user,
-        userObject: state.user,
-        volumeStatus: volumeStatus,
-        initialFetchFlag: initialFetchPerformedRef.current,
-      }
-    );
+    // REMOVED console.log
+    // REMOVED "[UserProvider] Combined effect hook triggered. Current states:",
+    // REMOVED {
+    // REMOVED   isLoggedIn: state.isLoggedIn,
+    // REMOVED   hasUser: !!state.user,
+    // REMOVED   userObject: state.user,
+    // REMOVED   volumeStatus: volumeStatus,
+    // REMOVED   initialFetchFlag: initialFetchPerformedRef.current,
+    // REMOVED }
+    // REMOVED );
 
-    // Only run if:
-    // 1. Logged in
-    // 2. User data is available
-    // 3. Initial fetch hasn't been performed yet for this session
+    // REMOVED Only run if:
+    // REMOVED 1. Logged in
+    // REMOVED 2. User data is available
+    // REMOVED 3. Initial fetch hasn't been performed yet for this session
     if (state.isLoggedIn && state.user && !initialFetchPerformedRef.current) {
-      // Set the flag *before* starting the async operation
+      // REMOVED Set the flag *before* starting the async operation
       initialFetchPerformedRef.current = true;
-      console.log("[UserProvider] Initial fetch flag set to true.");
+      // REMOVED console.log("[UserProvider] Initial fetch flag set to true.");
 
       const fetchMarketDetailsAndVolumeData = async () => {
-        let actualMarketIds: string[] = []; // Default to empty array
+        let actualMarketIds: string[] = []; // REMOVED Default to empty array
 
-        // 1. Fetch Actual Market IDs if user has access defined
+        // REMOVED 1. Fetch Actual Market IDs if user has access defined
         if (state.user?.user_access?.Markets?.length) {
           const userMarketNumericIds = state.user.user_access.Markets.map(
             (m) => m.id
@@ -440,43 +434,43 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
               if (response.data && response.data.length > 0) {
                 actualMarketIds = response.data.map((m) => m.market_id);
-                console.log(
-                  "[UserProvider] Fetched actual market IDs for user:",
-                  actualMarketIds
-                );
+                // REMOVED console.log(
+                // REMOVED   "[UserProvider] Fetched actual market IDs for user:",
+                // REMOVED   actualMarketIds
+                // REMOVED );
               } else {
-                console.log(
-                  "[UserProvider] /get-markets returned no data for the user's numeric IDs. Proceeding with empty market list."
-                );
-                // actualMarketIds remains []
+                // REMOVED console.log(
+                // REMOVED   "[UserProvider] /get-markets returned no data for the user's numeric IDs. Proceeding with empty market list."
+                // REMOVED );
+                // REMOVED actualMarketIds remains []
               }
             } catch (error) {
-              console.error(
-                "[UserProvider] Error fetching market details from /get-markets. Proceeding with empty market list:",
-                error
-              );
-              // actualMarketIds remains []
+              // REMOVED console.error(
+              // REMOVED   "[UserProvider] Error fetching market details from /get-markets. Proceeding with empty market list:",
+              // REMOVED   error
+              // REMOVED );
+              // REMOVED actualMarketIds remains []
             }
           } else {
-            console.log(
-              "[UserProvider] User has market access array but no numeric IDs. Proceeding with empty market list."
-            );
-            // actualMarketIds remains []
+            // REMOVED console.log(
+            // REMOVED   "[UserProvider] User has market access array but no numeric IDs. Proceeding with empty market list."
+            // REMOVED );
+            // REMOVED actualMarketIds remains []
           }
         } else {
-          console.log(
-            "[UserProvider] User has no market access defined. Proceeding with empty market list."
-          );
-          // actualMarketIds remains []
+          // REMOVED console.log(
+          // REMOVED   "[UserProvider] User has no market access defined. Proceeding with empty market list."
+          // REMOVED );
+          // REMOVED actualMarketIds remains []
         }
 
-        // 2. Dispatch fetchVolumeData with the determined market IDs (could be populated or empty)
-        // Keep isCustomerView as false for the initial default load.
-        console.log(
-          `[UserProvider] Dispatching fetchVolumeData with market IDs: ${JSON.stringify(
-            actualMarketIds
-          )}`
-        );
+        // REMOVED 2. Dispatch fetchVolumeData with the determined market IDs (could be populated or empty)
+        // REMOVED Keep isCustomerView as false for the initial default load.
+        // REMOVED console.log(
+        // REMOVED   `[UserProvider] Dispatching fetchVolumeData with market IDs: ${JSON.stringify(
+        // REMOVED     actualMarketIds
+        // REMOVED   )}`
+        // REMOVED );
         appDispatch(
           fetchVolumeData({
             markets: actualMarketIds,
@@ -485,28 +479,29 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           })
         ).then((action) => {
           if (fetchVolumeData.fulfilled.match(action)) {
-            // Log removed
+            // REMOVED Log removed
           } else if (fetchVolumeData.rejected.match(action)) {
-            console.error(
-              "[UserProvider] fetchVolumeData rejected:",
-              action.payload
-            );
+            // REMOVED console.error(
+            // REMOVED   "[UserProvider] fetchVolumeData rejected:",
+            // REMOVED   action.payload
+            // REMOVED );
           }
         });
       };
 
-      // Execute the combined fetch logic
+      // REMOVED Execute the combined fetch logic
       fetchMarketDetailsAndVolumeData();
     }
   }, [state.isLoggedIn, state.user, volumeStatus, appDispatch]);
-  // --- Combined Effect for Market Details and Initial Volume Data Fetch --- END
+  // REMOVED --- Combined Effect for Market Details and Initial Volume Data Fetch --- END
 
-  // Axios interceptor for 401 errors
+  // REMOVED Axios interceptor for 401 errors
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
+          // REMOVED Check if token is still present before logging out
           if (!tokenService.verifyTokenPresence()) {
             dispatch({ type: "LOGOUT" });
             navigate("/login");
@@ -519,111 +514,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => axios.interceptors.response.eject(interceptor);
   }, [navigate]);
 
-  // Implement the updateUserSettings method
-  const updateUserSettings = useCallback(
-    async (settings: UserSettings): Promise<boolean> => {
-      try {
-        if (!state.user) {
-          return false;
-        }
-
-        const response = await axios.put(
-          `${import.meta.env.VITE_API_URL}/users/settings/update`,
-          {
-            userId: state.user.id,
-            settings,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${tokenService.getToken()}`,
-            },
-          }
-        );
-
-        if (response.data.success) {
-          dispatch({
-            type: "UPDATE_USER_SETTINGS",
-            payload: response.data.settings || settings,
-          });
-          return true;
-        }
-        return false;
-      } catch (error) {
-        console.error("Error updating user settings:", error);
-        return false;
-      }
-    },
-    [state.user]
-  );
-
-  // Implement the saveGuidancePreferences method
-  const saveGuidancePreferences = useCallback(
-    async (guidanceIds: number[]): Promise<boolean> => {
-      try {
-        if (!state.user) {
-          return false;
-        }
-
-        // Create guidance preferences array with order
-        const guidance = guidanceIds.map((id, index) => ({
-          id,
-          order: index,
-        }));
-
-        // Update user settings with new guidance preferences
-        const settings: UserSettings = {
-          guidance,
-        };
-
-        return await updateUserSettings(settings);
-      } catch (error) {
-        console.error("Error saving guidance preferences:", error);
-        return false;
-      }
-    },
-    [state.user, updateUserSettings]
-  );
-
-  // --- NEW syncGuidanceSettings Function --- START
-  const syncGuidanceSettings = useCallback(
-    async (payload: {
-      guidance_settings: GuidanceSettingsPayload;
-    }): Promise<void> => {
-      if (!state.user) {
-        console.warn("Cannot sync guidance settings, user not logged in.");
-        return; // Or throw error
-      }
-      try {
-        // Use the PATCH endpoint designed for guidance settings
-        const response = await axios.patch(
-          `${import.meta.env.VITE_API_URL}/users/sync-settings`,
-          payload,
-          { headers: { Authorization: `Bearer ${tokenService.getToken()}` } }
-        );
-
-        // Update context state with the settings confirmed by the backend response
-        if (response.data.settings) {
-          // Ensure the payload for dispatch matches what the reducer expects
-          // If reducer merges top-level, dispatch top-level. If it expects guidance_settings nested, dispatch that.
-          // Assuming reducer merges top-level based on UPDATE_USER_SETTINGS structure:
-          dispatch({
-            type: "UPDATE_USER_SETTINGS",
-            payload: response.data.settings,
-          });
-        } else {
-          console.warn(
-            "Sync response did not contain settings to update context."
-          );
-        }
-      } catch (error) {
-        console.error("Failed to sync guidance settings:", error);
-        throw error; // Re-throw so the caller (logout handler) knows it failed
-      }
-    },
-    [state.user]
-  ); // Added dependency
-  // --- NEW syncGuidanceSettings Function --- END
-
   const value = {
     user: state.user,
     isLoggedIn: state.isLoggedIn,
@@ -631,15 +521,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     login,
     logout,
     checkAuth,
-    updateUserSettings,
-    saveGuidancePreferences,
-    syncGuidanceSettings,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 };
 
-// Hook
+// REMOVED Hook
 export const useUser = (): UserContextType => {
   const context = useContext(UserContext);
   if (context === undefined) {
