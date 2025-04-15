@@ -1,4 +1,4 @@
-import { DialogTitle, Box, Typography, CircularProgress } from "@mui/material";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import { useState } from "react";
 import { DynamicTable } from "../../../reusableComponents/dynamicTable";
 import { AccountDetails } from "./accountDetails";
@@ -114,10 +114,18 @@ export const DepletionDetails = ({
         />
       ) : (
         <>
-          <DialogTitle>Depletion Details</DialogTitle>
           <Box sx={{ mb: 3, px: 3 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 500,
+                color: (theme) => theme.palette.primary.main,
+              }}
+            >
+              DEPLETION DETAILS
+            </Typography>
             <Typography variant="subtitle1">
-              <strong>Size SKU:</strong> {variant_size_pack_desc}
+              <strong>Size Pack:</strong> {variant_size_pack_desc}
             </Typography>
             <Typography variant="subtitle1">
               <strong>Market:</strong> {market}

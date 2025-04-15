@@ -819,8 +819,16 @@ export const Summary = ({
                   onChange={handleMarketChange}
                   input={<OutlinedInput label="Filter Markets" />}
                   renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selected.map((value) => {
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "nowrap",
+                        gap: 0.5,
+                        overflow: "hidden",
+                        alignItems: "flex-end",
+                      }}
+                    >
+                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => {
                         const market = marketData.find(
                           (m) => m.market_id === value
                         );
@@ -834,6 +842,7 @@ export const Summary = ({
                             sx={{
                               borderRadius: "16px",
                               backgroundColor: "transparent",
+                              flexShrink: 0,
                               "& .MuiChip-label": { px: 1 },
                             }}
                             onDelete={(e) => {
@@ -845,6 +854,14 @@ export const Summary = ({
                           />
                         );
                       })}
+                      {selected.length > MAX_CHIPS_VISIBLE && (
+                        <Typography
+                          variant="body2"
+                          sx={{ pl: 0.5, flexShrink: 0, pb: 0.25 }}
+                        >
+                          +{selected.length - MAX_CHIPS_VISIBLE} more
+                        </Typography>
+                      )}
                       {selected.length === 0 && (
                         <Box sx={{ minHeight: "24px" }} />
                       )}
