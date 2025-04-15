@@ -377,15 +377,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     : depletionsStatus;
 
   // --- Log the received data --- START
-  useEffect(() => {
-    console.log("MARKET Depletions data from Redux:", rawVolumeData);
-    console.log("MARKET Depletions status from Redux:", depletionsStatus);
-    console.log("CUSTOMER Depletions data from Redux:", customerRawVolumeData);
-    console.log(
-      "CUSTOMER Depletions status from Redux:",
-      customerDepletionsStatus
-    );
-  }, [
+  useEffect(() => {}, [
     rawVolumeData,
     depletionsStatus,
     customerRawVolumeData,

@@ -85,10 +85,6 @@ export const fetchVolumeData = createAsyncThunk<
                 // Only include 'brands' param if not null
                 ...(brandsParam && { brands: brandsParam }),
             };
-            console.log('[depletionSlice.fetchVolumeData] Making API call:', {
-              url: requestUrl,
-              params: requestParams,
-            });
             // --- Log API Call Parameters --- END
             
             const response = await axios.get(
@@ -171,13 +167,11 @@ const volumeSlice = createSlice({
                     state.customerRawApiData = payload.rawData;
                     state.customerLastActualMonthIndex = payload.lastActualMonthIndex; // Store if needed
                     state.customerError = null;
-                    console.log("[volumeSlice] CUSTOMER fetchVolumeData fulfilled. Data (first 5 items):", payload.rawData.slice(0, 5));
                 } else {
                     state.status = 'succeeded';
                     state.rawApiData = payload.rawData;
                     state.lastActualMonthIndex = payload.lastActualMonthIndex;
                     state.error = null;
-                    console.log("[volumeSlice] MARKET fetchVolumeData fulfilled. Data (first 5 items):", payload.rawData.slice(0, 5));
                 }
             })
             .addCase(fetchVolumeData.rejected, (state, action) => {

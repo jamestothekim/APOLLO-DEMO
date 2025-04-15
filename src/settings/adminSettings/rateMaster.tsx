@@ -41,7 +41,7 @@ export const RateMaster = () => {
         // Add unique IDs to each row
         const dataWithIds = response.data.map((row: RateData) => ({
           ...row,
-          id: `${row.hp_market}-${row.variant_size_pack_id}`,
+          id: `${row.market_code}-${row.customer_id}-${row.variant_size_pack_id}`,
         }));
 
         setData(dataWithIds);

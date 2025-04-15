@@ -576,7 +576,7 @@ const ReportBuilder = () => {
         <Grid container>
           <Grid item xs={12}>
             <Paper
-              elevation={1}
+              elevation={0}
               variant="outlined"
               sx={{
                 p: 1.5,

@@ -397,9 +397,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
             }
           }
         } else {
-          console.log(
-            "[UserProvider] User has no market access defined in state."
-          );
           return;
         }
 
@@ -445,9 +442,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
             }
           });
         } else {
-          console.log(
-            "[UserProvider] Skipping MARKET fetchVolumeData as no market-managed market IDs were found."
-          );
         }
 
         // 4. Dispatch fetchVolumeData for Customer View (if applicable)
@@ -461,10 +455,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
             })
           ).then((action) => {
             if (fetchVolumeData.fulfilled.match(action)) {
-              console.log(
-                "[UserProvider] CUSTOMER fetchVolumeData fulfilled. Data (first 5 items):",
-                action.payload.rawData.slice(0, 5)
-              );
             } else if (fetchVolumeData.rejected.match(action)) {
               console.error(
                 "[UserProvider] CUSTOMER fetchVolumeData rejected:",
@@ -473,9 +463,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
             }
           });
         } else {
-          console.log(
-            "[UserProvider] Skipping CUSTOMER fetchVolumeData as no customer-managed customer IDs were found."
-          );
         }
       };
 
