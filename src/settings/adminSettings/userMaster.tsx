@@ -16,11 +16,15 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  InputAdornment,
+  IconButton,
 } from "@mui/material";
 import {
   CheckCircle as CheckCircleIcon,
   Cancel as XIcon,
   PersonAdd as PersonAddIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
 } from "@mui/icons-material";
 import axios from "axios";
 import { useUser } from "../../userContext";
@@ -69,6 +73,8 @@ const UserMaster = () => {
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState<string>("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Fetch users and market data
   useEffect(() => {
@@ -205,6 +211,8 @@ const UserMaster = () => {
   const handleCloseSidebar = () => {
     setSidebarOpen(false);
     setEditingUser(null);
+    setPasswordError(""); // Reset password error on close
+    setShowPassword(false); // Reset password visibility on close
   };
 
   const showSnackbar = (message: string, severity: "success" | "error") => {
@@ -219,7 +227,15 @@ const UserMaster = () => {
   ) => {
     if (!editingUser) return;
 
-    if (field === "markets") {
+    // Validate password if the field is 'password' and it's a new user
+    if (field === "password" && editingUser.id === 0) {
+      const validationError = validatePassword(value);
+      setPasswordError(validationError);
+      setEditingUser({
+        ...editingUser,
+        [field]: value,
+      });
+    } else if (field === "markets") {
       setEditingUser({
         ...editingUser,
         user_access: {
@@ -246,12 +262,30 @@ const UserMaster = () => {
   const generatePassword = () => {
     const length = 12;
     const charset =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?"; // Expanded charset
     let password = "";
     for (let i = 0; i < length; i++) {
       password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     return password;
+  };
+
+  // Password validation function
+  const validatePassword = (password: string): string => {
+    if (!password) {
+      return "Password is required.";
+    }
+    if (password.length < 7) {
+      return "Password must be at least 7 characters long.";
+    }
+    if (!/[A-Z]/.test(password)) {
+      return "Password must contain at least one uppercase letter.";
+    }
+    // Using a broader set of special characters based on generatePassword
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password)) {
+      return "Password must contain at least one special character.";
+    }
+    return ""; // No error
   };
 
   const columns = [
@@ -331,6 +365,7 @@ const UserMaster = () => {
       }
 
       showSnackbar("User deleted successfully", "success");
+      setDeleteConfirmOpen(false);
       setSidebarOpen(false);
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -384,6 +419,10 @@ const UserMaster = () => {
             label: editingUser?.id === 0 ? "Create User" : "Save Changes",
             onClick: handleSave,
             variant: "contained" as const,
+            // Disable Create User if password is empty or invalid for new users
+            disabled:
+              editingUser?.id === 0 &&
+              (!editingUser?.password || !!passwordError),
           },
         ]}
       >
@@ -421,23 +460,51 @@ const UserMaster = () => {
                   fullWidth
                 />
                 {editingUser?.id === 0 && (
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                  <Box
+                    sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}
+                  >
                     <TextField
-                      label="Generated Password"
+                      label="Password"
+                      type={showPassword ? "text" : "password"}
                       size="small"
                       value={editingUser?.password || ""}
-                      InputProps={{
-                        readOnly: true,
-                      }}
+                      onChange={(e) =>
+                        handleEditChange("password", e.target.value)
+                      }
+                      error={!!passwordError}
+                      helperText={
+                        passwordError || "Min 7 chars, 1 uppercase, 1 special."
+                      }
                       fullWidth
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label="toggle password visibility"
+                              onClick={() => setShowPassword(!showPassword)}
+                              onMouseDown={(e) => e.preventDefault()}
+                              edge="end"
+                            >
+                              {showPassword ? (
+                                <VisibilityOffIcon />
+                              ) : (
+                                <VisibilityIcon />
+                              )}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
                     />
                     <Button
                       variant="outlined"
                       size="small"
-                      onClick={() =>
-                        handleEditChange("password", generatePassword())
-                      }
-                      sx={{ whiteSpace: "nowrap" }}
+                      onClick={() => {
+                        const newPassword = generatePassword();
+                        handleEditChange("password", newPassword);
+                        setPasswordError("");
+                        setShowPassword(true);
+                      }}
+                      sx={{ whiteSpace: "nowrap", height: "40px" }}
                     >
                       Generate
                     </Button>
