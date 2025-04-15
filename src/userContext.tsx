@@ -4,9 +4,18 @@ import React, {
   useReducer,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+// --- Redux Imports for Initial Fetch --- START
+import { useSelector, useDispatch } from "react-redux";
+import type { AppDispatch, RootState } from "./redux/store";
+import {
+  fetchVolumeData,
+  selectVolumeDataStatus,
+} from "./redux/depletionSlice";
+// --- Redux Imports for Initial Fetch --- END
 
 // Types
 export interface MarketAccess {
@@ -200,6 +209,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const navigate = useNavigate();
+  // --- Redux Hooks for Initial Fetch --- START
+  const appDispatch = useDispatch<AppDispatch>();
+  const volumeStatus = useSelector((state: RootState) =>
+    selectVolumeDataStatus(state)
+  );
+  // --- Redux Hooks for Initial Fetch --- END
+
+  // --- Ref to track initial data fetch --- START
+  const initialFetchPerformedRef = useRef(false);
+  // --- Ref to track initial data fetch --- END
 
   const checkAuth = async (): Promise<boolean> => {
     try {
@@ -269,6 +288,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       // Still logout even if the server call fails
     } finally {
       dispatch({ type: "LOGOUT" });
+      initialFetchPerformedRef.current = false;
       navigate("/login");
     }
   };
@@ -372,6 +392,115 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => observer.disconnect();
   }, []);
 
+  // --- Combined Effect for Market Details and Initial Volume Data Fetch --- START
+  useEffect(() => {
+    console.log(
+      "[UserProvider] Combined effect hook triggered. Current states:",
+      {
+        isLoggedIn: state.isLoggedIn,
+        hasUser: !!state.user,
+        userObject: state.user,
+        volumeStatus: volumeStatus,
+        initialFetchFlag: initialFetchPerformedRef.current,
+      }
+    );
+
+    // Only run if:
+    // 1. Logged in
+    // 2. User data is available
+    // 3. Initial fetch hasn't been performed yet for this session
+    if (state.isLoggedIn && state.user && !initialFetchPerformedRef.current) {
+      // Set the flag *before* starting the async operation
+      initialFetchPerformedRef.current = true;
+      console.log("[UserProvider] Initial fetch flag set to true.");
+
+      const fetchMarketDetailsAndVolumeData = async () => {
+        let actualMarketIds: string[] = []; // Default to empty array
+
+        // 1. Fetch Actual Market IDs if user has access defined
+        if (state.user?.user_access?.Markets?.length) {
+          const userMarketNumericIds = state.user.user_access.Markets.map(
+            (m) => m.id
+          );
+
+          if (userMarketNumericIds.length > 0) {
+            try {
+              const response = await axios.get<
+                { id: number; market: string; market_id: string }[]
+              >(
+                `${
+                  import.meta.env.VITE_API_URL
+                }/volume/get-markets?ids=${userMarketNumericIds.join(",")}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${tokenService.getToken()}`,
+                  },
+                }
+              );
+
+              if (response.data && response.data.length > 0) {
+                actualMarketIds = response.data.map((m) => m.market_id);
+                console.log(
+                  "[UserProvider] Fetched actual market IDs for user:",
+                  actualMarketIds
+                );
+              } else {
+                console.log(
+                  "[UserProvider] /get-markets returned no data for the user's numeric IDs. Proceeding with empty market list."
+                );
+                // actualMarketIds remains []
+              }
+            } catch (error) {
+              console.error(
+                "[UserProvider] Error fetching market details from /get-markets. Proceeding with empty market list:",
+                error
+              );
+              // actualMarketIds remains []
+            }
+          } else {
+            console.log(
+              "[UserProvider] User has market access array but no numeric IDs. Proceeding with empty market list."
+            );
+            // actualMarketIds remains []
+          }
+        } else {
+          console.log(
+            "[UserProvider] User has no market access defined. Proceeding with empty market list."
+          );
+          // actualMarketIds remains []
+        }
+
+        // 2. Dispatch fetchVolumeData with the determined market IDs (could be populated or empty)
+        // Keep isCustomerView as false for the initial default load.
+        console.log(
+          `[UserProvider] Dispatching fetchVolumeData with market IDs: ${JSON.stringify(
+            actualMarketIds
+          )}`
+        );
+        appDispatch(
+          fetchVolumeData({
+            markets: actualMarketIds,
+            brands: null,
+            isCustomerView: false,
+          })
+        ).then((action) => {
+          if (fetchVolumeData.fulfilled.match(action)) {
+            // Log removed
+          } else if (fetchVolumeData.rejected.match(action)) {
+            console.error(
+              "[UserProvider] fetchVolumeData rejected:",
+              action.payload
+            );
+          }
+        });
+      };
+
+      // Execute the combined fetch logic
+      fetchMarketDetailsAndVolumeData();
+    }
+  }, [state.isLoggedIn, state.user, volumeStatus, appDispatch]);
+  // --- Combined Effect for Market Details and Initial Volume Data Fetch --- END
+
   // Axios interceptor for 401 errors
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
@@ -464,7 +593,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         console.warn("Cannot sync guidance settings, user not logged in.");
         return; // Or throw error
       }
-      console.log("Syncing guidance settings to backend:", payload);
       try {
         // Use the PATCH endpoint designed for guidance settings
         const response = await axios.patch(
@@ -472,7 +600,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           payload,
           { headers: { Authorization: `Bearer ${tokenService.getToken()}` } }
         );
-        console.log("Guidance sync API call successful:", response.data);
 
         // Update context state with the settings confirmed by the backend response
         if (response.data.settings) {
@@ -483,7 +610,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
             type: "UPDATE_USER_SETTINGS",
             payload: response.data.settings,
           });
-          console.log("User context updated with synced settings.");
         } else {
           console.warn(
             "Sync response did not contain settings to update context."

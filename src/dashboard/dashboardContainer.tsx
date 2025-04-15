@@ -1,61 +1,35 @@
-import { useState, useEffect } from "react";
 import { Box, Paper } from "@mui/material";
 import { ForecastByBrand } from "./forecastByBrand";
 import { LoadingProgress } from "../reusableComponents/loadingProgress";
-import axios from "axios";
-
-interface DashboardData {
-  brand: string;
-  jan: number;
-  feb: number;
-  mar: number;
-  apr: number;
-  may: number;
-  jun: number;
-  jul: number;
-  aug: number;
-  sep: number;
-  oct: number;
-  nov: number;
-  dec: number;
-  total: number;
-}
+import { useAppSelector } from "../redux/store";
+import {
+  selectDashboardData,
+  selectVolumeDataStatus,
+} from "../redux/depletionSlice"; // Import necessary items from volumeSlice
 
 export const DashboardContainer = () => {
-  const [data, setData] = useState<DashboardData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Removed unused dispatch
+  // Select the processed dashboard data and loading status
+  const data = useAppSelector(selectDashboardData); // Use the new selector
+  const loadingStatus = useAppSelector(selectVolumeDataStatus); // Use status selector
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/analytics/dashboard`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
-        setData(response.data);
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-      }
-    };
-
-    fetchDashboardData();
-  }, []);
+  // Determine loading state based on status
+  const isLoading = loadingStatus === "loading" || loadingStatus === "idle";
 
   return (
     <Box sx={{ position: "relative" }}>
       {isLoading && (
         <Box sx={{ height: "80vh" }}>
-          <LoadingProgress onComplete={() => setIsLoading(false)} />
+          {/* Keep onComplete for now, as LoadingProgress might still require it */}
+          <LoadingProgress onComplete={() => {}} />
         </Box>
       )}
+      {/* Use derived isLoading state */}
       <Box sx={{ visibility: isLoading ? "hidden" : "visible" }}>
         <Paper elevation={3}>
           <Box sx={{ p: 4 }}>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {/* Pass the processed data from the selector */}
               <ForecastByBrand data={data} />
               {/* Add more dashboard components here as needed */}
             </Box>

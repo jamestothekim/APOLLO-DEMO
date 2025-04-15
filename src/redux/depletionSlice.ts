@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import axios from 'axios';
 import type { RootState } from './store'; // Assuming your store file is named store.ts
 
@@ -64,19 +64,28 @@ export const fetchVolumeData = createAsyncThunk<
 
             // Use null for empty arrays if the API expects that
             const marketsParam = !isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
-            const customersParam = isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
+            let customersParam = isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
             const brandsParam = brands && brands.length > 0 ? JSON.stringify(brands) : null;
 
+            // --- Log API Call Parameters --- START
+            const requestUrl = `${import.meta.env.VITE_API_URL}/volume/depletions-forecast`;
+            const requestParams = {
+                isMarketView: !isCustomerView,
+                markets: marketsParam,
+                customers: customersParam,
+                // Only include 'brands' param if not null
+                ...(brandsParam && { brands: brandsParam }),
+            };
+            console.log('[depletionSlice.fetchVolumeData] Making API call:', {
+              url: requestUrl,
+              params: requestParams,
+            });
+            // --- Log API Call Parameters --- END
+            
             const response = await axios.get(
-                `${import.meta.env.VITE_API_URL}/volume/depletions-forecast`,
+                requestUrl, // Use the defined URL
                 {
-                    params: {
-                        isMarketView: !isCustomerView,
-                        markets: marketsParam,
-                        customers: customersParam,
-                        // Only include 'brands' param if not null
-                        ...(brandsParam && { brands: brandsParam }),
-                    },
+                    params: requestParams, // Use the defined params
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
@@ -167,6 +176,84 @@ export const selectVolumeDataError = (state: RootState): string | null => state.
 // Selector for the last actual month index
 export const selectLastActualMonthIndex = (state: RootState): number => state.volume.lastActualMonthIndex;
 
+// --- Selector for Dashboard Data (Add this section) ---
+
+// Define the shape for the dashboard component
+interface DashboardData {
+    brand: string;
+    jan: number;
+    feb: number;
+    mar: number;
+    apr: number;
+    may: number;
+    jun: number;
+    jul: number;
+    aug: number;
+    sep: number;
+    oct: number;
+    nov: number;
+    dec: number;
+    total: number;
+}
+
+export const selectDashboardData = createSelector(
+    [selectRawVolumeData], // Input selector
+    (rawApiData): DashboardData[] => {
+        const aggregated: { [brand: string]: DashboardData } = {};
+
+        rawApiData.forEach((item) => {
+            const brand = item.brand;
+            const volume = item.case_equivalent_volume ?? 0;
+            const month = item.month; // Month number (1-12)
+
+            if (!brand || !month || month < 1 || month > 12) {
+                return; // Skip items without brand or valid month
+            }
+
+            // Initialize brand entry if it doesn't exist
+            if (!aggregated[brand]) {
+                aggregated[brand] = {
+                    brand: brand,
+                    jan: 0, feb: 0, mar: 0, apr: 0, may: 0, jun: 0,
+                    jul: 0, aug: 0, sep: 0, oct: 0, nov: 0, dec: 0,
+                    total: 0,
+                };
+            }
+
+            // Add volume to the correct month and total
+            const monthKey = [
+                'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+            ][month - 1] as keyof Omit<DashboardData, 'brand' | 'total'>;
+
+            if (monthKey) {
+                aggregated[brand][monthKey] += volume;
+            }
+            aggregated[brand].total += volume;
+        });
+
+        // Convert to array, round values, and sort
+        const result = Object.values(aggregated).map(row => ({
+            ...row,
+            jan: roundToWhole(row.jan),
+            feb: roundToWhole(row.feb),
+            mar: roundToWhole(row.mar),
+            apr: roundToWhole(row.apr),
+            may: roundToWhole(row.may),
+            jun: roundToWhole(row.jun),
+            jul: roundToWhole(row.jul),
+            aug: roundToWhole(row.aug),
+            sep: roundToWhole(row.sep),
+            oct: roundToWhole(row.oct),
+            nov: roundToWhole(row.nov),
+            dec: roundToWhole(row.dec),
+            total: roundToWhole(row.total),
+        })).sort((a, b) => a.brand.localeCompare(b.brand));
+
+        return result;
+    }
+);
+
 // Selectors for derived/processed data will be added later (using createSelector for memoization)
 // Example placeholder:
 // export const selectProcessedDepletionsForTable = createSelector(
@@ -190,3 +277,8 @@ export default volumeSlice.reducer;
 
 // Export specific actions if needed (e.g., clearVolumeData)
 // export const { clearVolumeData } = volumeSlice.actions;
+
+// Helper function for rounding numbers (add this)
+function roundToWhole(num: number | null | undefined): number {
+    return Math.round(num || 0);
+}

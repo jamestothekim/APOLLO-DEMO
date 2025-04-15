@@ -28,9 +28,13 @@ import type { Guidance } from "../components/guidance";
 import axios from "axios";
 
 // --- Redux Imports ---
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { triggerSync } from "../../redux/syncSlice"; // Import the action creator
-import type { AppDispatch } from "../../redux/store"; // Optional: for typed dispatch
+import type { AppDispatch } from "../../redux/store"; // Added RootState
+import {
+  selectRawVolumeData, // Added import
+  selectVolumeDataStatus, // Added import
+} from "../../redux/depletionSlice";
 // ---------------------
 
 import {
@@ -353,6 +357,19 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const { user } = useUser();
   const theme = useTheme();
   const dispatch: AppDispatch = useDispatch(); // <-- Get the dispatch function
+
+  // --- Redux State for Volume Data --- START
+  const rawVolumeData = useSelector(selectRawVolumeData);
+  const depletionsStatus = useSelector(selectVolumeDataStatus);
+  // --- Redux State for Volume Data --- END
+
+  // --- Log the received data --- START
+  useEffect(() => {
+    console.log("Depletions data from Redux:", rawVolumeData);
+    console.log("Depletions status from Redux:", depletionsStatus);
+  }, [rawVolumeData, depletionsStatus]);
+  // --- Log the received data --- END
+
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [availableMarkets, setAvailableMarkets] = useState<string[]>([]);

@@ -51,6 +51,10 @@ import { GuidanceDialog } from "../components/guidance";
 import { LineChart } from "@mui/x-charts";
 import { RawDepletionForecastItem } from "../../redux/depletionSlice";
 import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
+import {
+  selectRawVolumeData,
+  selectVolumeDataStatus,
+} from "../../redux/depletionSlice";
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -105,8 +109,6 @@ const DEFAULT_SELECTED_BRANDS = [
 ];
 
 interface SummaryProps {
-  rawVolumeData: RawDepletionForecastItem[];
-  depletionsStatus: "idle" | "loading" | "succeeded" | "failed";
   availableBrands: string[];
   marketData: MarketData[];
   availableGuidance: Guidance[];
@@ -252,13 +254,13 @@ const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
 // --- End NEW Component ---
 
 export const Summary = ({
-  rawVolumeData,
-  depletionsStatus,
   availableBrands,
   marketData,
   availableGuidance,
 }: SummaryProps) => {
   const dispatch: AppDispatch = useDispatch();
+  const rawVolumeData = useSelector(selectRawVolumeData);
+  const depletionsStatus = useSelector(selectVolumeDataStatus);
   const lastSyncTrigger = useSelector(
     (state: RootState) => state.sync.lastSyncTrigger
   );
@@ -329,16 +331,18 @@ export const Summary = ({
 
     setLocalCalcStatus("calculating");
 
-    const filteredData = rawVolumeData.filter((item) => {
-      if (!item.market_id) return false;
-      const marketMatch =
-        selectedMarkets.length === 0 ||
-        selectedMarkets.includes(item.market_id);
-      const brandMatch =
-        selectedBrands.length === 0 ||
-        (item.brand && selectedBrands.includes(item.brand));
-      return marketMatch && brandMatch;
-    });
+    const filteredData = rawVolumeData.filter(
+      (item: RawDepletionForecastItem) => {
+        if (!item.market_id) return false;
+        const marketMatch =
+          selectedMarkets.length === 0 ||
+          selectedMarkets.includes(item.market_id);
+        const brandMatch =
+          selectedBrands.length === 0 ||
+          (item.brand && selectedBrands.includes(item.brand));
+        return marketMatch && brandMatch;
+      }
+    );
 
     let pendingChangesMap = new Map<string, RestoredState>();
     if (pendingChangesStatus === "succeeded") {

@@ -16,21 +16,9 @@ import {
   selectAvailableGuidance,
 } from "../redux/userSettingsSlice"; // Use correct filename
 
-// --- Import Volume Data Fetching --- START
-import {
-  fetchVolumeData,
-  selectRawVolumeData,
-  selectVolumeDataStatus,
-} from "../redux/depletionSlice";
-// --- Import Volume Data Fetching --- END
-
 export const VolumeView = () => {
-  const { user } = useUser();
+  const { user, isLoggedIn } = useUser();
   const dispatch: AppDispatch = useDispatch();
-
-  // --- Redux State for Volume Data ---
-  const rawVolumeData = useSelector(selectRawVolumeData);
-  const volumeStatus = useSelector(selectVolumeDataStatus);
 
   const [isInitialDataLoading, setIsInitialDataLoading] = useState(true);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
@@ -39,16 +27,6 @@ export const VolumeView = () => {
 
   const isGuidanceInitializedInRedux = useSelector(selectIsGuidanceInitialized);
   const availableGuidanceFromRedux = useSelector(selectAvailableGuidance);
-
-  // --- Effect to Fetch Volume Data via Redux ---
-  useEffect(() => {
-    if (volumeStatus === "idle") {
-      // Fetch all data initially; filtering will happen later
-      dispatch(
-        fetchVolumeData({ markets: null, brands: null, isCustomerView: false })
-      );
-    }
-  }, [dispatch, volumeStatus]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -112,8 +90,10 @@ export const VolumeView = () => {
       }
     };
 
-    fetchInitialData();
-  }, [user, dispatch, isGuidanceInitializedInRedux]);
+    if (isLoggedIn) {
+      fetchInitialData();
+    }
+  }, [user, dispatch, isGuidanceInitializedInRedux, isLoggedIn]);
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -151,8 +131,6 @@ export const VolumeView = () => {
           }}
         >
           <Summary
-            rawVolumeData={rawVolumeData}
-            depletionsStatus={volumeStatus}
             availableBrands={availableBrands}
             marketData={marketData}
             availableGuidance={availableGuidanceFromRedux}

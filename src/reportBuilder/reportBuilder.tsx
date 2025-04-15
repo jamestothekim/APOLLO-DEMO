@@ -2,7 +2,6 @@ import {
   Box,
   Paper,
   Typography,
-  CircularProgress,
   Grid,
   useTheme,
   Chip,
@@ -19,6 +18,7 @@ import {
   OutlinedInput,
   Snackbar,
   Alert,
+  CircularProgress,
 } from "@mui/material";
 import {
   AVAILABLE_DIMENSIONS,
@@ -29,8 +29,16 @@ import {
   exportReportToCSV,
 } from "./reportUtil/reportUtil";
 import { Toolbox } from "../volume/components/toolbox";
-import axios from "axios";
 import { useState, useEffect } from "react";
+// --- Redux Imports --- START
+import { useSelector } from "react-redux";
+import type { RootState } from "../redux/store";
+import {
+  selectRawVolumeData,
+  selectVolumeDataStatus,
+  selectVolumeDataError,
+} from "../redux/depletionSlice";
+// --- Redux Imports --- END
 
 // --- Report Table Component ---
 interface ReportTableProps {
@@ -209,8 +217,6 @@ interface SnackbarState {
 
 const ReportBuilder = () => {
   const theme = useTheme();
-  const [isDataLoading, setIsDataLoading] = useState(false);
-  const [rawData, setRawData] = useState<any[]>([]);
   const [aggregationResult, setAggregationResult] = useState<AggregationResult>(
     {
       rows: [],
@@ -236,38 +242,21 @@ const ReportBuilder = () => {
     severity: "info",
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsDataLoading(true);
-      setRawData([]);
-      try {
-        const marketsParam = null;
-        const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/volume/depletions-forecast`,
-          {
-            params: {
-              isMarketView: true,
-              markets: marketsParam,
-            },
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
-        setRawData(response.data);
-        console.log("Fetched Report Builder Data:", response.data);
-      } catch (error) {
-        console.error("Error fetching summary data:", error);
-      } finally {
-        setIsDataLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  // --- Get Data from Redux --- START
+  const rawVolumeData = useSelector((state: RootState) =>
+    selectRawVolumeData(state)
+  );
+  const depletionsStatus = useSelector((state: RootState) =>
+    selectVolumeDataStatus(state)
+  );
+  const depletionsError = useSelector((state: RootState) =>
+    selectVolumeDataError(state)
+  );
+  // --- Get Data from Redux --- END
 
   // --- Update useEffect to pass filter values ---
   useEffect(() => {
-    if (rawData.length > 0 && selectedCalculation) {
+    if (rawVolumeData.length > 0 && selectedCalculation) {
       console.log("Selections changed, processing data...");
 
       const getDimsByIds = (ids: string[]): ReportDimension[] =>
@@ -303,7 +292,7 @@ const ReportBuilder = () => {
       }));
 
       const result = processReportData(
-        rawData,
+        rawVolumeData,
         filtersWithValues, // Pass dimensions with their selected values
         getSingleDim(selectedRow),
         getSingleDim(selectedColumn),
@@ -324,7 +313,7 @@ const ReportBuilder = () => {
     selectedFilters,
     selectedFilterValues, // <-- Add to dependency array
     selectedCalculation,
-    rawData,
+    rawVolumeData,
   ]);
 
   // --- Handler for changing selected filter values ---
@@ -551,7 +540,8 @@ const ReportBuilder = () => {
         </Box>
       </Paper>
 
-      {isDataLoading && (
+      {/* --- Loading State --- */}
+      {depletionsStatus === "loading" && (
         <Box
           sx={{
             display: "flex",
@@ -565,14 +555,24 @@ const ReportBuilder = () => {
         </Box>
       )}
 
-      {!isDataLoading && rawData.length === 0 && (
+      {/* --- Error State --- */}
+      {depletionsStatus === "failed" && (
+        <Box sx={{ p: 3 }}>
+          <Alert severity="error" variant="filled">
+            Error loading data: {depletionsError || "Unknown error"}
+          </Alert>
+        </Box>
+      )}
+
+      {/* --- Empty State (after loading/no error) --- */}
+      {depletionsStatus === "succeeded" && rawVolumeData.length === 0 && (
         <Typography sx={{ textAlign: "center", color: "text.secondary", p: 3 }}>
-          No data loaded.
+          No data available.
         </Typography>
       )}
 
-      {/* Report Table Area */}
-      {!isDataLoading && rawData.length > 0 && (
+      {/* Report Table Area - Show only when succeeded and data exists */}
+      {depletionsStatus === "succeeded" && rawVolumeData.length > 0 && (
         <Grid container>
           <Grid item xs={12}>
             <Paper
@@ -601,7 +601,7 @@ const ReportBuilder = () => {
                     if (!dimension) return null;
 
                     const availableValues = getUniqueValuesForDimension(
-                      rawData,
+                      rawVolumeData,
                       filterId
                     );
                     const currentSelection =
