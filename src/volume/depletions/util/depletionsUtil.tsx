@@ -17,7 +17,7 @@ export const FORECAST_OPTIONS: ForecastOption[] = [
 ];
 
 // Renamed to make it clear this is for sidebar
-export const SIDEBAR_BENCHMARK_OPTIONS = [
+export const SIDEBAR_GUIDANCE_OPTIONS = [
   {
     id: 1,
     label: "Last Year (LY)",
@@ -141,7 +141,7 @@ export interface ExportableData {
       isManuallyModified?: boolean;
     };
   };
-  [key: string]: any; // Allow for benchmark fields
+  [key: string]: any; // Allow for guidance fields
 }
 
 export const exportToCSV = (
@@ -150,7 +150,7 @@ export const exportToCSV = (
 ) => {
   const monthKeys = MONTH_NAMES;
 
-  // Build a complete set of headers including benchmarks
+  // Build a complete set of headers including guidance
   const baseHeaders = [
     "Market",
     ...(data.some((row) => row.customer_name) ? ["Customer"] : []),
@@ -159,12 +159,12 @@ export const exportToCSV = (
     "VOL 9L (TY)",
   ];
 
-  // Add benchmark headers
-  const benchmarkHeaders =
-    selectedGuidance?.map((benchmark) =>
-      benchmark.sublabel
-        ? `${benchmark.label} (${benchmark.sublabel})`
-        : benchmark.label
+  // Add guidance headers
+  const guidanceHeaders =
+    selectedGuidance?.map((guidance) =>
+      guidance.sublabel
+        ? `${guidance.label} (${guidance.sublabel})`
+        : guidance.label
     ) || [];
 
   // Add month headers with ACT/FCST labels
@@ -175,7 +175,7 @@ export const exportToCSV = (
   });
 
   // Combine all headers for CSV
-  const headerRow = [...baseHeaders, ...benchmarkHeaders, ...monthHeaders];
+  const headerRow = [...baseHeaders, ...guidanceHeaders, ...monthHeaders];
 
   // Format each data row with proper formatting
   const dataRows = data.map((item) => {
@@ -197,23 +197,23 @@ export const exportToCSV = (
       formattedTotal,
     ];
 
-    // Format benchmark values
-    const benchmarkColumns =
-      selectedGuidance?.map((benchmark) => {
-        // Get benchmark value from the row
+    // Format guidance values
+    const guidanceColumns =
+      selectedGuidance?.map((guidance) => {
+        // Get guidance value from the row
         const value =
-          typeof benchmark.value === "string"
-            ? item[benchmark.value]
-            : item[`benchmark_${benchmark.id}`];
+          typeof guidance.value === "string"
+            ? item[guidance.value]
+            : item[`guidance_${guidance.id}`];
 
         if (value === undefined || isNaN(value)) return "";
 
-        // Apply appropriate formatting based on benchmark type
-        if (benchmark.calculation.format === "percent") {
+        // Apply appropriate formatting based on guidance type
+        if (guidance.calculation.format === "percent") {
           return `${Math.round(value * 100)}%`;
         } else if (
-          benchmark.label.toLowerCase().includes("gsv") &&
-          !benchmark.label.toLowerCase().includes("%")
+          guidance.label.toLowerCase().includes("gsv") &&
+          !guidance.label.toLowerCase().includes("%")
         ) {
           // Currency format for GSV values
           return new Intl.NumberFormat("en-US", {
@@ -241,7 +241,7 @@ export const exportToCSV = (
     });
 
     // Combine all columns for this row
-    return [...baseColumns, ...benchmarkColumns, ...monthValues];
+    return [...baseColumns, ...guidanceColumns, ...monthValues];
   });
 
   // Convert rows to CSV format, properly handling commas and quotes
@@ -295,7 +295,7 @@ export const calculateTotal = (months: {
   return Object.values(months).reduce((acc, curr) => acc + curr.value, 0);
 };
 
-// Add this type to handle benchmark data
+// Add this type to handle guidance data
 export interface GuidanceData {
   [key: string]: number;
 }
@@ -322,10 +322,10 @@ export interface Guidance {
 
 export const processGuidanceValue = (
   data: any[],
-  benchmark: Guidance,
+  guidance: Guidance,
   isCustomerView: boolean
 ): { [key: string]: number } => {
-  const benchmarkData: { [key: string]: number } = {};
+  const guidanceData: { [key: string]: number } = {};
   const aggregatedData: { [key: string]: { [field: string]: number } } = {};
 
   // First, aggregate the data by market/size-pack
@@ -354,18 +354,18 @@ export const processGuidanceValue = (
       Number(item.py_case_equivalent_volume) || 0;
   });
 
-  // Then process the aggregated data according to benchmark type
+  // Then process the aggregated data according to guidance type
   Object.entries(aggregatedData).forEach(([key, values]) => {
-    if (typeof benchmark.value === "string") {
+    if (typeof guidance.value === "string") {
       // Direct value (like py_case_equivalent_volume)
-      const fieldName = benchmark.value;
-      benchmarkData[key] = Math.round(values[fieldName] * 100) / 100;
+      const fieldName = guidance.value;
+      guidanceData[key] = Math.round(values[fieldName] * 100) / 100;
     } else {
       // Calculated value
-      const value = benchmark.value as GuidanceValue;
+      const value = guidance.value as GuidanceValue;
 
       if (
-        benchmark.calculation.type === "percentage" &&
+        guidance.calculation.type === "percentage" &&
         value.numerator &&
         value.denominator
       ) {
@@ -377,10 +377,10 @@ export const processGuidanceValue = (
         const numeratorValue = minuend - subtrahend;
 
         const denominatorValue = values[value.denominator];
-        benchmarkData[key] =
+        guidanceData[key] =
           denominatorValue === 0 ? 0 : numeratorValue / denominatorValue;
       } else if (
-        benchmark.calculation.type === "difference" &&
+        guidance.calculation.type === "difference" &&
         value.expression
       ) {
         // Handle difference calculations
@@ -388,17 +388,17 @@ export const processGuidanceValue = (
         const expressionParts = value.expression.split(" - ");
         const minuend = values[expressionParts[0]];
         const subtrahend = values[expressionParts[1]];
-        benchmarkData[key] = minuend - subtrahend;
+        guidanceData[key] = minuend - subtrahend;
       } else {
-        benchmarkData[key] = 0;
+        guidanceData[key] = 0;
       }
     }
   });
 
-  return benchmarkData;
+  return guidanceData;
 };
 
-// Add this new centralized function to recalculate benchmark values
+// Add this new centralized function to recalculate guidance values
 export const recalculateGuidance = (
   row: any,
   selectedGuidance: Guidance[]
@@ -448,18 +448,18 @@ export const recalculateGuidance = (
     updatedRow.py_gross_sales_value = 0;
   }
 
-  // Now recalculate all benchmarks
-  selectedGuidance.forEach((benchmark) => {
-    if (typeof benchmark.value === "string") {
+  // Now recalculate all guidance
+  selectedGuidance.forEach((guidance) => {
+    if (typeof guidance.value === "string") {
       // Direct values don't need recalculation as they come directly from the source data
       // These include py_case_equivalent_volume, gross_sales_value, py_gross_sales_value, etc.
     } else {
       // For calculated values (difference, percentage)
       if (
-        benchmark.calculation.type === "difference" &&
-        benchmark.value.expression
+        guidance.calculation.type === "difference" &&
+        guidance.value.expression
       ) {
-        const expressionParts = benchmark.value.expression.split(" - ");
+        const expressionParts = guidance.value.expression.split(" - ");
         const field1 = expressionParts[0].trim();
         const field2 = expressionParts[1].trim();
 
@@ -475,19 +475,19 @@ export const recalculateGuidance = (
 
         // Calculate the difference
         const result = (Number(value1) || 0) - (Number(value2) || 0);
-        updatedRow[`benchmark_${benchmark.id}`] = result;
+        updatedRow[`guidance_${guidance.id}`] = result;
       } else if (
-        benchmark.calculation.type === "percentage" &&
-        benchmark.value.numerator &&
-        benchmark.value.denominator
+        guidance.calculation.type === "percentage" &&
+        guidance.value.numerator &&
+        guidance.value.denominator
       ) {
         // Parse the numerator which is an expression like "field1 - field2"
-        const numeratorParts = benchmark.value.numerator.split(" - ");
+        const numeratorParts = guidance.value.numerator.split(" - ");
         const numerField1 = numeratorParts[0].trim();
         const numerField2 = numeratorParts[1].trim();
 
         // Get denominator field
-        const denomField = benchmark.value.denominator.trim();
+        const denomField = guidance.value.denominator.trim();
 
         // Get all the values, handling special cases
         const numerValue1 =
@@ -510,7 +510,7 @@ export const recalculateGuidance = (
 
         // Calculate the percentage, avoiding division by zero
         const result = denominator === 0 ? 0 : numerator / denominator;
-        updatedRow[`benchmark_${benchmark.id}`] = result;
+        updatedRow[`guidance_${guidance.id}`] = result;
       }
     }
   });
@@ -521,7 +521,7 @@ export const recalculateGuidance = (
 export const formatGuidanceValue = (
   value: number | undefined,
   format: string = "number",
-  benchmarkType?: string
+  guidanceType?: string
 ): React.ReactNode => {
   if (value === undefined || isNaN(value)) return "-";
   if (value === Infinity || value === -Infinity) return "-";
@@ -547,9 +547,9 @@ export const formatGuidanceValue = (
 
   // Handle currency format for GSV direct values and differences (but not percentages)
   if (
-    benchmarkType &&
-    benchmarkType.toLowerCase().includes("gsv") &&
-    !benchmarkType.toLowerCase().includes("%")
+    guidanceType &&
+    guidanceType.toLowerCase().includes("gsv") &&
+    !guidanceType.toLowerCase().includes("%")
   ) {
     const formattedValue = new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -609,37 +609,37 @@ export interface GuidanceDataSourceInput {
 
 export const getGuidanceDataForSidebar = (
   data: GuidanceDataSourceInput,
-  benchmarkOptions: GuidanceForecastOption[]
+  guidanceOptions: GuidanceForecastOption[]
 ): GuidanceMonthlyValueData => {
   const sidebarGuidanceData: GuidanceMonthlyValueData = {};
   const months = Object.keys(data.months);
 
-  // Process each benchmark option
-  benchmarkOptions.forEach((benchmark) => {
-    const benchmarkField = benchmark.value;
+  // Process each guidance option
+  guidanceOptions.forEach((guidance) => {
+    const guidanceField = guidance.value;
 
     // For direct values (like py_case_equivalent_volume, gross_sales_value)
-    if (typeof benchmarkField === "string" && !benchmark.calculation) {
+    if (typeof guidanceField === "string" && !guidance.calculation) {
       // Check if we have historical monthly data in the data object
-      if (data[`${benchmarkField}_months`]) {
+      if (data[`${guidanceField}_months`]) {
         // Use the actual historical monthly values
-        sidebarGuidanceData[benchmarkField] = months.map(
-          (month) => data[`${benchmarkField}_months`]?.[month]?.value || 0
+        sidebarGuidanceData[guidanceField] = months.map(
+          (month) => data[`${guidanceField}_months`]?.[month]?.value || 0
         );
       } else {
         // Fallback to distributing the total value if monthly data is not available
-        const totalGuidanceValue = data[benchmarkField];
+        const totalGuidanceValue = data[guidanceField];
         if (totalGuidanceValue !== undefined) {
           const totalValue = Number(totalGuidanceValue) || 0;
           const equalShare = Math.round((totalValue / months.length) * 10) / 10;
-          sidebarGuidanceData[benchmarkField] = Array(months.length).fill(
+          sidebarGuidanceData[guidanceField] = Array(months.length).fill(
             equalShare
           );
         }
       }
     }
-    // For calculated benchmarks, they will be handled in the QuantSidebar's trendLines calculation
-    // This ensures calculated benchmarks are always derived from the latest forecast data
+    // For calculated guidance, they will be handled in the QuantSidebar's trendLines calculation
+    // This ensures calculated guidance are always derived from the latest forecast data
   });
 
   return sidebarGuidanceData;

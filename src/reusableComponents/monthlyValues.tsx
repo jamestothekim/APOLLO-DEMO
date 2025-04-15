@@ -29,7 +29,7 @@ interface MonthlyValuesProps {
   label?: string;
   defaultExpanded?: boolean;
   gsvRate?: number;
-  benchmarkForecasts?: Array<{
+  guidanceForecasts?: Array<{
     id: number;
     label: string;
     value: string;
@@ -44,7 +44,7 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
   label = "MONTHLY VALUES",
   defaultExpanded = true,
   gsvRate,
-  benchmarkForecasts = [],
+  guidanceForecasts = [],
   availableGuidanceData = {},
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -163,9 +163,9 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
                       }}
                     />
 
-                    {benchmarkForecasts.map((benchmark) => {
+                    {guidanceForecasts.map((guidance) => {
                       const monthValues =
-                        availableGuidanceData[benchmark.value] || [];
+                        availableGuidanceData[guidance.value] || [];
                       if (monthValues.length === 0) return null;
 
                       const forecastValues = quarterGroups.flatMap(
@@ -173,19 +173,18 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
                           months.map((monthData) => monthData.value)
                       );
 
-                      const benchmarkValue = monthValues[globalIndex] || 0;
+                      const guidanceValue = monthValues[globalIndex] || 0;
                       const forecastValue = forecastValues[globalIndex];
-                      const diff = forecastValue - benchmarkValue;
+                      const diff = forecastValue - guidanceValue;
                       const percentDiff =
-                        benchmarkValue !== 0
-                          ? ((forecastValue - benchmarkValue) /
-                              benchmarkValue) *
+                        guidanceValue !== 0
+                          ? ((forecastValue - guidanceValue) / guidanceValue) *
                             100
                           : 0;
 
                       return (
                         <Box
-                          key={`${benchmark.id}-${monthData.month}`}
+                          key={`${guidance.id}-${monthData.month}`}
                           sx={{
                             mt: 1,
                             display: "flex",
@@ -210,7 +209,7 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
                               sx={{
                                 width: 8,
                                 height: 8,
-                                backgroundColor: benchmark.color,
+                                backgroundColor: guidance.color,
                                 borderRadius: "2px",
                               }}
                             />
@@ -218,7 +217,7 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
                               variant="caption"
                               color="text.secondary"
                             >
-                              {`${monthData.month} ${benchmark.label}`}
+                              {`${monthData.month} ${guidance.label}`}
                             </Typography>
                           </Box>
 

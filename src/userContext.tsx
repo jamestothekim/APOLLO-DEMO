@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useReducer, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  useCallback,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -25,14 +31,22 @@ export interface MarketAccess {
   };
 }
 
-// Add interface for benchmark settings
+// Add interface for guidance settings
 export interface GuidancePreference {
   id: number;
   order: number;
 }
 
+interface GuidanceSettingsPayload {
+  summary_cols?: number[];
+  summary_rows?: number[];
+  forecast_cols?: number[];
+  forecast_rows?: number[];
+}
+
 interface UserSettings {
-  benchmarks?: GuidancePreference[];
+  guidance?: GuidancePreference[];
+  guidance_settings?: GuidanceSettingsPayload;
   [key: string]: any;
 }
 
@@ -120,7 +134,10 @@ interface UserContextType {
   logout: () => Promise<void>;
   checkAuth: () => Promise<boolean>;
   updateUserSettings: (settings: UserSettings) => Promise<boolean>;
-  saveGuidancePreferences: (benchmarkIds: number[]) => Promise<boolean>;
+  saveGuidancePreferences: (guidanceIds: number[]) => Promise<boolean>;
+  syncGuidanceSettings: (payload: {
+    guidance_settings: GuidanceSettingsPayload;
+  }) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -374,64 +391,112 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [navigate]);
 
   // Implement the updateUserSettings method
-  const updateUserSettings = async (
-    settings: UserSettings
-  ): Promise<boolean> => {
-    try {
-      if (!state.user) {
+  const updateUserSettings = useCallback(
+    async (settings: UserSettings): Promise<boolean> => {
+      try {
+        if (!state.user) {
+          return false;
+        }
+
+        const response = await axios.put(
+          `${import.meta.env.VITE_API_URL}/users/settings/update`,
+          {
+            userId: state.user.id,
+            settings,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${tokenService.getToken()}`,
+            },
+          }
+        );
+
+        if (response.data.success) {
+          dispatch({
+            type: "UPDATE_USER_SETTINGS",
+            payload: response.data.settings || settings,
+          });
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error("Error updating user settings:", error);
         return false;
       }
-
-      const response = await axios.put(
-        `${import.meta.env.VITE_API_URL}/users/settings/update`,
-        {
-          userId: state.user.id,
-          settings,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${tokenService.getToken()}`,
-          },
-        }
-      );
-
-      if (response.data.success) {
-        dispatch({ type: "UPDATE_USER_SETTINGS", payload: settings });
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error("Error updating user settings:", error);
-      return false;
-    }
-  };
+    },
+    [state.user]
+  );
 
   // Implement the saveGuidancePreferences method
-  const saveGuidancePreferences = async (
-    benchmarkIds: number[]
-  ): Promise<boolean> => {
-    try {
-      if (!state.user) {
+  const saveGuidancePreferences = useCallback(
+    async (guidanceIds: number[]): Promise<boolean> => {
+      try {
+        if (!state.user) {
+          return false;
+        }
+
+        // Create guidance preferences array with order
+        const guidance = guidanceIds.map((id, index) => ({
+          id,
+          order: index,
+        }));
+
+        // Update user settings with new guidance preferences
+        const settings: UserSettings = {
+          guidance,
+        };
+
+        return await updateUserSettings(settings);
+      } catch (error) {
+        console.error("Error saving guidance preferences:", error);
         return false;
       }
+    },
+    [state.user, updateUserSettings]
+  );
 
-      // Create benchmark preferences array with order
-      const benchmarks = benchmarkIds.map((id, index) => ({
-        id,
-        order: index,
-      }));
+  // --- NEW syncGuidanceSettings Function --- START
+  const syncGuidanceSettings = useCallback(
+    async (payload: {
+      guidance_settings: GuidanceSettingsPayload;
+    }): Promise<void> => {
+      if (!state.user) {
+        console.warn("Cannot sync guidance settings, user not logged in.");
+        return; // Or throw error
+      }
+      console.log("Syncing guidance settings to backend:", payload);
+      try {
+        // Use the PATCH endpoint designed for guidance settings
+        const response = await axios.patch(
+          `${import.meta.env.VITE_API_URL}/users/sync-settings`,
+          payload,
+          { headers: { Authorization: `Bearer ${tokenService.getToken()}` } }
+        );
+        console.log("Guidance sync API call successful:", response.data);
 
-      // Update user settings with new benchmark preferences
-      const settings: UserSettings = {
-        benchmarks,
-      };
-
-      return await updateUserSettings(settings);
-    } catch (error) {
-      console.error("Error saving benchmark preferences:", error);
-      return false;
-    }
-  };
+        // Update context state with the settings confirmed by the backend response
+        if (response.data.settings) {
+          // Ensure the payload for dispatch matches what the reducer expects
+          // If reducer merges top-level, dispatch top-level. If it expects guidance_settings nested, dispatch that.
+          // Assuming reducer merges top-level based on UPDATE_USER_SETTINGS structure:
+          dispatch({
+            type: "UPDATE_USER_SETTINGS",
+            payload: response.data.settings,
+          });
+          console.log("User context updated with synced settings.");
+        } else {
+          console.warn(
+            "Sync response did not contain settings to update context."
+          );
+        }
+      } catch (error) {
+        console.error("Failed to sync guidance settings:", error);
+        throw error; // Re-throw so the caller (logout handler) knows it failed
+      }
+    },
+    [state.user]
+  ); // Added dependency
+  // --- NEW syncGuidanceSettings Function --- END
 
   const value = {
     user: state.user,
@@ -442,6 +507,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     checkAuth,
     updateUserSettings,
     saveGuidancePreferences,
+    syncGuidanceSettings,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

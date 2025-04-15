@@ -2,12 +2,22 @@ import { configureStore } from '@reduxjs/toolkit';
 // We will import reducer functions here later
 import syncReducer from './syncSlice';
 import pendingChangesReducer from './pendingChangesSlice';
+// Import the reducer from the refactored slice
+import guidanceSettingsReducer from './userSettingsSlice';
+// Assume depletionReducer and guidanceCalculationsReducer exist if needed
+import volumeReducer from './depletionSlice';
+import guidanceCalculationsReducer from './guidanceCalculationsSlice';
 
 export const store = configureStore({
   reducer: {
     // Add reducers here, e.g.:
     sync: syncReducer,
     pendingChanges: pendingChangesReducer,
+    // Use the new reducer name
+    guidanceSettings: guidanceSettingsReducer,
+    // Add other reducers as needed
+    volume: volumeReducer,
+    guidanceCalculations: guidanceCalculationsReducer,
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   FormControl,
@@ -18,12 +18,19 @@ import {
 import { Depletions } from "./depletions/depletions";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import { useUser } from "../userContext";
 import { Toolbox } from "./components/toolbox";
 import type { ToolType } from "./components/toolbox";
 import { GuidanceDialog } from "./components/guidance";
-import type { Guidance } from "./components/guidance";
-import axios from "axios";
+import { useSelector, useDispatch } from "react-redux";
+import type { AppDispatch } from "../redux/store";
+import {
+  setPendingForecastCols,
+  setPendingForecastRows,
+  selectPendingGuidanceForecastColumns,
+  selectPendingGuidanceForecastRows,
+  selectAvailableGuidance,
+} from "../redux/userSettingsSlice";
+import type { Guidance } from "../redux/userSettingsSlice";
 
 const MAX_CHIPS_VISIBLE = 3; // Define how many chips to show
 
@@ -50,7 +57,7 @@ const TabPanel = (props: TabPanelProps) => {
   );
 };
 
-// Add export to the interface
+// Keep MarketData definition here for now
 export interface MarketData {
   id: number;
   market_name: string;
@@ -71,19 +78,20 @@ interface CustomerData {
   raw: string;
 }
 
-// Add prop type for the handler function
 interface VolumeForecastProps {
-  // onPendingChange: () => void; // <-- Remove prop type
+  availableBrands: string[];
+  marketData: MarketData[];
 }
 
-export const VolumeForecast: React.FC<
-  VolumeForecastProps
-> = (/* { onPendingChange } */) => {
-  const { user, /* saveGuidancePreferences, */ updateUserSettings } = useUser();
+export const VolumeForecast: React.FC<VolumeForecastProps> = ({
+  availableBrands,
+  marketData,
+}) => {
+  const dispatch: AppDispatch = useDispatch();
+  const availableGuidance = useSelector(selectAvailableGuidance);
+
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
-  const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [tabValue, setTabValue] = useState(0);
   const [undoHandler, setUndoHandler] = useState<(() => Promise<void>) | null>(
     null
@@ -92,103 +100,6 @@ export const VolumeForecast: React.FC<
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
-  const [selectedGuidance, setSelectedGuidance] = useState<Guidance[]>([]);
-  const [selectedRowGuidanceState, setSelectedRowGuidanceState] = useState<
-    Guidance[]
-  >([]);
-  const [availableGuidance, setAvailableGuidance] = useState<Guidance[]>([]);
-  const prefsLoadedRef = useRef(false);
-
-  useEffect(() => {
-    const fetchBrands = async () => {
-      try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/volume/brands`
-        );
-        setAvailableBrands(response.data);
-      } catch (error) {
-        console.error("Error loading brands:", error);
-      }
-    };
-
-    fetchBrands();
-  }, []);
-
-  useEffect(() => {
-    const fetchMarketData = async () => {
-      try {
-        const userMarketIds = (user?.user_access?.Markets || []).map(
-          (m) => m.id
-        );
-        const response = await axios.get(
-          `${
-            import.meta.env.VITE_API_URL
-          }/volume/get-markets?ids=${userMarketIds.join(",")}`
-        );
-        setMarketData(response.data);
-      } catch (error) {
-        console.error("Error loading market data:", error);
-      }
-    };
-
-    if (user?.user_access?.Markets?.length) {
-      fetchMarketData();
-    }
-  }, [user]);
-
-  // Fetch available benchmarks when component mounts
-  useEffect(() => {
-    const fetchGuidance = async () => {
-      try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/util/get-benchmarks`
-        );
-        setAvailableGuidance(response.data);
-      } catch (error) {
-        console.error("Error fetching benchmarks:", error);
-      }
-    };
-
-    fetchGuidance();
-  }, []);
-
-  // Load user's guidance preferences ONCE when availableGuidance/user are loaded
-  useEffect(() => {
-    const loadUserGuidancePreferences = () => {
-      // Only load if prefs haven't been loaded AND necessary data exists
-      if (
-        !prefsLoadedRef.current &&
-        availableGuidance.length > 0 &&
-        user?.user_settings
-      ) {
-        console.log("Attempting to load user guidance preferences..."); // Debug log
-        const { guidance_columns, guidance_rows } = user.user_settings;
-
-        // Load Column Preferences
-        if (guidance_columns && Array.isArray(guidance_columns)) {
-          const userSelectedColumns = guidance_columns
-            .map((id) => availableGuidance.find((g) => g.id === id))
-            .filter(Boolean) as Guidance[];
-          console.log("Loading columns:", userSelectedColumns); // Debug log
-          setSelectedGuidance(userSelectedColumns);
-        }
-
-        // Load Row Preferences
-        if (guidance_rows && Array.isArray(guidance_rows)) {
-          const userSelectedRows = guidance_rows
-            .map((id) => availableGuidance.find((g) => g.id === id))
-            .filter(Boolean) as Guidance[];
-          console.log("Loading rows:", userSelectedRows); // Debug log
-          setSelectedRowGuidanceState(userSelectedRows);
-        }
-        prefsLoadedRef.current = true; // Mark preferences as loaded
-        console.log("Preferences loaded, ref set to true."); // Debug log
-      }
-    };
-
-    loadUserGuidancePreferences();
-    // Only re-run if availableGuidance or the user identity changes, NOT on settings change
-  }, [availableGuidance, user]); // Updated dependencies
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -217,34 +128,31 @@ export const VolumeForecast: React.FC<
     }
   };
 
-  // Add this function inside the component
   const getCleanCustomerName = (customerData: string | undefined) => {
     if (!customerData) return "";
     const parts = customerData.split(" - ");
     return parts.length > 1 ? parts[1] : customerData;
   };
 
-  // Update the filteredData mapping
-  const filteredData: (MarketData | CustomerData)[] = isCustomerView
-    ? marketData
-        .filter((market) => market.settings?.managed_by === "Customer")
-        .flatMap((market) =>
-          (market.customers || []).map((customer) => ({
-            id: customer.customer_id,
-            code: customer.customer_id,
-            display: getCleanCustomerName(customer.customer_actual_data),
-            raw: customer.customer_actual_data,
-          }))
-        )
-    : marketData.filter((market) => market.settings?.managed_by === "Market");
+  const filteredData: (MarketData | CustomerData)[] = useMemo(() => {
+    return isCustomerView
+      ? marketData
+          .filter((market) => market.settings?.managed_by === "Customer")
+          .flatMap((market) =>
+            (market.customers || []).map((customer) => ({
+              id: customer.customer_id,
+              code: customer.customer_id,
+              display: getCleanCustomerName(customer.customer_actual_data),
+              raw: customer.customer_actual_data,
+            }))
+          )
+      : marketData.filter((market) => market.settings?.managed_by === "Market");
+  }, [isCustomerView, marketData]);
 
-  // When marketData changes, set default selected markets
   useEffect(() => {
-    if (!isCustomerView && marketData.length > 0) {
-      // Initialize with no markets selected
-      setSelectedMarkets([]);
-    }
-  }, [marketData, isCustomerView]);
+    setSelectedMarkets([]);
+    setSelectedBrands([]);
+  }, [isCustomerView, marketData]);
 
   const isCustomerData = (
     item: MarketData | CustomerData
@@ -252,60 +160,48 @@ export const VolumeForecast: React.FC<
     return "raw" in item;
   };
 
-  // Add columns handler
   const handleColumns = () => {
     setColumnsDialogOpen(true);
   };
 
   const handleApplyColumns = async (columns: Guidance[]) => {
-    console.log("VolumeForecast saving Columns:", columns);
-    const newSelectedGuidance = columns || [];
-    setSelectedGuidance(newSelectedGuidance);
     setColumnsDialogOpen(false);
-
-    // Save COLUMN preferences using the new structure
-    if (user) {
-      try {
-        const columnIds = newSelectedGuidance.map((col) => col.id);
-        await updateUserSettings({ guidance_columns: columnIds }); // Use generic update function
-      } catch (error) {
-        console.error("Error saving column guidance preferences:", error);
-      }
-    }
+    const columnIds = columns.map((col) => col.id);
+    dispatch(setPendingForecastCols(columnIds));
   };
 
   const handleApplyRows = async (rows: Guidance[]) => {
-    console.log("VolumeForecast saving Rows:", rows);
-    const newSelectedRows = rows || [];
-    setSelectedRowGuidanceState(newSelectedRows);
-    // Note: Dialog closing is handled by handleApplyColumns if it's the same dialog
-    // setColumnsDialogOpen(false); // Assuming the dialog closes after applying either
-
-    // Save ROW preferences using the new structure
-    if (user) {
-      try {
-        const rowIds = newSelectedRows.map((row) => row.id);
-        await updateUserSettings({ guidance_rows: rowIds }); // Use generic update function
-      } catch (error) {
-        console.error("Error saving row guidance preferences:", error);
-      }
-    }
+    const rowIds = rows.map((row) => row.id);
+    dispatch(setPendingForecastRows(rowIds));
   };
 
-  // Add this function to handle view toggle
   const handleViewToggle = () => {
     setIsCustomerView(!isCustomerView);
-    setSelectedMarkets([]); // Clear selected markets when switching views
-    setSelectedBrands([]); // Also clear selected brands when switching views
+    setSelectedMarkets([]);
+    setSelectedBrands([]);
   };
+
+  // Get selected Guidance objects directly from Redux using the reselect selectors
+  const selectedGuidanceCols: Guidance[] = useSelector(
+    selectPendingGuidanceForecastColumns
+  );
+  const selectedGuidanceRows: Guidance[] = useSelector(
+    selectPendingGuidanceForecastRows
+  );
 
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          Volume Forecast
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 500,
+            color: (theme) => theme.palette.primary.main,
+          }}
+        >
+          VOLUME FORECAST
         </Typography>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, ml: "auto" }}>
           <IconButton onClick={() => setIsCollapsed(!isCollapsed)}>
             {isCollapsed ? <KeyboardArrowDownIcon /> : <KeyboardArrowUpIcon />}
           </IconButton>
@@ -326,7 +222,7 @@ export const VolumeForecast: React.FC<
                   onChange={handleMarketChange}
                   input={
                     <OutlinedInput
-                      label={`Select ${
+                      label={`Filter ${
                         isCustomerView ? "Customers" : "Markets"
                       }`}
                     />
@@ -335,62 +231,65 @@ export const VolumeForecast: React.FC<
                     <Box
                       sx={{
                         display: "flex",
-                        flexWrap: "nowrap", // Prevent chips from wrapping
+                        flexWrap: "nowrap",
                         gap: 0.5,
-                        overflow: "hidden", // Hide overflowing chips
-                        alignItems: "flex-end", // Align counter baseline
+                        overflow: "hidden",
+                        alignItems: "center",
+                        minHeight: "24px",
                       }}
                     >
-                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => (
-                        <Chip
-                          key={value}
-                          label={(() => {
-                            if (isCustomerView) {
-                              const item = filteredData.find(
-                                (item) =>
-                                  isCustomerData(item) && item.code === value
+                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => {
+                        const item = filteredData.find(
+                          (item) =>
+                            (isCustomerData(item)
+                              ? item.code
+                              : item.market_id) === value
+                        );
+                        const label = item
+                          ? isCustomerData(item)
+                            ? item.display
+                            : item.market_name
+                          : value;
+                        return (
+                          <Chip
+                            key={value}
+                            label={label}
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            sx={{
+                              borderRadius: "16px",
+                              backgroundColor: "transparent",
+                              flexShrink: 0,
+                              "& .MuiChip-label": { px: 1 },
+                            }}
+                            onDelete={(e) => {
+                              e.stopPropagation();
+                              setSelectedMarkets((prev) =>
+                                prev.filter((market) => market !== value)
                               );
-                              return item && isCustomerData(item)
-                                ? getCleanCustomerName(item.raw)
-                                : value;
-                            } else {
-                              const market = filteredData.find(
-                                (item) =>
-                                  !isCustomerData(item) &&
-                                  item.market_id === value
-                              ) as MarketData | undefined;
-                              return market ? market.market_name : value;
-                            }
-                          })()}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          sx={{
-                            borderRadius: "16px",
-                            backgroundColor: "transparent",
-                            flexShrink: 0, // Prevent chips from shrinking
-                            "& .MuiChip-label": { px: 1 },
-                          }}
-                          onDelete={() =>
-                            setSelectedMarkets((prev) =>
-                              prev.filter((market) => market !== value)
-                            )
-                          }
-                        />
-                      ))}
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        );
+                      })}
                       {selected.length > MAX_CHIPS_VISIBLE && (
                         <Typography
                           variant="body2"
-                          sx={{ pl: 0.5, flexShrink: 0, pb: 0.25 }}
+                          sx={{ pl: 0.5, flexShrink: 0 }}
                         >
                           +{selected.length - MAX_CHIPS_VISIBLE} more
                         </Typography>
                       )}
-                      {selected.length === 0 && (
-                        <Box sx={{ minHeight: "24px" }} /> // Placeholder to maintain height
-                      )}
                     </Box>
                   )}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        "& .MuiMenuItem-root": {},
+                      },
+                    },
+                  }}
                 >
                   {filteredData.map((item) => (
                     <MenuItem
@@ -411,7 +310,7 @@ export const VolumeForecast: React.FC<
                   multiple
                   value={selectedBrands}
                   onChange={handleBrandChange}
-                  input={<OutlinedInput label="Select Brands" />}
+                  input={<OutlinedInput label="Filter Brands" />}
                   renderValue={(selected) => (
                     <Box
                       sx={{
@@ -419,7 +318,8 @@ export const VolumeForecast: React.FC<
                         flexWrap: "nowrap",
                         gap: 0.5,
                         overflow: "hidden",
-                        alignItems: "flex-end",
+                        alignItems: "center",
+                        minHeight: "24px",
                       }}
                     >
                       {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => (
@@ -435,26 +335,32 @@ export const VolumeForecast: React.FC<
                             flexShrink: 0,
                             "& .MuiChip-label": { px: 1 },
                           }}
-                          onDelete={() =>
+                          onDelete={(e) => {
+                            e.stopPropagation();
                             setSelectedBrands((prev) =>
                               prev.filter((brand) => brand !== value)
-                            )
-                          }
+                            );
+                          }}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       ))}
                       {selected.length > MAX_CHIPS_VISIBLE && (
                         <Typography
                           variant="body2"
-                          sx={{ pl: 0.5, flexShrink: 0, pb: 0.25 }}
+                          sx={{ pl: 0.5, flexShrink: 0 }}
                         >
                           +{selected.length - MAX_CHIPS_VISIBLE} more
                         </Typography>
                       )}
-                      {selected.length === 0 && (
-                        <Box sx={{ minHeight: "24px" }} />
-                      )}
                     </Box>
                   )}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        "& .MuiMenuItem-root": {},
+                      },
+                    },
+                  }}
                 >
                   {availableBrands.map((brand) => (
                     <MenuItem key={brand} value={brand}>
@@ -481,6 +387,7 @@ export const VolumeForecast: React.FC<
             onCustomerToggle={handleViewToggle}
             canUndo={true}
             isDepletionsView={true}
+            isCustomerView={isCustomerView}
           />
 
           <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -497,9 +404,8 @@ export const VolumeForecast: React.FC<
               isCustomerView={isCustomerView}
               onUndo={(handler) => setUndoHandler(() => handler)}
               onExport={(handler) => setExportHandler(() => handler)}
-              onAvailableBrandsChange={setAvailableBrands}
-              selectedGuidance={selectedGuidance}
-              rowGuidanceSelections={selectedRowGuidanceState}
+              selectedGuidance={selectedGuidanceCols}
+              rowGuidanceSelections={selectedGuidanceRows}
             />
           </TabPanel>
         </Box>
@@ -508,7 +414,10 @@ export const VolumeForecast: React.FC<
       <GuidanceDialog
         open={columnsDialogOpen}
         onClose={() => setColumnsDialogOpen(false)}
-        title="Guidance Options"
+        title="Forecast Guidance Options"
+        availableGuidance={availableGuidance}
+        initialSelectedColumns={selectedGuidanceCols}
+        initialSelectedRows={selectedGuidanceRows}
         onApplyColumns={handleApplyColumns}
         onApplyRows={handleApplyRows}
       />

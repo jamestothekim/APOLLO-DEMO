@@ -28,7 +28,7 @@ interface MonthGroup {
   months: string[];
 }
 
-// Interface for benchmark forecasts
+// Interface for guidance forecasts
 export interface GuidanceForecastOption {
   id: number;
   label: string;
@@ -63,7 +63,7 @@ interface QuantSidebarProps {
     color: string;
   }>;
   // Guidance props
-  benchmarkForecasts?: GuidanceForecastOption[];
+  guidanceForecasts?: GuidanceForecastOption[];
   availableGuidanceData?: Record<string, number[]>;
   // Hover metrics
   hoverMetrics?: Record<string, Record<string, number | string>>;
@@ -108,7 +108,7 @@ export const QuantSidebar = ({
   forecastOptions,
   onForecastLogicChange,
   graphData = [],
-  benchmarkForecasts = [],
+  guidanceForecasts = [],
   availableGuidanceData = {},
   months,
   onMonthValueChange,
@@ -141,38 +141,38 @@ export const QuantSidebar = ({
     };
   }, [totalTYForecast, pyTotalVolume]);
 
-  // Generate trend lines from benchmark options
+  // Generate trend lines from guidance options
   const trendLines = useMemo(() => {
-    if (!graphData.length || !benchmarkForecasts.length) return [];
+    if (!graphData.length || !guidanceForecasts.length) return [];
 
     const baseData = graphData[0].data;
     const months = baseData.map((item) => item.month);
     const tyValues = baseData.map((item) => item.value || 0);
 
-    return benchmarkForecasts.map((benchmarkOption) => {
-      // For direct value benchmarks (like py_case_equivalent_volume, gross_sales_value)
-      if (!benchmarkOption.calculation) {
-        // Get the benchmark data values from availableGuidanceData
-        const benchmarkValues =
-          availableGuidanceData[benchmarkOption.value] || [];
+    return guidanceForecasts.map((guidanceOption) => {
+      // For direct value guidance (like py_case_equivalent_volume, gross_sales_value)
+      if (!guidanceOption.calculation) {
+        // Get the guidance data values from availableGuidanceData
+        const guidanceValues =
+          availableGuidanceData[guidanceOption.value] || [];
 
         // Map the data to match the format expected by the graph
         const data = months.map((month, index) => ({
           month,
-          value: benchmarkValues[index] || 0,
+          value: guidanceValues[index] || 0,
         }));
 
         return {
-          id: benchmarkOption.value,
-          label: benchmarkOption.label,
+          id: guidanceOption.value,
+          label: guidanceOption.label,
           data,
-          color: benchmarkOption.color,
+          color: guidanceOption.color,
         };
       }
-      // For calculated benchmarks (like differences or percentages)
+      // For calculated guidance (like differences or percentages)
       else {
-        const calculation = benchmarkOption.calculation;
-        // Get the benchmark values for calculation
+        const calculation = guidanceOption.calculation;
+        // Get the guidance values for calculation
         const lyValues =
           availableGuidanceData["py_case_equivalent_volume"] || [];
         const tyGsvValues = availableGuidanceData["gross_sales_value"] || [];
@@ -239,21 +239,21 @@ export const QuantSidebar = ({
         });
 
         return {
-          id: benchmarkOption.value,
-          label: benchmarkOption.label,
+          id: guidanceOption.value,
+          label: guidanceOption.label,
           data,
-          color: benchmarkOption.color,
+          color: guidanceOption.color,
         };
       }
     });
-  }, [graphData, benchmarkForecasts, availableGuidanceData]);
+  }, [graphData, guidanceForecasts, availableGuidanceData]);
 
-  // Get selected benchmarks data
+  // Get selected guidance data
   const selectedGuidance = useMemo(() => {
-    return benchmarkForecasts.filter((benchmark) =>
-      selectedTrendLines.includes(benchmark.value)
+    return guidanceForecasts.filter((guidance) =>
+      selectedTrendLines.includes(guidance.value)
     );
-  }, [benchmarkForecasts, selectedTrendLines]);
+  }, [guidanceForecasts, selectedTrendLines]);
 
   // Combine base graph data with selected trend lines
   const combinedGraphData = useMemo(() => {
@@ -473,7 +473,7 @@ export const QuantSidebar = ({
               label="MONTHLY VALUES"
               defaultExpanded={true}
               gsvRate={gsvRate}
-              benchmarkForecasts={selectedGuidance}
+              guidanceForecasts={selectedGuidance}
               availableGuidanceData={availableGuidanceData}
             />
           </Grid>

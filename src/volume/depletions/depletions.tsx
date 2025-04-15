@@ -49,7 +49,7 @@ import {
   ForecastLogic,
   formatGuidanceValue,
   recalculateGuidance,
-  SIDEBAR_BENCHMARK_OPTIONS,
+  SIDEBAR_GUIDANCE_OPTIONS,
   getGuidanceDataForSidebar,
   calculateRowGuidanceMonthlyData,
 } from "./util/depletionsUtil";
@@ -89,7 +89,7 @@ export interface ExtendedForecastData {
   };
   commentary?: string;
   isLoading?: boolean;
-  [key: string]: any; // Allow dynamic benchmark values
+  [key: string]: any; // Allow dynamic guidance values
 }
 
 export type FilterSelectionProps = {
@@ -289,7 +289,7 @@ const processRawData = (
     }
   });
 
-  // Now calculate the derived benchmark values for each row
+  // Now calculate the derived guidance values for each row
   if (selectedGuidance && selectedGuidance.length > 0) {
     Object.keys(groupedData).forEach((key) => {
       groupedData[key] = recalculateGuidance(
@@ -599,7 +599,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               const totalVolume = calculateTotal(restored.months);
               updatedItem.case_equivalent_volume = totalVolume;
 
-              // Recalculate benchmarks if they exist
+              // Recalculate guidance if they exist
               if (selectedGuidance && selectedGuidance.length > 0) {
                 updatedItem = recalculateGuidance(
                   updatedItem,
@@ -738,7 +738,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         months: updatedMonths,
       };
 
-      // Use the centralized function to recalculate all benchmarks
+      // Use the centralized function to recalculate all guidance
       if (selectedGuidance && selectedGuidance.length > 0) {
         updatedRow = recalculateGuidance(updatedRow, selectedGuidance);
         updatedRow.isLoading = false; // Ensure loading is false after recalculation
@@ -916,7 +916,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         }
       );
 
-      // Recalculate benchmarks if they exist
+      // Recalculate guidance if they exist
       let finalEditedData = editedData;
       if (selectedGuidance && selectedGuidance.length > 0) {
         finalEditedData = recalculateGuidance(editedData, selectedGuidance);
@@ -1005,12 +1005,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       },
     };
 
-    // Define Benchmark columns (mapping over selectedGuidance)
-    const benchmarkColumns: Column[] =
-      selectedGuidance?.map((benchmark) => ({
-        key: `benchmark_${benchmark.id}`,
-        header: benchmark.label,
-        subHeader: benchmark.sublabel,
+    // Define guidance columns (mapping over selectedGuidance)
+    const derivedGuidanceColumns: Column[] =
+      selectedGuidance?.map((guidance) => ({
+        key: `guidance_${guidance.id}`,
+        header: guidance.label,
+        subHeader: guidance.sublabel,
         align: "right" as const,
         sx: cellPaddingSx, // Apply consistent padding
         render: (_: any, row: ExtendedForecastData) => {
@@ -1023,12 +1023,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             );
           }
 
-          // Check if the specific benchmark value exists on the row
+          // Check if the specific guidance value exists on the row
           let value: number | undefined;
           const valueKey =
-            typeof benchmark.value === "string"
-              ? benchmark.value
-              : `benchmark_${benchmark.id}`;
+            typeof guidance.value === "string"
+              ? guidance.value
+              : `guidance_${guidance.id}`;
 
           if (
             valueKey in row &&
@@ -1038,8 +1038,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             // Value exists, format and return it
             return formatGuidanceValue(
               value,
-              benchmark.calculation?.format,
-              benchmark.label
+              guidance.calculation?.format,
+              guidance.label
             );
           } else {
             // Value doesn't exist yet for this row, show loader
@@ -1248,8 +1248,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       },
     ];
 
-    // Create the base guidance columns
-    let guidanceColumns = [volTyColumn, ...benchmarkColumns];
+    // Create the base guidance columns using the renamed variable
+    let guidanceColumns = [volTyColumn, ...derivedGuidanceColumns];
 
     // Define the row guidance label column if needed, making it non-sticky and compact
     if (hasRowGuidance) {
@@ -1595,7 +1595,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       const totalVolume = calculateTotal(updatedMonths);
       updatedState.case_equivalent_volume = totalVolume;
 
-      // Use the centralized function to recalculate all benchmarks
+      // Use the centralized function to recalculate all guidance
       if (selectedGuidance && selectedGuidance.length > 0) {
         updatedState = recalculateGuidance(updatedState, selectedGuidance);
       }
@@ -1618,12 +1618,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   }, [availableMarkets, onAvailableMarketsChange]);
 
-  // Replace the existing benchmarkData useMemo with fixed types
+  // Replace the existing guidanceData useMemo with fixed types
   const sidebarGuidanceValues = useMemo(() => {
     if (!selectedDataState) return {};
     return getGuidanceDataForSidebar(
       selectedDataState,
-      SIDEBAR_BENCHMARK_OPTIONS
+      SIDEBAR_GUIDANCE_OPTIONS
     );
   }, [selectedDataState]);
 
@@ -1699,7 +1699,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               ]
             : []
         }
-        benchmarkForecasts={SIDEBAR_BENCHMARK_OPTIONS}
+        guidanceForecasts={SIDEBAR_GUIDANCE_OPTIONS}
         availableGuidanceData={sidebarGuidanceValues}
         months={selectedDataState?.months || {}}
         onMonthValueChange={handleMonthValueChange}
