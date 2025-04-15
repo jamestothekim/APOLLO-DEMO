@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Box } from "@mui/material";
-import { Summary } from "./summary";
+import { Summary } from "./summary/summary";
 import { LoadingProgress } from "../reusableComponents/loadingProgress";
 import { VolumeForecast, type MarketData } from "./volumeForecast";
 import { useUser } from "../userContext";
@@ -43,7 +43,6 @@ export const VolumeView = () => {
   // --- Effect to Fetch Volume Data via Redux ---
   useEffect(() => {
     if (volumeStatus === "idle") {
-      console.log("[VolumeView] Dispatching fetchVolumeData...");
       // Fetch all data initially; filtering will happen later
       dispatch(
         fetchVolumeData({ markets: null, brands: null, isCustomerView: false })
@@ -56,9 +55,6 @@ export const VolumeView = () => {
 
     const fetchInitialData = async () => {
       if (!user) {
-        console.log(
-          "[VolumeView] Skipping fetchInitialData: User not logged in."
-        );
         setIsInitialDataLoading(false);
         return;
       }

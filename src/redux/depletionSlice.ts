@@ -54,12 +54,6 @@ export const fetchVolumeData = createAsyncThunk<
     'volume/fetchData', // Slice name convention: feature/actionName
     async ({ markets, brands, isCustomerView }, { rejectWithValue }) => {
 
-        // Optional: Check if data for these exact filters is already loading/loaded
-        // const currentStatus = getState().depletions.status;
-        // if (currentStatus === 'loading') {
-        //     console.log('[fetchVolumeData] Fetch already in progress. Aborting.');
-        //     return rejectWithValue('Fetch already in progress.'); // Prevent duplicate fetches
-        // }
 
         try {
             const token = localStorage.getItem("token");
@@ -68,7 +62,6 @@ export const fetchVolumeData = createAsyncThunk<
                 return rejectWithValue("Authentication token not found.");
             }
 
-            // Prepare API parameters carefully
             // Use null for empty arrays if the API expects that
             const marketsParam = !isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
             const customersParam = isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
@@ -96,8 +89,7 @@ export const fetchVolumeData = createAsyncThunk<
             }
 
             const rawData: RawDepletionForecastItem[] = response.data;
-             console.log(`[fetchVolumeData] Received ${rawData.length} raw items from API.`);
-
+            
             // Calculate last actual month index directly from the fetched data
             let maxActualIndex = -1;
             rawData.forEach((item) => {
@@ -112,8 +104,7 @@ export const fetchVolumeData = createAsyncThunk<
                     }
                 }
             });
-             console.log(`[fetchVolumeData] Calculated last actual month index: ${maxActualIndex}`);
-
+             
             return { rawData, lastActualMonthIndex: maxActualIndex };
 
         } catch (error: any) {

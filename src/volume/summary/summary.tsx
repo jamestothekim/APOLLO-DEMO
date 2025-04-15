@@ -17,41 +17,43 @@ import {
   TableCell,
   TableRow,
 } from "@mui/material";
-import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
+import {
+  DynamicTable,
+  type Column,
+} from "../../reusableComponents/dynamicTable";
 import {
   exportToCSV,
   MONTH_NAMES,
   formatGuidanceValue,
   Guidance,
   ExportableData,
-} from "./depletions/util/depletionsUtil";
-import type { MarketData } from "./volumeForecast";
+  type CalculatedGuidanceValue,
+  aggregateSummaryData,
+  calculateAllSummaryGuidance,
+} from "../util/volumeUtil";
+import type { MarketData } from "../../volume/volumeForecast";
 import { useSelector, useDispatch } from "react-redux";
-import type { RootState, AppDispatch } from "../redux/store";
-import { fetchPendingChanges } from "../redux/pendingChangesSlice";
-import type { RestoredState } from "../redux/pendingChangesSlice";
+import type { RootState, AppDispatch } from "../../redux/store";
+import { fetchPendingChanges } from "../../redux/pendingChangesSlice";
+import type { RestoredState } from "../../redux/pendingChangesSlice";
 import {
   setPendingSummaryCols,
   setPendingSummaryRows,
   selectPendingGuidanceSummaryColumns,
   selectPendingGuidanceSummaryRows,
-} from "../redux/userSettingsSlice";
+} from "../../redux/userSettingsSlice";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import ViewHeadlineOutlinedIcon from "@mui/icons-material/ViewHeadlineOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { Toolbox } from "./components/toolbox";
-import { GuidanceDialog } from "./components/guidance";
+import { Toolbox } from "../components/toolbox";
+import { GuidanceDialog } from "../components/guidance";
 import { LineChart } from "@mui/x-charts";
-import { RawDepletionForecastItem } from "../redux/depletionSlice";
-import {
-  calculateSummaryGuidance,
-  selectSummaryCalculation,
-  selectSummaryCalculationsStatus,
-  clearSummaryGuidanceCalculations,
-} from "../redux/guidanceCalculationsSlice";
+import { RawDepletionForecastItem } from "../../redux/depletionSlice";
+import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
 
-interface SummaryVariantAggregateData {
+// --- Export these types --- START
+export interface SummaryVariantAggregateData {
   id: string;
   brand: string;
   variant_id?: string;
@@ -67,7 +69,7 @@ interface SummaryVariantAggregateData {
   [key: string]: any;
 }
 
-interface SummaryBrandAggregateData {
+export interface SummaryBrandAggregateData {
   id: string;
   brand: string;
   months: { [key: string]: number };
@@ -78,7 +80,7 @@ interface SummaryBrandAggregateData {
   [key: string]: any;
 }
 
-interface DisplayRow
+export interface DisplayRow
   extends Partial<SummaryBrandAggregateData>,
     Partial<SummaryVariantAggregateData> {
   id: string;
@@ -89,6 +91,7 @@ interface DisplayRow
   months: { [key: string]: number };
   total: number;
 }
+// --- End Export these types ---
 
 const DEFAULT_SELECTED_BRANDS = [
   "Balvenie",
@@ -113,33 +116,30 @@ interface SummaryProps {
 interface GuidanceCellRendererProps {
   aggregateKey: string;
   guidance: Guidance; // Pass the full guidance object
+  calculationResult: CalculatedGuidanceValue | undefined;
+  calcStatus: "idle" | "calculating" | "succeeded";
 }
 
 const GuidanceCellRenderer: React.FC<GuidanceCellRendererProps> = ({
-  aggregateKey,
   guidance,
+  calculationResult,
+  calcStatus,
 }) => {
-  // Select calculated value and status INSIDE this component
-  const calculation = useSelector((state: RootState) =>
-    selectSummaryCalculation(state, aggregateKey, guidance.id)
-  );
-  const currentSummaryCalcStatus = useSelector(selectSummaryCalculationsStatus);
-
-  // Show loading spinner
-  if (currentSummaryCalcStatus === "loading") {
+  // Show loading spinner based on prop
+  if (calcStatus === "calculating") {
     return (
       <Box sx={{ display: "flex", justifyContent: "center" }}>
         <CircularProgress size={16} thickness={4} />
       </Box>
     );
   }
-  // Display calculated total value
-  if (calculation && calculation.total !== undefined) {
+  // Display calculated total value from prop
+  if (calculationResult && calculationResult.total !== undefined) {
     return (
       <>
         {/* Use Fragment to avoid unnecessary divs */}
         {formatGuidanceValue(
-          calculation.total,
+          calculationResult.total,
           guidance.calculation.format,
           guidance.label
         )}
@@ -155,25 +155,21 @@ interface MonthlyGuidanceCellRendererProps {
   aggregateKey: string;
   guidance: Guidance;
   month: string;
+  calculationResult: CalculatedGuidanceValue | undefined;
+  calcStatus: "idle" | "calculating" | "succeeded";
 }
 
 const MonthlyGuidanceCellRenderer: React.FC<
   MonthlyGuidanceCellRendererProps
-> = ({ aggregateKey, guidance, month }) => {
-  // Select calculation and status
-  const calculation = useSelector((state: RootState) =>
-    selectSummaryCalculation(state, aggregateKey, guidance.id)
-  );
-  const currentSummaryCalcStatus = useSelector(selectSummaryCalculationsStatus);
-
-  const monthlyData = calculation?.monthly;
+> = ({ guidance, month, calculationResult, calcStatus }) => {
+  const monthlyData = calculationResult?.monthly;
   const value = monthlyData ? monthlyData[month] : undefined;
 
-  // Render based on status and value
-  if (currentSummaryCalcStatus === "loading") {
+  // Render based on status and value from props
+  if (calcStatus === "calculating") {
     return <CircularProgress size={12} thickness={4} />;
   }
-  if (currentSummaryCalcStatus === "succeeded" && value !== undefined) {
+  if (calcStatus === "succeeded" && value !== undefined) {
     return <>{formatGuidanceValue(value, guidance.calculation.format)}</>;
   }
   return <>-</>; // Placeholder
@@ -186,6 +182,8 @@ interface ExpandedGuidanceRowProps {
   guidance: Guidance;
   rowId: string; // Pass the original row ID for keys
   flatColumns: Column[];
+  calcStatus: "idle" | "calculating" | "succeeded";
+  calculationResult: CalculatedGuidanceValue | undefined;
 }
 
 const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
@@ -193,13 +191,15 @@ const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
   guidance,
   rowId,
   flatColumns,
+  calcStatus,
+  calculationResult,
 }) => {
   const cellPaddingSx = { py: "6px", px: "16px", borderBottom: 0 };
   const labelColumnKey = "row_guidance_label";
 
   return (
     <TableRow
-      key={`${rowId}-expanded-${guidance.id}`} // Use passed rowId
+      key={`${rowId}-expanded-${guidance.id}`}
       sx={{ backgroundColor: "action.hover" }}
     >
       {flatColumns.map((col) => {
@@ -231,6 +231,8 @@ const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
               aggregateKey={aggregateKey}
               guidance={guidance}
               month={month}
+              calculationResult={calculationResult}
+              calcStatus={calcStatus}
             />
           );
         }
@@ -281,7 +283,6 @@ export const Summary = ({
   const selectedRowGuidance: Guidance[] = useSelector(
     selectPendingGuidanceSummaryRows
   );
-  const summaryCalcStatus = useSelector(selectSummaryCalculationsStatus);
 
   const [variantAggregateData, setVariantAggregateData] = useState<
     SummaryVariantAggregateData[]
@@ -296,6 +297,14 @@ export const Summary = ({
     Set<string>
   >(new Set());
   const [lastActualMonthIndex, setLastActualMonthIndex] = useState<number>(-1);
+
+  // --- NEW State for Local Calculation Results and Status --- START
+  const [guidanceResults, setGuidanceResults] =
+    useState<SummaryCalculationsState>({});
+  const [localCalcStatus, setLocalCalcStatus] = useState<
+    "idle" | "calculating" | "succeeded"
+  >("idle");
+  // --- NEW State for Local Calculation Results and Status --- END
 
   const MAX_CHIPS_VISIBLE = 3;
 
@@ -313,9 +322,12 @@ export const Summary = ({
       setVariantAggregateData([]);
       setBrandLevelAggregates(new Map());
       setLastActualMonthIndex(-1);
-      dispatch(clearSummaryGuidanceCalculations());
+      setGuidanceResults({});
+      setLocalCalcStatus("idle");
       return;
     }
+
+    setLocalCalcStatus("calculating");
 
     const filteredData = rawVolumeData.filter((item) => {
       if (!item.market_id) return false;
@@ -328,11 +340,6 @@ export const Summary = ({
       return marketMatch && brandMatch;
     });
 
-    let maxActualIndex = -1;
-    const variantAggregation: {
-      [variantKey: string]: SummaryVariantAggregateData;
-    } = {};
-
     let pendingChangesMap = new Map<string, RestoredState>();
     if (pendingChangesStatus === "succeeded") {
       pendingChanges.forEach((change: RestoredState) => {
@@ -341,171 +348,27 @@ export const Summary = ({
           `forecast:${change.market_id}:${change.variant_size_pack_desc}`;
         pendingChangesMap.set(key, change);
       });
-    } else {
     }
 
-    filteredData.forEach((row) => {
-      const brand = row.brand;
-      const variantName = row.variant;
-      const variantId = row.variant_id;
-      if (
-        !brand ||
-        !variantName ||
-        !row.market_id ||
-        !row.variant_size_pack_desc
-      )
-        return;
-
-      const variantKey = variantId
-        ? `${brand}_${variantId}`
-        : `${brand}_${variantName}`;
-      const monthIndex = row.month;
-      if (monthIndex < 1 || monthIndex > 12) return;
-      const monthName = MONTH_NAMES[monthIndex - 1];
-
-      let volume = Number(row.case_equivalent_volume) || 0;
-      const py_volume = Number(row.py_case_equivalent_volume) || 0;
-      const gsv_ty = Number(row.gross_sales_value) || 0;
-      const gsv_py = Number(row.py_gross_sales_value) || 0;
-
-      if (pendingChangesMap.size > 0) {
-        const potentialRedisKey = `forecast:${row.market_id}:${row.variant_size_pack_desc}`;
-        const pendingChange = pendingChangesMap.get(potentialRedisKey);
-        if (pendingChange?.months?.[monthName]?.value !== undefined) {
-          volume = pendingChange.months[monthName].value;
-        }
-      }
-
-      if (row.data_type?.includes("actual")) {
-        const currentMonthIndex = Number(row.month) - 1;
-        if (
-          currentMonthIndex >= 0 &&
-          currentMonthIndex < 12 &&
-          currentMonthIndex > maxActualIndex
-        ) {
-          maxActualIndex = currentMonthIndex;
-        }
-      }
-
-      if (!variantAggregation[variantKey]) {
-        variantAggregation[variantKey] = {
-          id: variantKey,
-          brand: brand,
-          variant_id: variantId,
-          variant: variantName,
-          months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
-          total: 0,
-          months_py_volume: MONTH_NAMES.reduce(
-            (acc, m) => ({ ...acc, [m]: 0 }),
-            {}
-          ),
-          total_py_volume: 0,
-          months_gsv_ty: MONTH_NAMES.reduce(
-            (acc, m) => ({ ...acc, [m]: 0 }),
-            {}
-          ),
-          total_gsv_ty: 0,
-          months_gsv_py: MONTH_NAMES.reduce(
-            (acc, m) => ({ ...acc, [m]: 0 }),
-            {}
-          ),
-          total_gsv_py: 0,
-        };
-      }
-
-      variantAggregation[variantKey].months[monthName] += volume;
-      variantAggregation[variantKey].months_py_volume[monthName] += py_volume;
-      variantAggregation[variantKey].months_gsv_ty[monthName] += gsv_ty;
-      variantAggregation[variantKey].months_gsv_py[monthName] += gsv_py;
-    });
-
-    let variantsAggArray = Object.values(variantAggregation)
-      .map((variantAggRow) => {
-        variantAggRow.total = Object.values(variantAggRow.months).reduce(
-          (s, v) => s + v,
-          0
-        );
-        variantAggRow.total_py_volume = Object.values(
-          variantAggRow.months_py_volume
-        ).reduce((s, v) => s + v, 0);
-        variantAggRow.total_gsv_ty = Object.values(
-          variantAggRow.months_gsv_ty
-        ).reduce((s, v) => s + v, 0);
-        variantAggRow.total_gsv_py = Object.values(
-          variantAggRow.months_gsv_py
-        ).reduce((s, v) => s + v, 0);
-        variantAggRow.total = Math.round(variantAggRow.total);
-        variantAggRow.total_py_volume = Math.round(
-          variantAggRow.total_py_volume
-        );
-        variantAggRow.total_gsv_ty =
-          Math.round(variantAggRow.total_gsv_ty * 100) / 100;
-        variantAggRow.total_gsv_py =
-          Math.round(variantAggRow.total_gsv_py * 100) / 100;
-        MONTH_NAMES.forEach((month) => {
-          variantAggRow.months[month] = Math.round(variantAggRow.months[month]);
-          variantAggRow.months_py_volume[month] = Math.round(
-            variantAggRow.months_py_volume[month]
-          );
-          variantAggRow.months_gsv_ty[month] =
-            Math.round(variantAggRow.months_gsv_ty[month] * 100) / 100;
-          variantAggRow.months_gsv_py[month] =
-            Math.round(variantAggRow.months_gsv_py[month] * 100) / 100;
-        });
-        return variantAggRow;
-      })
-      .sort((a, b) => a.variant.localeCompare(b.variant));
+    const { variantsAggArray, brandAggsMap, maxActualIndex } =
+      aggregateSummaryData(filteredData, pendingChangesMap);
 
     setVariantAggregateData(variantsAggArray);
-
-    const brandAggsMap = new Map<string, SummaryBrandAggregateData>();
-    variantsAggArray.forEach((variantAggRow) => {
-      const brand = variantAggRow.brand;
-      if (!brandAggsMap.has(brand)) {
-        brandAggsMap.set(brand, {
-          id: brand,
-          brand: brand,
-          months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
-          total: 0,
-          total_py_volume: 0,
-          total_gsv_ty: 0,
-          total_gsv_py: 0,
-        });
-      }
-      const brandAgg = brandAggsMap.get(brand)!;
-      MONTH_NAMES.forEach((month) => {
-        brandAgg.months[month] += variantAggRow.months[month];
-      });
-      brandAgg.total += variantAggRow.total;
-      brandAgg.total_py_volume += variantAggRow.total_py_volume;
-      brandAgg.total_gsv_ty += variantAggRow.total_gsv_ty;
-      brandAgg.total_gsv_py += variantAggRow.total_gsv_py;
-    });
-
-    brandAggsMap.forEach((brandAgg) => {
-      brandAgg.total = Math.round(brandAgg.total);
-      brandAgg.total_py_volume = Math.round(brandAgg.total_py_volume);
-      brandAgg.total_gsv_ty = Math.round(brandAgg.total_gsv_ty * 100) / 100;
-      brandAgg.total_gsv_py = Math.round(brandAgg.total_gsv_py * 100) / 100;
-      MONTH_NAMES.forEach((month) => {
-        brandAgg.months[month] = Math.round(brandAgg.months[month]);
-      });
-    });
-
     setBrandLevelAggregates(brandAggsMap);
     setLastActualMonthIndex(maxActualIndex);
 
     if (selectedGuidance.length > 0 || selectedRowGuidance.length > 0) {
-      dispatch(
-        calculateSummaryGuidance({
-          filteredData: filteredData,
-          columnGuidanceDefs: selectedGuidance,
-          rowGuidanceDefs: selectedRowGuidance,
-        })
+      const calculatedResults = calculateAllSummaryGuidance(
+        variantsAggArray,
+        brandAggsMap,
+        selectedGuidance,
+        selectedRowGuidance
       );
+      setGuidanceResults(calculatedResults);
     } else {
-      dispatch(clearSummaryGuidanceCalculations());
+      setGuidanceResults({});
     }
+    setLocalCalcStatus("succeeded");
   }, [
     rawVolumeData,
     depletionsStatus,
@@ -521,13 +384,11 @@ export const Summary = ({
   const handleMarketChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
     setSelectedMarkets(typeof value === "string" ? value.split(",") : value);
-    dispatch(clearSummaryGuidanceCalculations());
   };
 
   const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
     setSelectedBrands(typeof value === "string" ? value.split(",") : value);
-    dispatch(clearSummaryGuidanceCalculations());
   };
 
   const handleBrandExpandClick = useCallback((brandId: string) => {
@@ -666,10 +527,14 @@ export const Summary = ({
           const aggregateKey = row.isBrandRow
             ? `brand:${row.id}`
             : `variant:${row.brand}_${row.variant_id || row.variant}`;
+          const calculationResult =
+            guidanceResults[aggregateKey]?.[guidance.id];
           return (
             <GuidanceCellRenderer
               aggregateKey={aggregateKey}
               guidance={guidance}
+              calculationResult={calculationResult}
+              calcStatus={localCalcStatus}
             />
           );
         },
@@ -790,6 +655,8 @@ export const Summary = ({
     lastActualMonthIndex,
     depletionsStatus,
     selectedGuidance,
+    guidanceResults,
+    localCalcStatus,
   ]);
 
   const handleColumns = () => setColumnsDialogOpen(true);
@@ -888,16 +755,20 @@ export const Summary = ({
       ? `brand:${row.id}`
       : `variant:${row.brand}_${row.variant_id || row.variant}`;
 
-    // Map over guidance and render the new component
-    return selectedRowGuidance.map((guidance) => (
-      <ExpandedGuidanceRow
-        key={`${row.id}-expanded-${guidance.id}`} // Key needed for list rendering
-        aggregateKey={aggregateKey}
-        guidance={guidance}
-        rowId={row.id}
-        flatColumns={flatColumns}
-      />
-    ));
+    return selectedRowGuidance.map((guidance) => {
+      const calculationResult = guidanceResults[aggregateKey]?.[guidance.id];
+      return (
+        <ExpandedGuidanceRow
+          key={`${row.id}-expanded-${guidance.id}`}
+          aggregateKey={aggregateKey}
+          guidance={guidance}
+          rowId={row.id}
+          flatColumns={flatColumns}
+          calculationResult={calculationResult}
+          calcStatus={localCalcStatus}
+        />
+      );
+    });
   };
 
   return (
@@ -1075,7 +946,7 @@ export const Summary = ({
                 columns={columns}
                 loading={
                   depletionsStatus === "loading" ||
-                  summaryCalcStatus === "loading"
+                  localCalcStatus === "calculating"
                 }
                 rowsPerPageOptions={[
                   10,
@@ -1127,7 +998,7 @@ export const Summary = ({
                 ) : (
                   brandLevelAggregates.size === 0 &&
                   depletionsStatus !== "loading" &&
-                  summaryCalcStatus !== "loading" && (
+                  localCalcStatus !== "calculating" && (
                     <Typography
                       sx={{
                         textAlign: "center",
@@ -1140,7 +1011,7 @@ export const Summary = ({
                   )
                 )}
                 {depletionsStatus === "loading" ||
-                  (summaryCalcStatus === "loading" && (
+                  (localCalcStatus === "calculating" && (
                     <Box
                       sx={{
                         position: "absolute",

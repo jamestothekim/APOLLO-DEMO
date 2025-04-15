@@ -52,7 +52,7 @@ import {
   SIDEBAR_GUIDANCE_OPTIONS,
   getGuidanceDataForSidebar,
   calculateRowGuidanceMonthlyData,
-} from "./util/depletionsUtil";
+} from "../util/volumeUtil";
 import {
   Save as SaveIcon,
   Publish as PublishIcon,

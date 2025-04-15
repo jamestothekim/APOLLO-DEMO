@@ -31,11 +31,10 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
 
   const handleLogout = async () => {
     try {
-      console.log("Initiating logout process...");
       // --- Sync Guidance Settings Before Logout --- START
       if (typeof syncGuidanceSettings === "function") {
         // Check if sync function exists
-        console.log("Syncing guidance settings...");
+
         // Get latest pending state directly from store
         const currentState = store.getState();
         const guidanceState = currentState.guidanceSettings;
@@ -55,7 +54,6 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
 
         // Reset the Redux initialization flag
         dispatch(resetGuidanceInitialization());
-        console.log("Redux guidance initialization reset.");
       } else {
         console.warn("syncGuidanceSettings function not found in UserContext.");
       }
@@ -63,7 +61,6 @@ export const NavigationAppBar = ({ toggleSidebar }: AppBarProps) => {
 
       // Call original logout from context
       await logout();
-      console.log("User context logout complete.");
 
       // Navigate to login
       navigate("/login", { replace: true });

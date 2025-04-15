@@ -1,6 +1,13 @@
-import { ExtendedForecastData } from "../depletions";
+import { ExtendedForecastData } from "../depletions/depletions";
 import { Box } from "@mui/material";
-import type { GuidanceForecastOption } from "../../../reusableComponents/quantSidebar";
+import type { GuidanceForecastOption } from "../../reusableComponents/quantSidebar";
+import type { RawDepletionForecastItem } from "../../redux/depletionSlice";
+import type { RestoredState } from "../../redux/pendingChangesSlice";
+import type {
+  SummaryVariantAggregateData,
+  SummaryBrandAggregateData,
+} from "../summary/summary"; // Import exported types
+import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
 
 export type ForecastOption = {
   id: number;
@@ -772,3 +779,399 @@ export const calculateRowGuidanceMonthlyData = (
   console.error("Unhandled guidance calculation type or structure:", guidance);
   return null; // Indicate calculation failed or wasn't applicable
 };
+
+// --- Moved from guidanceCalculationsSlice --- START
+// Structure for calculated guidance values (total and/or monthly)
+export interface CalculatedGuidanceValue {
+  total?: number;
+  monthly?: { [month: string]: number };
+}
+
+// Helper function to calculate a single guidance metric for a summary aggregate
+export const calculateSingleSummaryGuidance = (
+  baseData: {
+    // Represents either a variant or brand aggregate
+    total_ty: number;
+    total_py: number;
+    total_gsv_ty: number;
+    total_gsv_py: number;
+    months_ty?: { [key: string]: number }; // Only needed for monthly calcs
+    months_py?: { [key: string]: number };
+    months_gsv_ty?: { [key: string]: number };
+    months_gsv_py?: { [key: string]: number };
+  },
+  guidance: Guidance,
+  calculateMonthly: boolean = false
+): CalculatedGuidanceValue => {
+  const result: CalculatedGuidanceValue = {};
+
+  // Helper to get total value based on field name
+  const getTotalValue = (fieldName: string): number => {
+    if (fieldName === "case_equivalent_volume") return baseData.total_ty;
+    if (fieldName === "py_case_equivalent_volume") return baseData.total_py;
+    if (fieldName === "gross_sales_value") return baseData.total_gsv_ty;
+    if (fieldName === "py_gross_sales_value") return baseData.total_gsv_py;
+    return 0;
+  };
+
+  // Helper to get monthly value based on field name
+  const getMonthlyValue = (fieldName: string, month: string): number => {
+    if (fieldName === "case_equivalent_volume")
+      return baseData.months_ty?.[month] ?? 0;
+    if (fieldName === "py_case_equivalent_volume")
+      return baseData.months_py?.[month] ?? 0;
+    if (fieldName === "gross_sales_value")
+      return baseData.months_gsv_ty?.[month] ?? 0;
+    if (fieldName === "py_gross_sales_value")
+      return baseData.months_gsv_py?.[month] ?? 0;
+    return 0;
+  };
+
+  // --- Calculate Total ---
+  if (typeof guidance.value === "string") {
+    result.total = getTotalValue(guidance.value);
+  } else {
+    const valueDef = guidance.value as GuidanceValue; // Use local GuidanceValue
+    const calcType = guidance.calculation.type;
+
+    if (calcType === "difference" && valueDef.expression) {
+      const parts = valueDef.expression.split(" - ");
+      result.total =
+        getTotalValue(parts[0]?.trim()) - getTotalValue(parts[1]?.trim());
+    } else if (
+      calcType === "percentage" &&
+      valueDef.numerator &&
+      valueDef.denominator
+    ) {
+      const numParts = valueDef.numerator.split(" - ");
+      const numerator =
+        getTotalValue(numParts[0]?.trim()) - getTotalValue(numParts[1]?.trim());
+      const denominator = getTotalValue(valueDef.denominator.trim());
+      result.total = denominator === 0 ? 0 : numerator / denominator;
+    }
+  }
+  // Apply rounding (or other formatting logic) consistently
+  result.total = result.total ? Math.round(result.total * 1000) / 1000 : 0;
+
+  // --- Calculate Monthly (if requested) ---
+  if (calculateMonthly && baseData.months_ty) {
+    // Ensure monthly source data exists
+    result.monthly = {};
+    MONTH_NAMES.forEach((month) => {
+      let monthlyVal: number | undefined = undefined;
+      if (typeof guidance.value === "string") {
+        monthlyVal = getMonthlyValue(guidance.value, month);
+      } else {
+        const valueDef = guidance.value as GuidanceValue; // Use local GuidanceValue
+        const calcType = guidance.calculation.type;
+
+        if (calcType === "difference" && valueDef.expression) {
+          const parts = valueDef.expression.split(" - ");
+          const val1 = getMonthlyValue(parts[0]?.trim(), month);
+          const val2 = getMonthlyValue(parts[1]?.trim(), month);
+          monthlyVal = val1 - val2;
+        } else if (
+          calcType === "percentage" &&
+          valueDef.numerator &&
+          valueDef.denominator
+        ) {
+          const numParts = valueDef.numerator.split(" - ");
+          const numerVal1 = getMonthlyValue(numParts[0]?.trim(), month);
+          const numerVal2 = getMonthlyValue(numParts[1]?.trim(), month);
+          const denomVal = getMonthlyValue(valueDef.denominator.trim(), month);
+          const numerator = numerVal1 - numerVal2;
+          monthlyVal = denomVal === 0 ? 0 : numerator / denomVal;
+        }
+      }
+      // Apply rounding (or other formatting logic) consistently
+      result.monthly![month] =
+        monthlyVal !== undefined ? Math.round(monthlyVal * 1000) / 1000 : 0;
+    });
+  }
+
+  return result;
+};
+// --- Moved from guidanceCalculationsSlice --- END
+
+// Re-export or define types needed for the aggregation functions
+export type {
+  SummaryVariantAggregateData,
+  SummaryBrandAggregateData,
+} from "../summary/summary"; // Assuming types are defined there
+
+// --- NEW Aggregation Function --- START
+interface AggregationResult {
+  variantsAggArray: SummaryVariantAggregateData[];
+  brandAggsMap: Map<string, SummaryBrandAggregateData>;
+  maxActualIndex: number;
+}
+
+export const aggregateSummaryData = (
+  filteredData: RawDepletionForecastItem[],
+  pendingChangesMap: Map<string, RestoredState>
+): AggregationResult => {
+  let maxActualIndex = -1;
+  const variantAggregation: {
+    [variantKey: string]: SummaryVariantAggregateData;
+  } = {};
+
+  // --- VARIANT Aggregation Loop --- START
+  filteredData.forEach((row) => {
+    const brand = row.brand;
+    const variantName = row.variant;
+    const variantId = row.variant_id;
+    if (!brand || !variantName || !row.market_id || !row.variant_size_pack_desc)
+      return;
+
+    const variantKey = variantId
+      ? `${brand}_${variantId}`
+      : `${brand}_${variantName}`;
+    const monthIndex = row.month;
+    if (monthIndex < 1 || monthIndex > 12) return;
+    const monthName = MONTH_NAMES[monthIndex - 1];
+
+    let volume = Number(row.case_equivalent_volume) || 0;
+    const py_volume = Number(row.py_case_equivalent_volume) || 0;
+    const gsv_ty = Number(row.gross_sales_value) || 0;
+    const gsv_py = Number(row.py_gross_sales_value) || 0;
+
+    // Apply pending changes if applicable
+    if (pendingChangesMap.size > 0) {
+      const potentialRedisKey = `forecast:${row.market_id}:${row.variant_size_pack_desc}`;
+      const pendingChange = pendingChangesMap.get(potentialRedisKey);
+      if (pendingChange?.months?.[monthName]?.value !== undefined) {
+        volume = pendingChange.months[monthName].value;
+      }
+    }
+
+    // Track last actual month
+    if (row.data_type?.includes("actual")) {
+      const currentMonthIndex = Number(row.month) - 1;
+      if (
+        currentMonthIndex >= 0 &&
+        currentMonthIndex < 12 &&
+        currentMonthIndex > maxActualIndex
+      ) {
+        maxActualIndex = currentMonthIndex;
+      }
+    }
+
+    // Initialize variant aggregate if it doesn't exist
+    if (!variantAggregation[variantKey]) {
+      variantAggregation[variantKey] = {
+        id: variantKey,
+        brand: brand,
+        variant_id: variantId,
+        variant: variantName,
+        months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        total: 0,
+        months_py_volume: MONTH_NAMES.reduce(
+          (acc, m) => ({ ...acc, [m]: 0 }),
+          {}
+        ),
+        total_py_volume: 0,
+        months_gsv_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        total_gsv_ty: 0,
+        months_gsv_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        total_gsv_py: 0,
+      };
+    }
+
+    // Accumulate values
+    variantAggregation[variantKey].months[monthName] += volume;
+    variantAggregation[variantKey].months_py_volume[monthName] += py_volume;
+    variantAggregation[variantKey].months_gsv_ty[monthName] += gsv_ty;
+    variantAggregation[variantKey].months_gsv_py[monthName] += gsv_py;
+  });
+  // --- VARIANT Aggregation Loop --- END
+
+  // --- Post-process VARIANT Aggregates (Totals, Rounding, Prep for Guidance) --- START
+  let variantsAggArray = Object.values(variantAggregation)
+    .map((variantAggRow) => {
+      // Calculate totals
+      variantAggRow.total = Object.values(variantAggRow.months).reduce(
+        (s: number, v: number) => s + v,
+        0
+      );
+      variantAggRow.total_py_volume = Object.values(
+        variantAggRow.months_py_volume
+      ).reduce((s: number, v: number) => s + v, 0);
+      variantAggRow.total_gsv_ty = Object.values(
+        variantAggRow.months_gsv_ty
+      ).reduce((s: number, v: number) => s + v, 0);
+      variantAggRow.total_gsv_py = Object.values(
+        variantAggRow.months_gsv_py
+      ).reduce((s: number, v: number) => s + v, 0);
+
+      // Round totals
+      variantAggRow.total = Math.round(variantAggRow.total);
+      variantAggRow.total_py_volume = Math.round(variantAggRow.total_py_volume);
+      variantAggRow.total_gsv_ty =
+        Math.round(variantAggRow.total_gsv_ty * 100) / 100;
+      variantAggRow.total_gsv_py =
+        Math.round(variantAggRow.total_gsv_py * 100) / 100;
+
+      // Round monthly values
+      MONTH_NAMES.forEach((month) => {
+        variantAggRow.months[month] = Math.round(variantAggRow.months[month]);
+        variantAggRow.months_py_volume[month] = Math.round(
+          variantAggRow.months_py_volume[month]
+        );
+        variantAggRow.months_gsv_ty[month] =
+          Math.round(variantAggRow.months_gsv_ty[month] * 100) / 100;
+        variantAggRow.months_gsv_py[month] =
+          Math.round(variantAggRow.months_gsv_py[month] * 100) / 100;
+      });
+
+      // Prepare monthly data needed by calculateSingleSummaryGuidance
+      variantAggRow.months_ty = { ...variantAggRow.months }; // Assuming 'months' is TY volume
+      variantAggRow.months_py = { ...variantAggRow.months_py_volume };
+      variantAggRow.months_gsv_ty = { ...variantAggRow.months_gsv_ty };
+      variantAggRow.months_gsv_py = { ...variantAggRow.months_gsv_py };
+
+      return variantAggRow;
+    })
+    .sort((a, b) => a.variant.localeCompare(b.variant));
+  // --- Post-process VARIANT Aggregates --- END
+
+  // --- BRAND Aggregation Loop --- START
+  const brandAggsMap = new Map<string, SummaryBrandAggregateData>();
+  variantsAggArray.forEach((variantAggRow) => {
+    const brand = variantAggRow.brand;
+    if (!brandAggsMap.has(brand)) {
+      brandAggsMap.set(brand, {
+        id: brand,
+        brand: brand,
+        months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}), // For display
+        total: 0,
+        total_py_volume: 0,
+        total_gsv_ty: 0,
+        total_gsv_py: 0,
+        // Initialize monthly aggregates needed for guidance calculation
+        months_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        months_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        months_gsv_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        months_gsv_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+      });
+    }
+    const brandAgg = brandAggsMap.get(brand)!;
+
+    // Aggregate monthly values (both for display and guidance)
+    MONTH_NAMES.forEach((month) => {
+      brandAgg.months[month] += variantAggRow.months[month]; // Base display months
+      brandAgg.months_ty[month] += variantAggRow.months_ty?.[month] || 0;
+      brandAgg.months_py[month] += variantAggRow.months_py?.[month] || 0;
+      brandAgg.months_gsv_ty[month] +=
+        variantAggRow.months_gsv_ty?.[month] || 0;
+      brandAgg.months_gsv_py[month] +=
+        variantAggRow.months_gsv_py?.[month] || 0;
+    });
+
+    // Aggregate totals for guidance
+    brandAgg.total += variantAggRow.total; // Base display total
+    brandAgg.total_py_volume += variantAggRow.total_py_volume;
+    brandAgg.total_gsv_ty += variantAggRow.total_gsv_ty;
+    brandAgg.total_gsv_py += variantAggRow.total_gsv_py;
+  });
+  // --- BRAND Aggregation Loop --- END
+
+  // --- Post-process BRAND Aggregates (Rounding) --- START
+  brandAggsMap.forEach((brandAgg) => {
+    // Round totals
+    brandAgg.total = Math.round(brandAgg.total);
+    brandAgg.total_py_volume = Math.round(brandAgg.total_py_volume);
+    brandAgg.total_gsv_ty = Math.round(brandAgg.total_gsv_ty * 100) / 100;
+    brandAgg.total_gsv_py = Math.round(brandAgg.total_gsv_py * 100) / 100;
+
+    // Round monthly values
+    MONTH_NAMES.forEach((month) => {
+      brandAgg.months[month] = Math.round(brandAgg.months[month]); // Base display rounding
+      brandAgg.months_ty[month] = Math.round(brandAgg.months_ty[month]);
+      brandAgg.months_py[month] = Math.round(brandAgg.months_py[month]);
+      brandAgg.months_gsv_ty[month] =
+        Math.round(brandAgg.months_gsv_ty[month] * 100) / 100;
+      brandAgg.months_gsv_py[month] =
+        Math.round(brandAgg.months_gsv_py[month] * 100) / 100;
+    });
+  });
+  // --- Post-process BRAND Aggregates --- END
+
+  return {
+    variantsAggArray,
+    brandAggsMap,
+    maxActualIndex,
+  };
+};
+// --- NEW Aggregation Function --- END
+
+// --- NEW Guidance Calculation Orchestration Function --- START
+export const calculateAllSummaryGuidance = (
+  variantsAggArray: SummaryVariantAggregateData[],
+  brandAggsMap: Map<string, SummaryBrandAggregateData>,
+  selectedGuidance: Guidance[],
+  selectedRowGuidance: Guidance[]
+): SummaryCalculationsState => {
+  // Return type is SummaryCalculationsState from slice
+
+  const calculatedResults: SummaryCalculationsState = {};
+  const allGuidanceDefs = [...selectedGuidance, ...selectedRowGuidance];
+  const uniqueGuidanceDefs = Array.from(
+    new Map(allGuidanceDefs.map((g) => [g.id, g])).values()
+  );
+  const rowGuidanceIds = new Set(selectedRowGuidance.map((g) => g.id));
+
+  // Calculate for Variants
+  variantsAggArray.forEach((variantAgg) => {
+    const key = `variant:${variantAgg.brand}_${
+      variantAgg.variant_id || variantAgg.variant
+    }`;
+    calculatedResults[key] = {};
+    // Prepare the base data object expected by calculateSingleSummaryGuidance
+    const baseData = {
+      total_ty: variantAgg.total,
+      total_py: variantAgg.total_py_volume,
+      total_gsv_ty: variantAgg.total_gsv_ty,
+      total_gsv_py: variantAgg.total_gsv_py,
+      months_ty: variantAgg.months_ty,
+      months_py: variantAgg.months_py,
+      months_gsv_ty: variantAgg.months_gsv_ty,
+      months_gsv_py: variantAgg.months_gsv_py,
+    };
+    uniqueGuidanceDefs.forEach((guidanceDef) => {
+      const needsMonthly = rowGuidanceIds.has(guidanceDef.id);
+      calculatedResults[key][guidanceDef.id] = calculateSingleSummaryGuidance(
+        baseData,
+        guidanceDef,
+        needsMonthly
+      );
+    });
+  });
+
+  // Calculate for Brands
+  brandAggsMap.forEach((brandAgg, brandName) => {
+    const key = `brand:${brandName}`;
+    calculatedResults[key] = {};
+    // Prepare the base data object expected by calculateSingleSummaryGuidance
+    const baseData = {
+      total_ty: brandAgg.total,
+      total_py: brandAgg.total_py_volume,
+      total_gsv_ty: brandAgg.total_gsv_ty,
+      total_gsv_py: brandAgg.total_gsv_py,
+      months_ty: brandAgg.months_ty,
+      months_py: brandAgg.months_py,
+      months_gsv_ty: brandAgg.months_gsv_ty,
+      months_gsv_py: brandAgg.months_gsv_py,
+    };
+    uniqueGuidanceDefs.forEach((guidanceDef) => {
+      const needsMonthly = rowGuidanceIds.has(guidanceDef.id);
+      calculatedResults[key][guidanceDef.id] = calculateSingleSummaryGuidance(
+        baseData,
+        guidanceDef,
+        needsMonthly
+      );
+    });
+  });
+
+  return calculatedResults;
+};
+// --- NEW Guidance Calculation Orchestration Function --- END

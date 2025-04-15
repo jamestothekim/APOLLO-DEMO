@@ -15,7 +15,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useState, useMemo } from "react";
 import { InteractiveGraph } from "./interactiveGraph";
 import { MonthlyValues } from "./monthlyValues";
-import { formatGuidanceValue } from "../volume/depletions/util/depletionsUtil";
+import { formatGuidanceValue } from "../volume/util/volumeUtil";
 
 interface MonthData {
   value: number;
