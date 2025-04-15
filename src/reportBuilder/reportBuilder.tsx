@@ -411,14 +411,13 @@ const ReportBuilder = () => {
         }}
       >
         <Typography
-          variant="h5"
+          variant="h6"
           sx={{
             fontWeight: 500,
-            color: theme.palette.primary.main,
-            textTransform: "uppercase",
+            color: (theme) => theme.palette.primary.main,
           }}
         >
-          Report Builder
+          REPORT BUILDER
         </Typography>
 
         {/* --- Toolbox --- */}

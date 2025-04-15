@@ -173,21 +173,28 @@ export const SKUMaster = () => {
     {
       key: "brand",
       header: "Brand",
+      width: 180,
       render: (value) => value,
+      sortable: true,
     },
     {
       key: "variant",
       header: "Variant",
+      width: 220,
       render: (value) => value,
+      sortable: true,
     },
     {
       key: "variant_size_pack_desc",
       header: "Size Pack",
+      width: 200,
       render: (value) => value,
+      sortable: true,
     },
     {
       key: "active_hyperion",
       header: "Active Hyperion",
+      width: 130,
       align: "center",
       render: (_value, row) => (
         <Box
@@ -204,10 +211,14 @@ export const SKUMaster = () => {
           )}
         </Box>
       ),
+      sortable: true,
+      sortAccessor: (row) =>
+        hasActiveHyperionSKUs(row.variant_size_pack_desc) ? 1 : 0,
     },
     {
       key: "active_vip",
       header: "Active VIP",
+      width: 100,
       align: "center",
       render: (_value, row) => (
         <Box
@@ -224,6 +235,9 @@ export const SKUMaster = () => {
           )}
         </Box>
       ),
+      sortable: true,
+      sortAccessor: (row) =>
+        hasActiveVIPSKUs(row.variant_size_pack_desc) ? 1 : 0,
     },
   ];
 

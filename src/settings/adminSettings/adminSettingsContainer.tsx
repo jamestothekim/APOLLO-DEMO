@@ -14,8 +14,14 @@ export const AdminSettingsContainer = () => {
 
   return (
     <Paper elevation={2} sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>
-        Admin Settings
+      <Typography
+        variant="h6"
+        sx={{
+          fontWeight: 500,
+          color: (theme) => theme.palette.primary.main,
+        }}
+      >
+        ADMIN SETTINGS
       </Typography>
 
       <Box>

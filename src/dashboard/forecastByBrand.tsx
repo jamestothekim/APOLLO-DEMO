@@ -138,11 +138,11 @@ export const ForecastByBrand = ({ data }: Props) => {
         <Typography
           variant="h6"
           sx={{
-            color: theme.palette.primary.main,
             fontWeight: 500,
+            color: (theme) => theme.palette.primary.main,
           }}
         >
-          Forecast By Brand
+          FORECAST BY BRAND
         </Typography>
         <Toolbox
           tools={["viewToggle"]}

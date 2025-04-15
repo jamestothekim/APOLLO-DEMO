@@ -298,7 +298,10 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
               },
             }}
           >
-            <Table size="small" sx={{ borderCollapse: "collapse" }}>
+            <Table
+              size="small"
+              sx={{ borderCollapse: "collapse", tableLayout: "fixed" }}
+            >
               <TableHead>
                 {/* Group header row */}
                 <TableRow>

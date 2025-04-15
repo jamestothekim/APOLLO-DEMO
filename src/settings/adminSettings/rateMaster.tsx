@@ -92,24 +92,31 @@ export const RateMaster = () => {
     {
       key: "hp_market",
       header: "Market",
+      width: 250,
       render: (value) =>
         value !== null && value !== undefined ? String(value) : "",
+      sortable: true,
     },
     {
       key: "hp_size_pack",
       header: "Size Pack",
+      width: 300,
       render: (value) =>
         value !== null && value !== undefined ? String(value) : "",
+      sortable: true,
     },
     {
       key: "variant_size_pack_id",
       header: "Size Pack ID",
+      width: 180,
       render: (value) =>
         value !== null && value !== undefined ? String(value) : "",
+      sortable: false,
     },
     {
       key: "gsv_rate",
       header: "GSV",
+      width: 100,
       align: "right",
       render: (value) => {
         if (value === null || value === undefined) return "";
@@ -120,6 +127,11 @@ export const RateMaster = () => {
           return value;
         }
       },
+      sortable: true,
+      sortAccessor: (row) =>
+        row.gsv_rate === null || row.gsv_rate === undefined
+          ? null
+          : Number(row.gsv_rate),
     },
   ];
 

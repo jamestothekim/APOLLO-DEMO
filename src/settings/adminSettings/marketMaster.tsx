@@ -129,27 +129,38 @@ export const MarketMaster = () => {
     {
       key: "market_name",
       header: "Market Name",
+      width: 250,
       render: (value) => value,
+      sortable: true,
     },
     {
       key: "market_code",
       header: "Market Code",
+      width: 150,
       render: (value) => value,
+      sortable: true,
     },
     {
       key: "market_coding",
       header: "Market Coding",
+      width: 150,
       render: (value) => value,
+      sortable: true,
     },
     {
       key: "market_id",
       header: "Market ID",
+      width: 180,
       render: (value) => value,
+      sortable: true,
     },
     {
       key: "settings.managed_by",
       header: "Managed By",
+      width: 150,
       render: (_value, row) => row.settings?.managed_by || "Not Set",
+      sortable: true,
+      sortAccessor: (row) => row.settings?.managed_by,
     },
   ];
 

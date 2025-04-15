@@ -28,6 +28,7 @@ import {
 } from "@mui/icons-material";
 import axios from "axios";
 import { useUser } from "../../userContext";
+import type { Column } from "../../reusableComponents/dynamicTable";
 
 // Types
 interface User {
@@ -288,28 +289,39 @@ const UserMaster = () => {
     return ""; // No error
   };
 
-  const columns = [
+  const columns: Column[] = [
     {
       header: "Full Name",
       key: "fullName",
+      width: 180,
       render: (_: any, row: User) => `${row.first_name} ${row.last_name}`,
+      sortable: true,
+      sortAccessor: (row: User) => `${row.first_name} ${row.last_name}`,
     },
     {
       header: "Email",
       key: "email",
+      width: 220,
+      sortable: true,
     },
     {
       header: "Role",
       key: "role",
+      width: 120,
+      sortable: true,
     },
     {
       header: "Division",
       key: "division",
+      width: 120,
       render: (_: any, row: User) => row.user_access?.Division || "-",
+      sortable: true,
+      sortAccessor: (row: User) => row.user_access?.Division,
     },
     {
       header: "Markets",
       key: "markets",
+      width: 250,
       render: (_: any, row: User) => (
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
           {row.user_access?.Markets?.map((market) => (
@@ -332,10 +344,13 @@ const UserMaster = () => {
           ))}
         </Box>
       ),
+      sortable: true,
+      sortAccessor: (row: User) => row.user_access?.Markets?.length ?? 0,
     },
     {
       header: "Admin",
       key: "admin",
+      width: 80,
       align: "center" as const,
       render: (_: any, row: User) => (
         <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -346,6 +361,13 @@ const UserMaster = () => {
           )}
         </Box>
       ),
+      sortable: true,
+      sortAccessor: (row: User) =>
+        row.user_access?.Admin === true
+          ? 1
+          : row.user_access?.Admin === false
+          ? 0
+          : null,
     },
   ];
 
