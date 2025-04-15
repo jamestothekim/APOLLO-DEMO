@@ -13,7 +13,6 @@ import {
   Typography,
   SxProps,
   Theme,
-  TableSortLabel,
   useTheme,
 } from "@mui/material";
 import { LoadingProgress } from "./loadingProgress";
@@ -37,7 +36,7 @@ export interface Column {
   wide?: boolean;
   sx?: SxProps<Theme>;
   sortable?: boolean;
-  sortValue?: (value: any, row: any) => number | string | null;
+  sortAccessor?: string | ((row: any) => number | string | null | undefined);
   columnGroup?: boolean;
   columns?: Column[];
 }
@@ -163,81 +162,63 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     });
   };
 
+  // Flatten columns first, as displayData depends on it
+  const flatColumns = useMemo(() => {
+    return columns.reduce((acc: Column[], col) => {
+      if (col.columnGroup && col.columns) {
+        return [...acc, ...col.columns];
+      }
+      return [...acc, col];
+    }, []);
+  }, [columns]);
+
   const displayData = useMemo(() => {
     let sortedData = [...data];
 
     if (sortConfig) {
-      // Get the column definition to access render function and sortValue function
-      const column = columns.find((col) => col.key === sortConfig.key);
-
-      console.log("Sorting column:", {
-        key: sortConfig.key,
-        column,
-        direction: sortConfig.direction,
-      });
+      // Get the column definition from flatColumns
+      const column = flatColumns.find((col) => col.key === sortConfig.key);
 
       sortedData.sort((a, b) => {
         // Get the raw values
-        const aRaw = a[sortConfig.key];
-        const bRaw = b[sortConfig.key];
+        let aValue: number | string | null | undefined;
+        let bValue: number | string | null | undefined;
 
-        // Use sortValue function if provided
-        if (column?.sortValue) {
-          const aValue = column.sortValue(aRaw, a);
-          const bValue = column.sortValue(bRaw, b);
-
-          // Handle null values
-          if (aValue === null && bValue === null) return 0;
-          if (aValue === null) return 1;
-          if (bValue === null) return -1;
-
-          // If both values are numbers, do numeric comparison
-          if (typeof aValue === "number" && typeof bValue === "number") {
-            return sortConfig.direction === "asc"
-              ? aValue - bValue
-              : bValue - aValue;
-          }
-
-          // Otherwise do string comparison
-          const aStr = String(aValue);
-          const bStr = String(bValue);
-          return sortConfig.direction === "asc"
-            ? aStr.localeCompare(bStr)
-            : bStr.localeCompare(aStr);
+        // --- Get sortable values --- START
+        if (typeof column?.sortAccessor === "function") {
+          // 1. Use sortAccessor function if provided
+          aValue = column.sortAccessor(a);
+          bValue = column.sortAccessor(b);
+        } else if (typeof column?.sortAccessor === "string") {
+          // 2. Use sortAccessor string as a key/path
+          // Simple implementation for direct keys; could be extended for deep paths
+          // Add error handling for invalid paths if needed
+          aValue = a[column.sortAccessor];
+          bValue = b[column.sortAccessor];
+        } else {
+          // 3. Fallback to using the column key directly on the row data
+          aValue = a[sortConfig.key];
+          bValue = b[sortConfig.key];
         }
 
-        // If no sortValue function, fall back to existing logic
-        // Get the displayed values using the render function if it exists
-        const aDisplay = column?.render ? column.render(aRaw, a) : aRaw;
-        const bDisplay = column?.render ? column.render(bRaw, b) : bRaw;
+        const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
 
-        // Convert to string and clean up any HTML or special formatting
-        const aValueStr =
-          aDisplay != null
-            ? String(aDisplay)
-                .replace(/<[^>]*>/g, "")
-                .trim()
-            : "";
-        const bValueStr =
-          bDisplay != null
-            ? String(bDisplay)
-                .replace(/<[^>]*>/g, "")
-                .trim()
-            : "";
+        // Handle null/undefined values (sort them consistently, e.g., to the end)
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return 1 * directionMultiplier; // nulls sort after defined values
+        if (bValue == null) return -1 * directionMultiplier; // nulls sort after defined values
 
-        // Try to convert to numbers if possible (handling commas)
-        const aNum = parseFloat(aValueStr.replace(/,/g, ""));
-        const bNum = parseFloat(bValueStr.replace(/,/g, ""));
-
-        // If both values can be converted to numbers, do numeric comparison
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          return sortConfig.direction === "asc" ? aNum - bNum : bNum - aNum;
+        // Numeric comparison
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return (aValue - bValue) * directionMultiplier;
         }
 
-        // Otherwise do string comparison
-        return sortConfig.direction === "asc"
-          ? aValueStr.localeCompare(bValueStr)
-          : bValueStr.localeCompare(aValueStr);
+        // String comparison (case-insensitive)
+        const aStr = String(aValue);
+        const bStr = String(bValue);
+
+        return aStr.localeCompare(bStr) * directionMultiplier;
+        // --- Comparison Logic --- END
       });
     }
 
@@ -248,17 +229,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
       page * rowsPerPage,
       page * rowsPerPage + rowsPerPage
     );
-  }, [data, page, rowsPerPage, showPagination, sortConfig, columns]);
-
-  // Flatten columns for data display
-  const flatColumns = useMemo(() => {
-    return columns.reduce((acc: Column[], col) => {
-      if (col.columnGroup && col.columns) {
-        return [...acc, ...col.columns];
-      }
-      return [...acc, col];
-    }, []);
-  }, [columns]);
+  }, [data, page, rowsPerPage, showPagination, sortConfig, flatColumns]);
 
   // Define minWidth calculation logic
   const getMinWidth = (column: Column): number | undefined => {
@@ -380,30 +351,45 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                           width: column.width,
                           minWidth: minW,
                           textAlign: "center",
+                          cursor:
+                            column.sortable !== false ? "pointer" : "default",
                           ...column.sx,
                         }}
+                        onClick={
+                          column.sortable !== false
+                            ? () => handleSort(column.key)
+                            : undefined
+                        }
                       >
-                        {column.sortable !== false ? (
-                          <TableSortLabel
-                            active={sortConfig?.key === column.key}
-                            direction={
-                              sortConfig?.key === column.key
-                                ? sortConfig.direction
-                                : "asc"
-                            }
-                            onClick={() => handleSort(column.key)}
-                            hideSortIcon={true}
+                        <Box
+                          sx={{
+                            position: "relative",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "100%",
+                            height: "100%",
+                          }}
+                        >
+                          {/* Centered Header Text - Apply conditional color */}
+                          <Typography
+                            variant="body2"
+                            component="span"
                             sx={{
-                              "& .MuiTableSortLabel-icon": {
-                                display: "none",
-                              },
+                              flexGrow: 1,
+                              textAlign: "center",
+                              // Apply color based on sort state
+                              color:
+                                sortConfig?.key === column.key
+                                  ? sortConfig.direction === "desc"
+                                    ? "primary.main"
+                                    : "error.main"
+                                  : "inherit",
                             }}
                           >
                             {column.header}
-                          </TableSortLabel>
-                        ) : (
-                          column.header
-                        )}
+                          </Typography>
+                        </Box>
                         {column.subHeader && (
                           <Typography
                             variant="caption"

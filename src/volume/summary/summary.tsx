@@ -429,8 +429,19 @@ export const Summary = ({
     sortedBrands.forEach((brand) => {
       const brandAgg = brandLevelAggregates.get(brand);
       if (brandAgg) {
+        const brandAggregateKey = `brand:${brandAgg.id}`;
+        const brandGuidanceForRow: { [key: string]: number | undefined } = {};
+        if (guidanceResults[brandAggregateKey]) {
+          selectedGuidance.forEach((guidance) => {
+            const result = guidanceResults[brandAggregateKey]?.[guidance.id];
+            brandGuidanceForRow[`sortable_guidance_${guidance.id}`] =
+              result?.total;
+          });
+        }
+
         const brandRow: DisplayRow = {
           ...brandAgg,
+          ...brandGuidanceForRow,
           isBrandRow: true,
           level: 0,
         };
@@ -444,7 +455,26 @@ export const Summary = ({
 
           variantsForBrand.forEach((variantAgg) => {
             if (Math.abs(variantAgg.total) > 0.001) {
-              variantRows.push({ ...variantAgg, isBrandRow: false, level: 1 });
+              const variantAggregateKey = `variant:${variantAgg.brand}_${
+                variantAgg.variant_id || variantAgg.variant
+              }`;
+              const variantGuidanceForRow: {
+                [key: string]: number | undefined;
+              } = {};
+              if (guidanceResults[variantAggregateKey]) {
+                selectedGuidance.forEach((guidance) => {
+                  const result =
+                    guidanceResults[variantAggregateKey]?.[guidance.id];
+                  variantGuidanceForRow[`sortable_guidance_${guidance.id}`] =
+                    result?.total;
+                });
+              }
+              variantRows.push({
+                ...variantAgg,
+                ...variantGuidanceForRow,
+                isBrandRow: false,
+                level: 1,
+              });
               brandHasVisibleChildren = true;
             }
           });
@@ -460,7 +490,13 @@ export const Summary = ({
       }
     });
     return rows.filter((row) => Math.abs(row.total) > 0.001 || row.isBrandRow);
-  }, [brandLevelAggregates, variantAggregateData, expandedBrandIds]);
+  }, [
+    brandLevelAggregates,
+    variantAggregateData,
+    expandedBrandIds,
+    guidanceResults,
+    selectedGuidance,
+  ]);
 
   // Log the final displayData before passing to table
   useEffect(() => {}, [displayData]);
@@ -473,7 +509,8 @@ export const Summary = ({
       key: "brand",
       header: "BRAND / VARIANT",
       align: "left",
-      sortable: false,
+      sortable: true,
+      sortAccessor: (row: DisplayRow) => row.brand,
       extraWide: true,
       render: (_value: any, row: DisplayRow) => {
         const isExpanded = expandedBrandIds.has(row.id);
@@ -513,7 +550,7 @@ export const Summary = ({
       header: "VOL 9L",
       subHeader: "TY",
       align: "right" as const,
-      sortable: false,
+      sortable: true,
       render: (value: number) => {
         return value?.toLocaleString() ?? "0";
       },
@@ -525,7 +562,9 @@ export const Summary = ({
         header: guidance.label,
         subHeader: guidance.sublabel,
         align: "right" as const,
-        sortable: false,
+        sortable: true,
+        sortAccessor: (row: DisplayRow) =>
+          row[`sortable_guidance_${guidance.id}`],
         sx: { minWidth: 90 },
         render: (_value: any, row: DisplayRow) => {
           const aggregateKey = row.isBrandRow
@@ -616,7 +655,8 @@ export const Summary = ({
         header: month,
         subHeader: index <= lastActualMonthIndex ? "ACT" : "FCST",
         align: "right" as const,
-        sortable: false,
+        sortable: true,
+        sortAccessor: (row: DisplayRow) => row.months?.[month],
         render: (_value: any, row: DisplayRow) => {
           if (depletionsStatus === "loading" && !row.months?.[month]) {
             return <CircularProgress size={16} thickness={4} />;
@@ -651,6 +691,7 @@ export const Summary = ({
 
     return combinedColumns;
   }, [
+    selectedGuidance,
     selectedRowGuidance,
     expandedBrandIds,
     expandedGuidanceRowIds,
@@ -658,9 +699,6 @@ export const Summary = ({
     handleGuidanceExpandClick,
     lastActualMonthIndex,
     depletionsStatus,
-    selectedGuidance,
-    guidanceResults,
-    localCalcStatus,
   ]);
 
   const handleColumns = () => setColumnsDialogOpen(true);

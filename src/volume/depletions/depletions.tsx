@@ -906,6 +906,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       header: "VOL 9L",
       subHeader: "TY",
       align: "right" as const,
+      sortable: true,
+      sortAccessor: (row: ExtendedForecastData) => calculateTotal(row.months),
       sx: cellPaddingSx, // Apply consistent padding
       render: (_: any, row: ExtendedForecastData) => {
         if (row.isLoading) {
@@ -932,6 +934,16 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         header: guidance.label,
         subHeader: guidance.sublabel,
         align: "right" as const,
+        sortable: true,
+        sortAccessor: (row: ExtendedForecastData) => {
+          const valueKey =
+            typeof guidance.value === "string"
+              ? guidance.value
+              : `guidance_${guidance.id}`;
+          return row[valueKey as keyof ExtendedForecastData] as
+            | number
+            | undefined;
+        },
         sx: cellPaddingSx, // Apply consistent padding
         render: (_: any, row: ExtendedForecastData) => {
           // Check if the entire row is loading
@@ -982,6 +994,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           key: "market",
           header: "MARKET",
           align: "center" as const,
+          sortable: true,
+          sortAccessor: "market_name",
           sx: { ...cellPaddingSx, minWidth: 150 }, // Apply padding, slightly reduce minWidth
           render: (_: any, row: ExtendedForecastData) => {
             const marketName = row.market_name;
@@ -1014,6 +1028,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           key: "product",
           header: "PRODUCT",
           align: "center" as const,
+          sortable: true,
+          sortAccessor: (row: ExtendedForecastData) => {
+            if (!row.product) return "";
+            const parts = row.product.split(" - ");
+            return parts.length > 1 ? parts[1] : row.product;
+          },
           extraWide: true,
           sx: cellPaddingSx, // Apply padding
           render: (_: any, row: ExtendedForecastData) => {
@@ -1026,6 +1046,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           key: "forecastLogic",
           header: "LOGIC",
           align: "left" as const,
+          sortable: false,
           sx: {
             ...cellPaddingSx,
             borderRight: "1px solid rgba(224, 224, 224, 1)",
@@ -1062,6 +1083,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           header: month,
           subHeader: isActualMonth ? "ACT" : "FCST",
           align: "right" as const,
+          sortable: true,
+          sortAccessor: (row: ExtendedForecastData) => row.months[month]?.value,
           sx: { ...cellPaddingSx, minWidth: 65 }, // Apply padding, set minWidth for months
           render: (_: any, row: ExtendedForecastData) => {
             if (row.isLoading) {
@@ -1279,9 +1302,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     isCustomerView,
     forecastData,
     marketMetadata,
-    handleLogicChange,
-    handleExpandClick,
-    handleCommentClick,
   ]);
 
   // --- Function to render the expanded content ---
