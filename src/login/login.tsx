@@ -66,21 +66,46 @@ export const Login: React.FC = () => {
         const from = (location.state as any)?.from?.pathname || "/";
         navigate(from, { replace: true });
       } else {
-        console.warn("Login failed - Server returned false for login attempt");
+        // This case might not be reachable if the backend always throws an error on failure
+        console.warn(
+          "Login failed - Server indicated failure but didn't throw an error."
+        );
         setNotification({
           open: true,
-          message: "Invalid email or password",
+          message: "Invalid email or password", // Generic message if no error thrown
           severity: "error",
         });
       }
-    } catch (error) {
-      console.error("Login error details:", {
-        error: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? error.stack : undefined,
-      });
+    } catch (error: any) {
+      console.error("Login error details:", error);
+      let message = "An error occurred during login";
+      // Check if the error has a response from the server (axios error)
+      if (error.response && error.response.data) {
+        // const errorCode = error.response.data.code; // Removed unused variable
+        const serverMessage = error.response.data.message;
+
+        // Use the server's message directly, which includes attempt warnings and lockout info
+        message = serverMessage || "Invalid email or password";
+
+        // You could potentially use the code for more specific UI changes if needed
+        // switch (errorCode) {
+        //   case 'ACCOUNT_LOCKED':
+        //     // Maybe disable the form temporarily
+        //     break;
+        //   case 'INVALID_CREDENTIALS_WARNING':
+        //     // Highlight remaining attempts
+        //     break;
+        //   default:
+        //     // Generic invalid credentials
+        //     break;
+        // }
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+
       setNotification({
         open: true,
-        message: "An error occurred during login",
+        message: message,
         severity: "error",
       });
     } finally {

@@ -36,7 +36,7 @@ export const UserSettings = () => {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const [passwordError, setPasswordError] = useState({ current: "", new: "" });
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -166,7 +166,7 @@ export const UserSettings = () => {
 
   const handlePasswordChange = async () => {
     try {
-      setPasswordError("");
+      setPasswordError({ current: "", new: "" });
       await axios.post(
         `${import.meta.env.VITE_API_URL}/users/change-password`,
         {
@@ -181,11 +181,38 @@ export const UserSettings = () => {
       setNewPassword("");
       showSnackbar("Password updated successfully", "success");
     } catch (error: any) {
-      // Type the error
-      setPasswordError(
-        error.response?.data?.message || "Failed to update password"
-      );
-      showSnackbar("Failed to update password", "error");
+      let errorMessage = "Failed to update password";
+      let errorField = ""; // Track which field caused the error
+
+      // Check for Axios error with response data
+      if (error.response && error.response.data) {
+        errorMessage = error.response.data.message || errorMessage;
+        const errorCode = error.response.data.code;
+
+        // Determine which field is associated with the error
+        if (errorCode === "PASSWORD_COMPLEXITY_FAILURE") {
+          errorField = "new";
+        } else if (
+          errorMessage.toLowerCase().includes("current password is incorrect")
+        ) {
+          errorField = "current";
+        }
+
+        // Don't log expected validation errors (like 400/401) as console errors
+        if (![400, 401].includes(error.response.status)) {
+          console.error("Password change error:", error.response.data);
+        }
+      } else {
+        // Log unexpected errors
+        console.error("Password change error:", error);
+      }
+
+      // Update the passwordError state for the specific field
+      setPasswordError({
+        current: errorField === "current" ? errorMessage : "",
+        new: errorField === "new" ? errorMessage : "",
+      });
+      showSnackbar(errorMessage, "error"); // Show specific error in Snackbar
     }
   };
 
@@ -224,52 +251,75 @@ export const UserSettings = () => {
 
       <Dialog
         open={passwordDialogOpen}
-        onClose={() => setPasswordDialogOpen(false)}
+        onClose={() => {
+          setPasswordDialogOpen(false);
+          setPasswordError({ current: "", new: "" }); // Reset errors on close
+        }}
       >
         <DialogTitle>Change Password</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              fullWidth
-              label="Current Password"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              error={!!passwordError}
-            />
-            <TextField
-              fullWidth
-              label="New Password"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
-            {passwordError && (
-              <Typography color="error" variant="body2">
-                {passwordError}
-              </Typography>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setPasswordDialogOpen(false);
-              setCurrentPassword("");
-              setNewPassword("");
-              setPasswordError("");
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handlePasswordChange}
-            variant="contained"
-            disabled={!currentPassword || !newPassword}
-          >
-            Submit
-          </Button>
-        </DialogActions>
+        <Box
+          component="form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handlePasswordChange();
+          }}
+        >
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                fullWidth
+                label="Current Password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => {
+                  setCurrentPassword(e.target.value);
+                  // Clear error only for this field when user types
+                  if (passwordError.current)
+                    setPasswordError((prev) => ({ ...prev, current: "" }));
+                }}
+                error={!!passwordError.current} // Keep red outline logic
+                helperText={" "} // Keep consistent spacing, but don't show error message
+                // Remove FormHelperTextProps - helper text won't turn red
+              />
+              <TextField
+                fullWidth
+                label="New Password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  // Clear error only for this field when user types
+                  if (passwordError.new)
+                    setPasswordError((prev) => ({ ...prev, new: "" }));
+                }}
+                error={!!passwordError.new} // Keep red outline logic
+                helperText={
+                  "Must be at least 7 characters, include 1 uppercase letter, and 1 special character."
+                } // Always show requirements
+                // Remove FormHelperTextProps - helper text won't turn red
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setPasswordDialogOpen(false);
+                setCurrentPassword("");
+                setNewPassword("");
+                setPasswordError({ current: "", new: "" }); // Reset errors on cancel
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit" // Make this button submit the form
+              variant="contained"
+              disabled={!currentPassword || !newPassword}
+            >
+              Submit
+            </Button>
+          </DialogActions>
+        </Box>
       </Dialog>
 
       <Snackbar
