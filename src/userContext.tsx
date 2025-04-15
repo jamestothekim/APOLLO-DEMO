@@ -7,12 +7,9 @@ import React, {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { useSelector, useDispatch } from "react-redux";
-import type { AppDispatch, RootState } from "./redux/store";
-import {
-  fetchVolumeData,
-  selectVolumeDataStatus,
-} from "./redux/depletionSlice";
+import { useDispatch } from "react-redux";
+import type { AppDispatch } from "./redux/store";
+import { fetchVolumeData } from "./redux/depletionSlice";
 
 // Types
 export interface MarketAccess {
@@ -200,9 +197,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   const [state, dispatch] = useReducer(authReducer, initialState);
   const navigate = useNavigate();
   const appDispatch = useDispatch<AppDispatch>();
-  const volumeStatus = useSelector((state: RootState) =>
-    selectVolumeDataStatus(state)
-  );
 
   const initialFetchPerformedRef = useRef(false);
 
