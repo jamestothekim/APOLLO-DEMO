@@ -7,14 +7,12 @@ import React, {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-// REMOVED --- Redux Imports for Initial Fetch --- START
 import { useSelector, useDispatch } from "react-redux";
 import type { AppDispatch, RootState } from "./redux/store";
 import {
   fetchVolumeData,
   selectVolumeDataStatus,
 } from "./redux/depletionSlice";
-// REMOVED --- Redux Imports for Initial Fetch --- END
 
 // Types
 export interface MarketAccess {
@@ -39,7 +37,6 @@ export interface MarketAccess {
   };
 }
 
-// REMOVED Add interface for guidance settings
 export interface GuidancePreference {
   id: number;
   order: number;
@@ -98,7 +95,6 @@ const tokenService = {
   },
   setToken(token: string) {
     localStorage.setItem("token", token);
-    // REMOVED Verify token was set correctly
     const verifyToken = localStorage.getItem("token");
     if (verifyToken) {
       this.setAuthHeader(verifyToken);
@@ -203,16 +199,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
   const navigate = useNavigate();
-  // REMOVED --- Redux Hooks for Initial Fetch --- START
   const appDispatch = useDispatch<AppDispatch>();
   const volumeStatus = useSelector((state: RootState) =>
     selectVolumeDataStatus(state)
   );
-  // REMOVED --- Redux Hooks for Initial Fetch --- END
 
-  // REMOVED --- Ref to track initial data fetch --- START
   const initialFetchPerformedRef = useRef(false);
-  // REMOVED --- Ref to track initial data fetch --- END
 
   const checkAuth = async (): Promise<boolean> => {
     try {
@@ -223,18 +215,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         return false;
       }
 
-      // REMOVED Verify token is properly set in axios headers
       if (!axios.defaults.headers.common["Authorization"]) {
         tokenService.setAuthHeader(token);
       }
 
-      // REMOVED Add cache-busting parameter to ensure fresh data
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/users/verify-token?_=${Date.now()}`
       );
 
       if (response.data.user) {
-        // REMOVED Make sure to update the entire user object with fresh data
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
         return true;
       }
@@ -242,7 +231,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       return false;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        // REMOVED Keep error handling logic but remove logging
       }
       dispatch({ type: "LOGOUT" });
       return false;
@@ -279,7 +267,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/users/logout`);
     } catch (error) {
-      // REMOVED Still logout even if the server call fails
     } finally {
       dispatch({ type: "LOGOUT" });
       initialFetchPerformedRef.current = false;
@@ -294,22 +281,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     let removalAttempts = 0;
     let lastKnownToken = localStorage.getItem("token");
 
-    // REMOVED Add storage event listener to detect localStorage changes
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === "token") {
         const currentToken = e.newValue;
 
         if (!currentToken && e.oldValue) {
-          // REMOVED Token removal detected
           removalAttempts++;
 
           if (removalAttempts > 3) {
-            // REMOVED Store token in a session variable as backup
             if (lastKnownToken) {
               sessionStorage.setItem("token_backup", lastKnownToken);
             }
             setTimeout(() => {
-              // REMOVED Try to recover from session storage first
               const backupToken = sessionStorage.getItem("token_backup");
               if (backupToken) {
                 localStorage.setItem("token", backupToken);
@@ -323,10 +306,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
           tokenService.syncToken();
         } else if (currentToken) {
-          // REMOVED Token set detected
           lastKnownToken = currentToken;
           removalAttempts = 0;
-          // REMOVED Clear backup if it exists
           sessionStorage.removeItem("token_backup");
         }
       }
@@ -334,13 +315,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
     window.addEventListener("storage", handleStorageChange);
 
-    // REMOVED Add a more frequent check specifically for token presence
     const tokenCheckInterval = setInterval(() => {
       const token = localStorage.getItem("token");
       const authHeader = axios.defaults.headers.common["Authorization"];
       const backupToken = sessionStorage.getItem("token_backup");
 
-      // REMOVED If token is missing but we have a backup or header, try to recover
       if (!token && (authHeader || backupToken)) {
         if (backupToken) {
           localStorage.setItem("token", backupToken);
@@ -348,10 +327,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           tokenService.syncToken();
         }
       }
-    }, 60000); // REMOVED Check every minute
+    }, 60000);
 
     const authCheckInterval = setInterval(() => {
-      tokenService.syncToken(); // REMOVED Sync before checking
+      tokenService.syncToken();
 
       if (!tokenService.verifyTokenPresence()) {
         const token = tokenService.getToken();
@@ -362,7 +341,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
       checkAuth();
-    }, 2 * 60 * 60 * 1000); // REMOVED 2 hours
+    }, 2 * 60 * 60 * 1000);
 
     return () => {
       clearInterval(authCheckInterval);
@@ -371,7 +350,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // REMOVED Add mutation observer to detect localStorage changes
   useEffect(() => {
     const observer = new MutationObserver(() => {
       tokenService.syncToken();
@@ -386,45 +364,26 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => observer.disconnect();
   }, []);
 
-  // REMOVED --- Combined Effect for Market Details and Initial Volume Data Fetch --- START
   useEffect(() => {
-    // REMOVED console.log
-    // REMOVED "[UserProvider] Combined effect hook triggered. Current states:",
-    // REMOVED {
-    // REMOVED   isLoggedIn: state.isLoggedIn,
-    // REMOVED   hasUser: !!state.user,
-    // REMOVED   userObject: state.user,
-    // REMOVED   volumeStatus: volumeStatus,
-    // REMOVED   initialFetchFlag: initialFetchPerformedRef.current,
-    // REMOVED }
-    // REMOVED );
-
-    // REMOVED Only run if:
-    // REMOVED 1. Logged in
-    // REMOVED 2. User data is available
-    // REMOVED 3. Initial fetch hasn't been performed yet for this session
     if (state.isLoggedIn && state.user && !initialFetchPerformedRef.current) {
-      // REMOVED Set the flag *before* starting the async operation
       initialFetchPerformedRef.current = true;
-      // REMOVED console.log("[UserProvider] Initial fetch flag set to true.");
 
       const fetchMarketDetailsAndVolumeData = async () => {
-        let actualMarketIds: string[] = []; // REMOVED Default to empty array
+        let marketViewMarketIds: string[] = [];
+        let customerViewCustomerIds: string[] = [];
+        let detailedMarkets: MarketAccess[] = [];
 
-        // REMOVED 1. Fetch Actual Market IDs if user has access defined
+        // 1. Fetch FULL details for ALL markets user has access to
         if (state.user?.user_access?.Markets?.length) {
-          const userMarketNumericIds = state.user.user_access.Markets.map(
-            (m) => m.id
-          );
+          const userMarketIds = state.user.user_access.Markets.map((m) => m.id);
 
-          if (userMarketNumericIds.length > 0) {
+          if (userMarketIds.length > 0) {
             try {
-              const response = await axios.get<
-                { id: number; market: string; market_id: string }[]
-              >(
+              // Fetch details for ALL market IDs
+              const response = await axios.get<MarketAccess[]>(
                 `${
                   import.meta.env.VITE_API_URL
-                }/volume/get-markets?ids=${userMarketNumericIds.join(",")}`,
+                }/volume/get-markets?ids=${userMarketIds.join(",")}`,
                 {
                   headers: {
                     Authorization: `Bearer ${tokenService.getToken()}`,
@@ -433,75 +392,108 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
               );
 
               if (response.data && response.data.length > 0) {
-                actualMarketIds = response.data.map((m) => m.market_id);
-                // REMOVED console.log(
-                // REMOVED   "[UserProvider] Fetched actual market IDs for user:",
-                // REMOVED   actualMarketIds
-                // REMOVED );
+                detailedMarkets = response.data;
               } else {
-                // REMOVED console.log(
-                // REMOVED   "[UserProvider] /get-markets returned no data for the user's numeric IDs. Proceeding with empty market list."
-                // REMOVED );
-                // REMOVED actualMarketIds remains []
               }
             } catch (error) {
-              // REMOVED console.error(
-              // REMOVED   "[UserProvider] Error fetching market details from /get-markets. Proceeding with empty market list:",
-              // REMOVED   error
-              // REMOVED );
-              // REMOVED actualMarketIds remains []
+              console.error(
+                "[UserProvider] Error fetching full market details:",
+                error
+              );
             }
-          } else {
-            // REMOVED console.log(
-            // REMOVED   "[UserProvider] User has market access array but no numeric IDs. Proceeding with empty market list."
-            // REMOVED );
-            // REMOVED actualMarketIds remains []
           }
         } else {
-          // REMOVED console.log(
-          // REMOVED   "[UserProvider] User has no market access defined. Proceeding with empty market list."
-          // REMOVED );
-          // REMOVED actualMarketIds remains []
+          console.log(
+            "[UserProvider] User has no market access defined in state."
+          );
+          return;
         }
 
-        // REMOVED 2. Dispatch fetchVolumeData with the determined market IDs (could be populated or empty)
-        // REMOVED Keep isCustomerView as false for the initial default load.
-        // REMOVED console.log(
-        // REMOVED   `[UserProvider] Dispatching fetchVolumeData with market IDs: ${JSON.stringify(
-        // REMOVED     actualMarketIds
-        // REMOVED   )}`
-        // REMOVED );
-        appDispatch(
-          fetchVolumeData({
-            markets: actualMarketIds,
-            brands: null,
-            isCustomerView: false,
-          })
-        ).then((action) => {
-          if (fetchVolumeData.fulfilled.match(action)) {
-            // REMOVED Log removed
-          } else if (fetchVolumeData.rejected.match(action)) {
-            // REMOVED console.error(
-            // REMOVED   "[UserProvider] fetchVolumeData rejected:",
-            // REMOVED   action.payload
-            // REMOVED );
+        // 2. Now, use detailedMarkets to filter and extract IDs
+        if (detailedMarkets.length > 0) {
+          const marketManagedMarkets = detailedMarkets.filter(
+            (m) => m.settings?.managed_by !== "Customer"
+          );
+          const customerManagedMarkets = detailedMarkets.filter(
+            (m) => m.settings?.managed_by === "Customer"
+          );
+
+          // Extract Market IDs for Market View
+          marketViewMarketIds = marketManagedMarkets
+            .map((m) => m.market_id)
+            .filter(Boolean);
+
+          // Extract Customer IDs for Customer View
+          if (customerManagedMarkets.length > 0) {
+            const rawCustomerIds = customerManagedMarkets
+              .flatMap(
+                (market) =>
+                  market.customers?.map((cust) => cust.customer_id) || []
+              )
+              .filter((id): id is string => !!id);
+
+            customerViewCustomerIds = [...new Set(rawCustomerIds)];
           }
-        });
+        } else {
+        }
+
+        // 3. Dispatch fetchVolumeData for Market View (if applicable)
+        if (marketViewMarketIds.length > 0) {
+          appDispatch(
+            fetchVolumeData({
+              markets: marketViewMarketIds,
+              brands: null,
+              isCustomerView: false,
+            })
+          ).then((action) => {
+            if (fetchVolumeData.fulfilled.match(action)) {
+            } else if (fetchVolumeData.rejected.match(action)) {
+            }
+          });
+        } else {
+          console.log(
+            "[UserProvider] Skipping MARKET fetchVolumeData as no market-managed market IDs were found."
+          );
+        }
+
+        // 4. Dispatch fetchVolumeData for Customer View (if applicable)
+
+        if (customerViewCustomerIds.length > 0) {
+          appDispatch(
+            fetchVolumeData({
+              markets: customerViewCustomerIds,
+              brands: null,
+              isCustomerView: true,
+            })
+          ).then((action) => {
+            if (fetchVolumeData.fulfilled.match(action)) {
+              console.log(
+                "[UserProvider] CUSTOMER fetchVolumeData fulfilled. Data (first 5 items):",
+                action.payload.rawData.slice(0, 5)
+              );
+            } else if (fetchVolumeData.rejected.match(action)) {
+              console.error(
+                "[UserProvider] CUSTOMER fetchVolumeData rejected:",
+                action.payload
+              );
+            }
+          });
+        } else {
+          console.log(
+            "[UserProvider] Skipping CUSTOMER fetchVolumeData as no customer-managed customer IDs were found."
+          );
+        }
       };
 
-      // REMOVED Execute the combined fetch logic
       fetchMarketDetailsAndVolumeData();
     }
-  }, [state.isLoggedIn, state.user, volumeStatus, appDispatch]);
-  // REMOVED --- Combined Effect for Market Details and Initial Volume Data Fetch --- END
+  }, [state.isLoggedIn, state.user, appDispatch]);
 
-  // REMOVED Axios interceptor for 401 errors
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          // REMOVED Check if token is still present before logging out
           if (!tokenService.verifyTokenPresence()) {
             dispatch({ type: "LOGOUT" });
             navigate("/login");
@@ -526,7 +518,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 };
 
-// REMOVED Hook
 export const useUser = (): UserContextType => {
   const context = useContext(UserContext);
   if (context === undefined) {

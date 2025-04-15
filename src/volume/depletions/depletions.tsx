@@ -34,6 +34,8 @@ import type { AppDispatch } from "../../redux/store"; // Added RootState
 import {
   selectRawVolumeData, // Added import
   selectVolumeDataStatus, // Added import
+  selectCustomerRawVolumeData,
+  selectCustomerVolumeDataStatus,
 } from "../../redux/depletionSlice";
 // ---------------------
 
@@ -361,13 +363,34 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   // --- Redux State for Volume Data --- START
   const rawVolumeData = useSelector(selectRawVolumeData);
   const depletionsStatus = useSelector(selectVolumeDataStatus);
+  // Select customer data
+  const customerRawVolumeData = useSelector(selectCustomerRawVolumeData);
+  const customerDepletionsStatus = useSelector(selectCustomerVolumeDataStatus);
   // --- Redux State for Volume Data --- END
+
+  // Determine the relevant data and status based on the view
+  const relevantRawData = isCustomerView
+    ? customerRawVolumeData
+    : rawVolumeData;
+  const relevantDepletionsStatus = isCustomerView
+    ? customerDepletionsStatus
+    : depletionsStatus;
 
   // --- Log the received data --- START
   useEffect(() => {
-    console.log("Depletions data from Redux:", rawVolumeData);
-    console.log("Depletions status from Redux:", depletionsStatus);
-  }, [rawVolumeData, depletionsStatus]);
+    console.log("MARKET Depletions data from Redux:", rawVolumeData);
+    console.log("MARKET Depletions status from Redux:", depletionsStatus);
+    console.log("CUSTOMER Depletions data from Redux:", customerRawVolumeData);
+    console.log(
+      "CUSTOMER Depletions status from Redux:",
+      customerDepletionsStatus
+    );
+  }, [
+    rawVolumeData,
+    depletionsStatus,
+    customerRawVolumeData,
+    customerDepletionsStatus,
+  ]);
   // --- Log the received data --- END
 
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
@@ -452,128 +475,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   }, [isCustomerView, marketMetadata]);
 
-  // Update loadForecastData to handle customer view
-  const loadForecastData = useMemo(
-    () => async () => {
-      try {
-        // Placeholder logic is removed from here, will be handled in useEffect
-
-        const allIds = isCustomerView
-          ? marketMetadata
-              .filter((market) => market.settings?.managed_by === "Customer")
-              .flatMap((market) => market.customers || [])
-              .map((customer) => customer.customer_id)
-          : marketMetadata
-              .filter((market) => market.settings?.managed_by === "Market")
-              .map((market) => market.market_id);
-
-        const marketsToFetch = isCustomerView
-          ? []
-          : selectedMarkets.length > 0
-          ? selectedMarkets
-          : allIds;
-        const customersToFetch = isCustomerView
-          ? selectedMarkets.length > 0
-            ? selectedMarkets
-            : allIds
-          : [];
-
-        // Fetch forecast data and logged changes concurrently
-        const [forecastResponse, loggedChanges] = await Promise.all([
-          axios.get(
-            `${import.meta.env.VITE_API_URL}/volume/depletions-forecast?` +
-              `isMarketView=${!isCustomerView}` +
-              `&markets=${JSON.stringify(marketsToFetch)}` +
-              `&customers=${JSON.stringify(customersToFetch)}`,
-            {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            }
-          ),
-          fetchLoggedForecastChanges(),
-        ]);
-
-        if (!forecastResponse.data) {
-          throw new Error("Failed to fetch forecast data");
-        }
-
-        // Process the raw data, applying logged changes
-        const processedData = processRawData(
-          forecastResponse.data,
-          loggedChanges,
-          isCustomerView ?? false,
-          selectedGuidance
-        );
-
-        // Filter out rows with zero total volume and remove loading state
-        const nonZeroData = processedData
-          .filter(hasNonZeroTotal)
-          .map((row) => ({
-            ...row,
-            isLoading: false, // Ensure loading state is off
-          }));
-
-        setForecastData(nonZeroData);
-
-        // Update available brands based on the fetched data
-        const brands = Array.from(
-          new Set(nonZeroData.map((row) => row.brand))
-        ).sort();
-        setAvailableBrands(brands);
-      } catch (error) {
-        console.error("Error loading forecast data:", error);
-        // Clear data and loading indicators on error
-        setForecastData(
-          (prevData) => prevData.map((row) => ({ ...row, isLoading: false })) // Clear loading from any placeholders
-        );
-        // Optionally show an error message to the user
-        showSnackbar("Failed to load forecast data.", "error");
-      }
-    },
-    [
-      marketMetadata,
-      isCustomerView,
-      selectedMarkets,
-      selectedGuidance,
-      // Removed forecastData.length dependency
-      // Dependencies should reflect what causes data to need reloading
-      setForecastData, // Include state setters used inside
-      setAvailableBrands,
-    ]
-  );
-
-  // Use loadForecastData in useEffect, handling initial loading and placeholders
-  // TO DO: don't make it lean on placeholder data because loadingProgress should be showing
-  useEffect(() => {
-    // Function to set placeholders if data is empty
-    const setPlaceholders = () => {
-      if (forecastData.length === 0) {
-        const placeholders = marketMetadata.slice(0, 3).map(
-          (market, idx) =>
-            ({
-              id: `loading-${idx}`,
-              market_id: market.market_id,
-              market_name: market.market_name,
-              product: "Loading...",
-              brand: "Loading...",
-              variant: "Loading...",
-              variant_id: `loading-${idx}`,
-              variant_size_pack_id: `loading-${idx}`,
-              variant_size_pack_desc: "Loading...",
-              forecastLogic: "flat",
-              isLoading: true,
-              months: {},
-            } as ExtendedForecastData)
-        );
-        setForecastData(placeholders);
-      }
-    };
-
-    setPlaceholders(); // Set placeholders immediately if needed
-    loadForecastData(); // Then trigger the actual data load
-  }, [loadForecastData, marketMetadata]); // Keep loadForecastData, add marketMetadata for placeholder logic
-
   // Update handleUndo to handle the new history information
   const handleUndo = useCallback(async () => {
     try {
@@ -638,6 +539,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             : "No more actions to undo"
         );
         setUndoSnackbarOpen(true);
+        dispatch(triggerSync()); // Dispatch sync after successful undo
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -650,6 +552,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setUndoSnackbarOpen,
     isCustomerView,
     selectedGuidance,
+    dispatch,
   ]);
 
   // Now the effect can safely include handleUndo in deps
@@ -1643,6 +1546,51 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       SIDEBAR_GUIDANCE_OPTIONS
     );
   }, [selectedDataState]);
+
+  // Effect to process raw data from Redux when it changes
+  useEffect(() => {
+    if (relevantDepletionsStatus === "succeeded" && relevantRawData) {
+      // Fetch logged changes (if necessary for applying Redis updates)
+      fetchLoggedForecastChanges()
+        .then((loggedChanges) => {
+          const processed = processRawData(
+            relevantRawData,
+            loggedChanges, // Pass logged changes if needed
+            isCustomerView ?? false,
+            selectedGuidance
+          );
+          const nonZeroData = processed.filter(hasNonZeroTotal);
+          setForecastData(nonZeroData);
+
+          // Update available brands based on the processed data
+          const brands = Array.from(
+            new Set(nonZeroData.map((row) => row.brand))
+          ).sort();
+          setAvailableBrands(brands);
+        })
+        .catch((error) => {
+          console.error("Error fetching logged changes:", error);
+          // Optionally handle error, maybe process without logged changes
+          const processed = processRawData(
+            relevantRawData,
+            [], // Process without logged changes on error
+            isCustomerView ?? false,
+            selectedGuidance
+          );
+          const nonZeroData = processed.filter(hasNonZeroTotal);
+          setForecastData(nonZeroData);
+          const brands = Array.from(
+            new Set(nonZeroData.map((row) => row.brand))
+          ).sort();
+          setAvailableBrands(brands);
+        });
+    }
+  }, [
+    relevantRawData,
+    relevantDepletionsStatus,
+    isCustomerView,
+    selectedGuidance,
+  ]);
 
   return (
     <Box>

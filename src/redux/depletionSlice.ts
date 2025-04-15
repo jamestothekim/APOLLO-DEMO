@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import axios from 'axios';
 import type { RootState } from './store'; // Assuming your store file is named store.ts
 
@@ -30,11 +30,15 @@ export interface RawDepletionForecastItem {
 
 // Define the state structure for this slice
 interface DepletionsState {
-    rawApiData: RawDepletionForecastItem[]; // Store the raw, unprocessed data from the API
+    rawApiData: RawDepletionForecastItem[]; // Store the raw, unprocessed data from the API (Market View)
     status: 'idle' | 'loading' | 'succeeded' | 'failed';
     error: string | null;
-    lastActualMonthIndex: number; // Store the calculated last actual month index from the raw data
-    // We avoid storing derived/processed data here; selectors will handle that.
+    lastActualMonthIndex: number; // Store the calculated last actual month index from the raw data (Market View)
+    // Add state for customer-specific data
+    customerRawApiData: RawDepletionForecastItem[];
+    customerStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
+    customerError: string | null;
+    customerLastActualMonthIndex: number; // Add if needed, or calculate via selector
 }
 
 const initialState: DepletionsState = {
@@ -42,6 +46,11 @@ const initialState: DepletionsState = {
     status: 'idle',
     error: null,
     lastActualMonthIndex: -1,
+    // Initialize customer state
+    customerRawApiData: [],
+    customerStatus: 'idle',
+    customerError: null,
+    customerLastActualMonthIndex: -1, // Initialize if storing
 };
 
 // --- Async Thunk for Fetching Depletions Data ---
@@ -64,7 +73,7 @@ export const fetchVolumeData = createAsyncThunk<
 
             // Use null for empty arrays if the API expects that
             const marketsParam = !isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
-            let customersParam = isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
+            const customersParam = isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
             const brandsParam = brands && brands.length > 0 ? JSON.stringify(brands) : null;
 
             // --- Log API Call Parameters --- START
@@ -141,22 +150,52 @@ const volumeSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            .addCase(fetchVolumeData.pending, (state) => {
-                state.status = 'loading';
-                state.error = null;
+            .addCase(fetchVolumeData.pending, (state, action) => {
+                // Update status based on view type
+                if (action.meta.arg.isCustomerView) {
+                    state.customerStatus = 'loading';
+                    state.customerError = null;
+                } else {
+                    state.status = 'loading';
+                    state.error = null;
+                }
             })
-            .addCase(fetchVolumeData.fulfilled, (state, action: PayloadAction<{ rawData: RawDepletionForecastItem[], lastActualMonthIndex: number }>) => {
-                state.status = 'succeeded';
-                state.rawApiData = action.payload.rawData; // Store the raw data
-                state.lastActualMonthIndex = action.payload.lastActualMonthIndex;
-                state.error = null; // Clear any previous error
+            .addCase(fetchVolumeData.fulfilled, (state, action) => {
+                // Access meta.arg - TypeScript might need help here if inference fails
+                const isCustomerView = (action.meta as any).arg.isCustomerView;
+                const payload = action.payload as { rawData: RawDepletionForecastItem[], lastActualMonthIndex: number }; // Assert payload type
+
+                // Update state based on view type
+                if (isCustomerView) {
+                    state.customerStatus = 'succeeded';
+                    state.customerRawApiData = payload.rawData;
+                    state.customerLastActualMonthIndex = payload.lastActualMonthIndex; // Store if needed
+                    state.customerError = null;
+                    console.log("[volumeSlice] CUSTOMER fetchVolumeData fulfilled. Data (first 5 items):", payload.rawData.slice(0, 5));
+                } else {
+                    state.status = 'succeeded';
+                    state.rawApiData = payload.rawData;
+                    state.lastActualMonthIndex = payload.lastActualMonthIndex;
+                    state.error = null;
+                    console.log("[volumeSlice] MARKET fetchVolumeData fulfilled. Data (first 5 items):", payload.rawData.slice(0, 5));
+                }
             })
             .addCase(fetchVolumeData.rejected, (state, action) => {
-                 console.error('[volumeSlice] fetchVolumeData failed:', action.payload);
-                state.status = 'failed';
-                state.error = action.payload ?? "Unknown error occurred";
-                state.rawApiData = []; // Clear data on failure
-                state.lastActualMonthIndex = -1;
+                 // Access meta.arg
+                 const isCustomerView = (action.meta as any).arg.isCustomerView;
+                 console.error('[volumeSlice] fetchVolumeData failed:', action.payload, 'Args:', (action.meta as any).arg);
+                // Update state based on view type
+                if (isCustomerView) {
+                    state.customerStatus = 'failed';
+                    state.customerError = (action.payload as string | undefined) ?? "Unknown error occurred";
+                    state.customerRawApiData = [];
+                    state.customerLastActualMonthIndex = -1;
+                } else {
+                    state.status = 'failed';
+                    state.error = (action.payload as string | undefined) ?? "Unknown error occurred";
+                    state.rawApiData = [];
+                    state.lastActualMonthIndex = -1;
+                }
             });
     },
 });
@@ -175,6 +214,13 @@ export const selectVolumeDataError = (state: RootState): string | null => state.
 
 // Selector for the last actual month index
 export const selectLastActualMonthIndex = (state: RootState): number => state.volume.lastActualMonthIndex;
+
+// --- Add Selectors for Customer Data ---
+export const selectCustomerRawVolumeData = (state: RootState): RawDepletionForecastItem[] => state.volume.customerRawApiData;
+export const selectCustomerVolumeDataStatus = (state: RootState): DepletionsState['customerStatus'] => state.volume.customerStatus;
+export const selectCustomerVolumeDataError = (state: RootState): string | null => state.volume.customerError;
+// Optional: Selector for customer last actual month index if needed
+export const selectCustomerLastActualMonthIndex = (state: RootState): number => state.volume.customerLastActualMonthIndex;
 
 // --- Selector for Dashboard Data (Add this section) ---
 
