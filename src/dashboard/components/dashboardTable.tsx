@@ -35,8 +35,8 @@ import {
   shouldShowLineChart,
   shouldShowPieChart,
 } from "../dashboardUtil/dashboardUtil";
-import { DashboardLineChart } from "./DashboardLineChart";
-import { DashboardPieChart } from "./DashboardPieChart";
+import { DashboardLineChart } from "./dashboardLineChart";
+import { DashboardPieChart } from "./dashboardPieChart";
 
 type VizType = "table" | "line" | "pie"; // Define possible visualization types
 
