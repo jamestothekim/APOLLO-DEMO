@@ -10,7 +10,7 @@ import {
 import { NavigationAppBar } from "./navigation/appbar";
 import { Sidebar } from "./navigation/sidebar";
 import { VolumeView } from "./volume/volumeView";
-import { DashboardContainer } from "./dashboard/dashboardContainer";
+import DashboardContainer from "./dashboard/dashboardContainer";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import theme from "./theme";

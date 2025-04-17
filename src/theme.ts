@@ -208,6 +208,17 @@ declare module '@mui/material/styles' {
           },
         },
       },
+      MuiChip: {
+        styleOverrides: {
+          outlined: {
+            borderRadius: "16px",
+          },
+          labelSmall: {
+            paddingLeft: '8px',
+            paddingRight: '8px',
+          },
+        },
+      },
       MuiDynamicTable: {
         styleOverrides: {
           sectionHeader: {

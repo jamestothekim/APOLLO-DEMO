@@ -1,211 +1,47 @@
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Paper,
   Typography,
   Grid,
-  Chip,
-  TableContainer,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
+  Snackbar,
+  Alert,
+  CircularProgress,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   OutlinedInput,
-  Snackbar,
-  Alert,
-  CircularProgress,
 } from "@mui/material";
 import {
   AVAILABLE_DIMENSIONS,
-  processReportData,
-  AggregationResult,
-  ReportDimension,
-  getUniqueValuesForDimension,
-  exportReportToCSV,
+  FILTERABLE_DIMENSIONS,
 } from "./reportUtil/reportUtil";
 import { Toolbox } from "../volume/components/toolbox";
-import { useState, useEffect } from "react";
+import { PublishPreviewModal } from "./publishPreviewModal";
 // --- Redux Imports --- START
-import { useSelector } from "react-redux";
-import type { RootState } from "../redux/store";
+import { useSelector, useDispatch } from "react-redux";
+import type { RootState, AppDispatch } from "../redux/store";
 import {
   selectRawVolumeData,
   selectVolumeDataStatus,
   selectVolumeDataError,
 } from "../redux/depletionSlice";
+import { addItem, ReportConfig, PublishedItem } from "../redux/dashboardSlice";
+import { syncDashboardToBackend } from "../redux/dashboardSlice";
 // --- Redux Imports --- END
+// --- Dashboard Component Imports (from VisualizationRenderer) --- START
+// import { DashboardTable } from "../dashboard/components/DashboardTable";
+// import { DashboardPieChart } from "../dashboard/components/DashboardPieChart";
+// import { DashboardLineChart } from "../dashboard/components/DashboardLineChart";
+import { DashboardTable } from "../dashboard/components/dashboardTable";
+// --- Dashboard Component Imports --- END
 
-// --- Report Table Component ---
-interface ReportTableProps {
-  headers: {
-    rows: string[];
-    columns: string[];
-    valueLabel?: { rows?: string[]; columns?: string[]; value?: string };
-  };
-  data: (number | null)[][];
-  valueFormat?: "number" | "currency" | "string";
-}
-
-const formatValue = (
-  value: number | null,
-  format: ReportTableProps["valueFormat"]
-): string => {
-  if (value === null || value === undefined) return "-";
-  try {
-    switch (format) {
-      case "currency":
-        return value.toLocaleString(undefined, {
-          style: "currency",
-          currency: "USD",
-        }); // Assuming USD
-      case "number":
-        return value.toLocaleString(undefined, { maximumFractionDigits: 0 }); // Round numbers
-      case "string":
-      default:
-        return value.toString();
-    }
-  } catch (e) {
-    console.error("Error formatting value:", value, format, e);
-    return value.toString(); // Fallback
-  }
-};
-
-const ReportTable = ({ headers, data, valueFormat }: ReportTableProps) => {
-  if (!headers || (!headers.rows.length && !headers.columns.length)) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: 150,
-          width: "100%",
-          p: 2,
-        }}
-      >
-        <Typography sx={{ textAlign: "center", color: "primary.main" }}>
-          Select dimensions for Rows, Columns, and a Calculation to build the
-          report.
-        </Typography>
-      </Box>
-    );
-  }
-
-  const hasRowHeaders = headers.rows.length > 0;
-  const hasColHeaders = headers.columns.length > 0;
-
-  const numCols = hasColHeaders
-    ? headers.columns.length
-    : hasRowHeaders
-    ? 1
-    : 0;
-
-  const rowDimensionLabel =
-    headers.valueLabel?.rows?.filter(Boolean).join(" / ") ||
-    (headers.rows.length ? "Row Value" : "");
-  const valueHeaderLabel = headers.valueLabel?.value || "Value";
-
-  return (
-    <TableContainer component={Paper} elevation={0} variant="outlined">
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            {hasRowHeaders && (
-              <TableCell
-                sx={{
-                  fontWeight: "bold",
-                  borderRight: 1,
-                  borderColor: "divider",
-                  minWidth: 150,
-                  position: "sticky",
-                  left: 0,
-                  background: "white",
-                  zIndex: 1,
-                }}
-              >
-                {rowDimensionLabel || ""}
-              </TableCell>
-            )}
-            {hasColHeaders
-              ? headers.columns.map((colHeader, index) => (
-                  <TableCell
-                    key={index}
-                    align="right"
-                    sx={{ fontWeight: "bold" }}
-                  >
-                    {colHeader}
-                  </TableCell>
-                ))
-              : hasRowHeaders && (
-                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    {valueHeaderLabel}
-                  </TableCell>
-                )}
-            {!hasRowHeaders && hasColHeaders && (
-              <TableCell sx={{ minWidth: 150 }} />
-            )}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {hasRowHeaders
-            ? headers.rows.map((rowHeader, rowIndex) => (
-                <TableRow key={`${rowHeader}-${rowIndex}`} hover>
-                  <TableCell
-                    component="th"
-                    scope="row"
-                    sx={{
-                      borderRight: 1,
-                      borderColor: "divider",
-                      position: "sticky",
-                      left: 0,
-                      background: "white",
-                      zIndex: 1,
-                    }}
-                  >
-                    {rowHeader}
-                  </TableCell>
-                  {Array.from({ length: numCols }).map((_, colIndex) => (
-                    <TableCell key={colIndex} align="right">
-                      {formatValue(data?.[rowIndex]?.[colIndex], valueFormat)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            : hasColHeaders && (
-                <TableRow hover>
-                  <TableCell sx={{ minWidth: 150 }} />
-                  {Array.from({ length: numCols }).map((_, colIndex) => (
-                    <TableCell key={colIndex} align="right">
-                      {formatValue(data?.[0]?.[colIndex], valueFormat)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              )}
-          {!hasRowHeaders && !hasColHeaders && data?.[0]?.[0] !== undefined && (
-            <TableRow hover>
-              <TableCell align="right">
-                {formatValue(data[0][0], valueFormat)}
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-};
-
-// Separate dimensions and measures for easier use in Selects
+// --- Constants --- START
 const DIMENSIONS = AVAILABLE_DIMENSIONS.filter((d) => d.type === "dimension");
 const MEASURES = AVAILABLE_DIMENSIONS.filter((d) => d.type === "measure");
-
-// --- Type for filter values state ---
-interface SelectedFilterValues {
-  [dimensionId: string]: string[]; // e.g., { brand: ["Balvenie"], market: ["USAFL1"] }
-}
+const TIME_SERIES_DIMENSION_IDS = ["month", "year", "date"];
+// --- Constants --- END
 
 // --- Type for Snackbar state ---
 interface SnackbarState {
@@ -215,32 +51,38 @@ interface SnackbarState {
 }
 
 const ReportBuilder = () => {
-  const [aggregationResult, setAggregationResult] = useState<AggregationResult>(
-    {
-      rows: [],
-      columns: [],
-      data: [[]],
-      valueFormat: "number",
-    }
-  );
-
-  // --- State for single selection ---
+  // --- Core State --- START
   const [selectedRow, setSelectedRow] = useState<string>("");
   const [selectedColumn, setSelectedColumn] = useState<string>("");
-  // Keep Filters multi-select
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [selectedCalculation, setSelectedCalculation] = useState<string>("");
-  // --- State for selected filter values ---
-  const [selectedFilterValues, setSelectedFilterValues] =
-    useState<SelectedFilterValues>({});
-  // --------------------------------------
+  const [currentVizType, setCurrentVizType] =
+    useState<PublishedItem["type"]>("table");
+  // --- Core State --- END
+
+  // --- Filter State --- START
+  const [selectedFilterDimensionId, setSelectedFilterDimensionId] =
+    useState<string>("");
+  // --- Filter State --- END
+
+  // --- Other State ---
   const [snackbarState, setSnackbarState] = useState<SnackbarState>({
     open: false,
     message: "",
     severity: "info",
   });
+  const [canPublish, setCanPublish] = useState(false);
+  const [canPieChart, setCanPieChart] = useState(false);
+  const [canLineChart, setCanLineChart] = useState(false);
+  const [isPublishPreviewOpen, setIsPublishPreviewOpen] = useState(false);
+  const [itemToPublish, setItemToPublish] = useState<{
+    requiredWidth: 6 | 12;
+    config: ReportConfig;
+    type: PublishedItem["type"];
+  } | null>(null);
+  // --- End Other State ---
 
-  // --- Get Data from Redux --- START
+  // --- Redux Data Fetching ---
+  const dispatch: AppDispatch = useDispatch();
   const rawVolumeData = useSelector((state: RootState) =>
     selectRawVolumeData(state)
   );
@@ -250,93 +92,55 @@ const ReportBuilder = () => {
   const depletionsError = useSelector((state: RootState) =>
     selectVolumeDataError(state)
   );
-  // --- Get Data from Redux --- END
+  const dashboardItems = useSelector(
+    (state: RootState) => state.dashboard.items
+  );
+  // --- End Redux Data Fetching ---
 
-  // --- Update useEffect to pass filter values ---
+  // --- Data Processing Logic --- START
+  // --- Data Processing Logic --- END
+
+  // --- Effect for deriving filter value options --- START
+  // --- Effect for deriving filter value options --- END
+
+  // --- Effect for updating Toolbox button states --- START
   useEffect(() => {
-    if (rawVolumeData.length > 0 && selectedCalculation) {
-      console.log("Selections changed, processing data...");
+    const reportIsRendered = !!selectedCalculation && rawVolumeData.length > 0;
 
-      const getDimsByIds = (ids: string[]): ReportDimension[] =>
-        ids
-          .map((id) => AVAILABLE_DIMENSIONS.find((d) => d.id === id))
-          .filter((d): d is ReportDimension => !!d);
+    setCanPublish(reportIsRendered);
 
-      // Get the single selected dimension object or empty array
-      const getSingleDim = (id: string): ReportDimension[] => {
-        const dim = AVAILABLE_DIMENSIONS.find((d) => d.id === id);
-        return dim ? [dim] : [];
-      };
+    const hasRow = !!selectedRow;
+    const hasCol = !!selectedColumn;
+    const hasCalc = !!selectedCalculation;
 
-      const calculationDim = MEASURES.find((m) => m.id === selectedCalculation);
+    const possiblePie = hasCalc && ((hasRow && !hasCol) || (!hasRow && hasCol));
+    setCanPieChart(possiblePie);
 
-      if (!calculationDim) {
-        console.warn("Selected calculation dimension not found");
-        setAggregationResult({
-          rows: [],
-          columns: [],
-          data: [[]],
-          valueFormat: "number",
-        });
-        return;
-      }
+    const rowIsTimeSeries = TIME_SERIES_DIMENSION_IDS.includes(selectedRow);
+    const colIsTimeSeries = TIME_SERIES_DIMENSION_IDS.includes(selectedColumn);
+    const possibleLine =
+      hasCalc &&
+      ((hasRow && !hasCol && rowIsTimeSeries) ||
+        (!hasRow && hasCol && colIsTimeSeries) ||
+        (hasRow && hasCol && (rowIsTimeSeries || colIsTimeSeries)));
+    setCanLineChart(possibleLine);
 
-      const filterDims = getDimsByIds(selectedFilters);
-
-      // Prepare filter dimensions with their selected values
-      const filtersWithValues = filterDims.map((dim) => ({
-        ...dim,
-        filterValues: selectedFilterValues[dim.id] || [], // Attach selected values
-      }));
-
-      const result = processReportData(
-        rawVolumeData,
-        filtersWithValues, // Pass dimensions with their selected values
-        getSingleDim(selectedRow),
-        getSingleDim(selectedColumn),
-        calculationDim
-      );
-      setAggregationResult(result);
-    } else {
-      setAggregationResult({
-        rows: [],
-        columns: [],
-        data: [[]],
-        valueFormat: "number",
-      });
+    if (currentVizType === "pie" && !possiblePie) {
+      setCurrentVizType("table");
+    }
+    if (currentVizType === "line" && !possibleLine) {
+      setCurrentVizType("table");
     }
   }, [
     selectedRow,
     selectedColumn,
-    selectedFilters,
-    selectedFilterValues, // <-- Add to dependency array
     selectedCalculation,
-    rawVolumeData,
+    rawVolumeData.length,
+    currentVizType,
   ]);
+  // --- Effect for updating Toolbox button states --- END
 
-  // --- Handler for changing selected filter values ---
-  const handleFilterValueChange = (dimensionId: string, values: string[]) => {
-    setSelectedFilterValues((prev) => ({
-      ...prev,
-      [dimensionId]: values,
-    }));
-  };
-  // --------------------------------------------------
-
-  // Keep renderSelectValue for Filters
-  const renderMultiSelectValue = (
-    selected: string[],
-    available: ReportDimension[]
-  ) => (
-    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-      {(selected as string[]).map((value) => {
-        const label = available.find((d) => d.id === value)?.label || value;
-        return <Chip key={value} label={label} size="small" />;
-      })}
-    </Box>
-  );
-
-  // --- Snackbar Handler ---
+  // --- Handlers --- START
   const handleSnackbarClose = (
     _event?: React.SyntheticEvent | Event,
     reason?: string
@@ -346,56 +150,104 @@ const ReportBuilder = () => {
     }
     setSnackbarState((prev) => ({ ...prev, open: false }));
   };
-  // ------------------------
 
-  // --- Handle Export (Updated for Snackbar) ---
   const handleExport = () => {
     console.log("Export requested");
-    const rowDim =
-      (selectedRow
-        ? DIMENSIONS.find((d) => d.id === selectedRow)
-        : undefined) ?? null;
-    const colDim =
-      (selectedColumn
-        ? DIMENSIONS.find((d) => d.id === selectedColumn)
-        : undefined) ?? null;
-    const calcDim =
-      (selectedCalculation
-        ? MEASURES.find((m) => m.id === selectedCalculation)
-        : undefined) ?? null;
+    console.warn(
+      "Export functionality needs refactoring after removing direct aggregation."
+    );
+    setSnackbarState({
+      open: true,
+      message: "Export needs update. Functionality may be limited.",
+      severity: "warning",
+    });
+    return;
+  };
 
-    if (!calcDim) {
-      console.warn("Cannot export without a selected calculation.");
+  const handlePublish = () => {
+    const requiredWidth: 6 | 12 = 12;
+
+    const configToPublish: ReportConfig = {
+      rowDimId: selectedRow || null,
+      colDimId: selectedColumn || null,
+      calcId: selectedCalculation,
+      filterIds: selectedFilterDimensionId ? [selectedFilterDimensionId] : [],
+      filterValues: {},
+    };
+
+    setItemToPublish({
+      requiredWidth,
+      config: configToPublish,
+      type: currentVizType,
+    });
+    setIsPublishPreviewOpen(true);
+  };
+
+  const handleViewAsPie = () => {
+    setCurrentVizType("pie");
+    setSnackbarState({
+      open: true,
+      message: "Pie chart view selected.",
+      severity: "info",
+    });
+  };
+
+  const handleViewAsLine = () => {
+    setCurrentVizType("line");
+    setSnackbarState({
+      open: true,
+      message: "Line chart view selected.",
+      severity: "info",
+    });
+  };
+
+  const handleConfirmPlacement = (_index: number, name: string) => {
+    if (!itemToPublish?.config || !itemToPublish?.type) {
+      console.error(
+        "Cannot confirm placement: item config or type is missing."
+      );
       setSnackbarState({
         open: true,
-        message: "Please select a Calculation before exporting.",
-        severity: "warning",
+        message: "Error: Report configuration missing.",
+        severity: "error",
       });
       return;
     }
+    const newItem: Omit<PublishedItem, "id"> = {
+      type: itemToPublish.type,
+      config: itemToPublish.config,
+      name: name,
+      gridPosition: { row: 0, col: 0, width: 12 },
+      order: _index,
+    };
 
-    // Call the utility function from reportUtil
-    try {
-      exportReportToCSV(aggregationResult, rowDim, colDim, calcDim);
-      // Optional: Show success snackbar?
-      // setSnackbarState({ open: true, message: "Export started successfully!", severity: 'success' });
-    } catch (error) {
-      console.error("Error during exportReportToCSV call:", error);
-      setSnackbarState({
-        open: true,
-        message: "An error occurred during export. Check console for details.",
-        severity: "error",
-      });
-    }
+    dispatch(addItem(newItem));
+    // Sync to backend after adding item
+    dispatch(
+      syncDashboardToBackend(
+        dashboardItems.concat({ ...newItem, id: crypto.randomUUID() })
+      )
+    );
+
+    setSnackbarState({
+      open: true,
+      message: `Item '${name}' published successfully.`,
+      severity: "success",
+    });
+    setItemToPublish(null);
+    setIsPublishPreviewOpen(false);
   };
-  // -----------------------------------------
+  // --- Handlers --- END
 
-  // --- Determine if a report is actually generated ---
-  const isReportRendered =
-    (aggregationResult.rows.length > 0 ||
-      aggregationResult.columns.length > 0) &&
-    !!selectedCalculation;
-  // -------------------------------------------------
+  // --- Build config for rendering --- START
+  const currentConfigForRender: ReportConfig = {
+    rowDimId: selectedRow || null,
+    colDimId: selectedColumn || null,
+    calcId: selectedCalculation,
+    filterIds: selectedFilterDimensionId ? [selectedFilterDimensionId] : [],
+    filterValues: {},
+  };
+  // --- Build config for rendering --- END
 
   return (
     <Paper elevation={3} sx={{ p: 2 }}>
@@ -410,36 +262,36 @@ const ReportBuilder = () => {
       >
         <Typography
           variant="h6"
-          sx={{
-            fontWeight: 500,
-            color: (theme) => theme.palette.primary.main,
-          }}
+          sx={{ fontWeight: 500, color: (theme) => theme.palette.primary.main }}
         >
           REPORT BUILDER
         </Typography>
-
-        {/* --- Toolbox --- */}
         <Toolbox
-          tools={isReportRendered ? ["export"] : []}
+          tools={["export", "publish", "pieChart", "lineChart"]}
+          canPublish={canPublish}
+          onPublish={handlePublish}
+          canPieChart={canPieChart}
+          onPieChart={handleViewAsPie}
+          canLineChart={canLineChart}
+          onLineChart={handleViewAsLine}
           onExport={handleExport}
           onColumns={() => {}}
           onUndo={() => {}}
-          onViewToggle={() => {}}
           canUndo={false}
-          viewType="table"
           isDepletionsView={false}
         />
-        {/* -------------- */}
       </Box>
-      {/* -------------------------------- */}
 
-      {/* Configuration Bar */}
-      <Paper
-        elevation={1}
-        sx={{ p: 2, mb: 3, display: "flex", flexWrap: "wrap" }}
-      >
-        {/* Row 1: Core Selects */}
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+      {/* --- Configuration UI --- START */}
+      <Paper elevation={1} sx={{ p: 2, mb: 3 }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 2,
+            flexWrap: "wrap",
+            alignItems: "flex-start",
+          }}
+        >
           {/* Rows Select */}
           <FormControl sx={{ m: 1, minWidth: 150, flexGrow: 1 }}>
             <InputLabel id="row-select-label">Row</InputLabel>
@@ -449,10 +301,6 @@ const ReportBuilder = () => {
               onChange={(e) => setSelectedRow(e.target.value as string)}
               input={<OutlinedInput label="Row" />}
             >
-              <MenuItem value="">
-                <em>None</em>
-              </MenuItem>{" "}
-              {/* Allow unselecting */}
               {DIMENSIONS.map((dim) => (
                 <MenuItem key={dim.id} value={dim.id}>
                   {dim.label}
@@ -469,10 +317,6 @@ const ReportBuilder = () => {
               onChange={(e) => setSelectedColumn(e.target.value as string)}
               input={<OutlinedInput label="Column" />}
             >
-              <MenuItem value="">
-                <em>None</em>
-              </MenuItem>{" "}
-              {/* Allow unselecting */}
               {DIMENSIONS.map((dim) => (
                 <MenuItem key={dim.id} value={dim.id}>
                   {dim.label}
@@ -489,9 +333,6 @@ const ReportBuilder = () => {
               onChange={(e) => setSelectedCalculation(e.target.value as string)}
               input={<OutlinedInput label="Calculation" />}
             >
-              <MenuItem value="">
-                <em>None</em>
-              </MenuItem>{" "}
               {MEASURES.map((dim) => (
                 <MenuItem key={dim.id} value={dim.id}>
                   {dim.label}
@@ -499,45 +340,45 @@ const ReportBuilder = () => {
               ))}
             </Select>
           </FormControl>
-          {/* Filters Select (Main) */}
+          {/* --- Filter Dimension Select --- START */}
           <FormControl sx={{ m: 1, minWidth: 150, flexGrow: 1 }}>
-            <InputLabel id="filters-select-label">Filters</InputLabel>
+            <InputLabel id="filter-dim-select-label">Filters</InputLabel>
             <Select
-              labelId="filters-select-label"
-              multiple
-              value={selectedFilters}
-              onChange={(e) => setSelectedFilters(e.target.value as string[])}
+              labelId="filter-dim-select-label"
+              value={selectedFilterDimensionId}
+              onChange={(e) => {
+                setSelectedFilterDimensionId(e.target.value as string);
+              }}
               input={<OutlinedInput label="Filters" />}
-              renderValue={(selected) =>
-                renderMultiSelectValue(selected, DIMENSIONS)
-              }
             >
-              {DIMENSIONS.map((dim) => (
+              {FILTERABLE_DIMENSIONS.map((dim) => (
                 <MenuItem key={dim.id} value={dim.id}>
                   {dim.label}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-          {/* Version Select */}
+          {/* --- Filter Dimension Select --- END */}
+
+          {/* Version Select - Keep this last or reposition as needed */}
           <FormControl sx={{ m: 1, minWidth: 150, flexGrow: 1 }}>
             <InputLabel id="version-select-label">Version</InputLabel>
             <Select
               labelId="version-select-label"
-              value="April Working" // Hardcode the value
+              value="April Working"
               input={<OutlinedInput label="Version" />}
-              disabled // Disable the dropdown for now
+              disabled
             >
               <MenuItem value="April Working">
                 <em>April Working</em>
               </MenuItem>
-              {/* No other options */}
             </Select>
           </FormControl>
         </Box>
       </Paper>
+      {/* --- Configuration UI --- END */}
 
-      {/* --- Loading State --- */}
+      {/* --- Loading/Error/Empty States --- START */}
       {depletionsStatus === "loading" && (
         <Box
           sx={{
@@ -547,28 +388,29 @@ const ReportBuilder = () => {
             p: 3,
           }}
         >
-          <CircularProgress />
-          <Typography sx={{ ml: 2 }}>Loading data...</Typography>
+          {" "}
+          <CircularProgress />{" "}
+          <Typography sx={{ ml: 2 }}>Loading data...</Typography>{" "}
         </Box>
       )}
-
-      {/* --- Error State --- */}
       {depletionsStatus === "failed" && (
         <Box sx={{ p: 3 }}>
+          {" "}
           <Alert severity="error" variant="filled">
-            Error loading data: {depletionsError || "Unknown error"}
-          </Alert>
+            {" "}
+            Error loading data: {depletionsError || "Unknown error"}{" "}
+          </Alert>{" "}
         </Box>
       )}
-
-      {/* --- Empty State (after loading/no error) --- */}
       {depletionsStatus === "succeeded" && rawVolumeData.length === 0 && (
         <Typography sx={{ textAlign: "center", color: "text.secondary", p: 3 }}>
-          No data available.
+          {" "}
+          No data available.{" "}
         </Typography>
       )}
+      {/* --- Loading/Error/Empty States --- END */}
 
-      {/* Report Table Area - Show only when succeeded and data exists */}
+      {/* Report Visualization Area - Show only when succeeded and data exists */}
       {depletionsStatus === "succeeded" && rawVolumeData.length > 0 && (
         <Grid container>
           <Grid item xs={12}>
@@ -582,120 +424,19 @@ const ReportBuilder = () => {
                 borderColor: "divider",
               }}
             >
-              {/* Dynamic Filter Value Selects */}
-              {selectedFilters.length > 0 && (
-                <Box
-                  sx={{
-                    display: "flex",
-                    gap: 2,
-                    flexWrap: "wrap",
-                    mb: 1.5,
-                    px: 0.5,
-                  }}
-                >
-                  {selectedFilters.map((filterId) => {
-                    const dimension = DIMENSIONS.find((d) => d.id === filterId);
-                    if (!dimension) return null;
-
-                    const availableValues = getUniqueValuesForDimension(
-                      rawVolumeData,
-                      filterId
-                    );
-                    const currentSelection =
-                      selectedFilterValues[filterId] || [];
-
-                    return (
-                      <FormControl
-                        key={filterId}
-                        sx={{ m: 0, minWidth: 180 }}
-                        size="small"
-                      >
-                        <InputLabel id={`${filterId}-value-select-label`}>
-                          {dimension.label}
-                        </InputLabel>
-                        <Select
-                          labelId={`${filterId}-value-select-label`}
-                          multiple
-                          value={currentSelection}
-                          onChange={(e) =>
-                            handleFilterValueChange(
-                              filterId,
-                              e.target.value as string[]
-                            )
-                          }
-                          input={
-                            <OutlinedInput
-                              label={dimension.label}
-                              size="small"
-                            />
-                          }
-                          renderValue={(selected) => (
-                            <Box
-                              sx={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: 0.5,
-                              }}
-                            >
-                              {selected.length > 2 ? (
-                                <Chip
-                                  label={`${selected.length} selected`}
-                                  size="small"
-                                />
-                              ) : (
-                                selected.map((val) => (
-                                  <Chip key={val} label={val} size="small" />
-                                ))
-                              )}
-                            </Box>
-                          )}
-                          MenuProps={{
-                            PaperProps: { style: { maxHeight: 250 } },
-                          }}
-                        >
-                          {availableValues.map((val) => (
-                            <MenuItem key={val} value={val} dense>
-                              {val}
-                            </MenuItem>
-                          ))}
-                          {availableValues.length === 0 && (
-                            <MenuItem disabled dense>
-                              No values found
-                            </MenuItem>
-                          )}
-                        </Select>
-                      </FormControl>
-                    );
-                  })}
-                </Box>
-              )}
-
-              {/* Box containing the table */}
-              <Box sx={{ overflow: "auto" }}>
-                <ReportTable
-                  headers={{
-                    rows: aggregationResult.rows,
-                    columns: aggregationResult.columns,
-                    valueLabel: {
-                      rows: selectedRow
-                        ? ([
-                            DIMENSIONS.find((d) => d.id === selectedRow)?.label,
-                          ].filter(Boolean) as string[])
-                        : [],
-                      columns: selectedColumn
-                        ? ([
-                            DIMENSIONS.find((d) => d.id === selectedColumn)
-                              ?.label,
-                          ].filter(Boolean) as string[])
-                        : [],
-                      value: MEASURES.find((m) => m.id === selectedCalculation)
-                        ?.label,
-                    },
-                  }}
-                  data={aggregationResult.data}
-                  valueFormat={aggregationResult.valueFormat}
-                />
+              {/* --- Visualization Rendering Logic --- START */}
+              <Box
+                sx={{
+                  overflow: "auto",
+                  minHeight: 300,
+                  mt: 0,
+                }}
+              >
+                {currentVizType === "table" && (
+                  <DashboardTable config={currentConfigForRender} />
+                )}
               </Box>
+              {/* --- Visualization Rendering Logic --- END */}
             </Paper>
           </Grid>
         </Grid>
@@ -706,7 +447,7 @@ const ReportBuilder = () => {
         open={snackbarState.open}
         autoHideDuration={6000}
         onClose={handleSnackbarClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }} // Position
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       >
         <Alert
           onClose={handleSnackbarClose}
@@ -717,7 +458,21 @@ const ReportBuilder = () => {
           {snackbarState.message}
         </Alert>
       </Snackbar>
-      {/* -------------------------- */}
+
+      {/* --- Publish Preview Modal --- START */}
+      {itemToPublish && (
+        <PublishPreviewModal
+          open={isPublishPreviewOpen}
+          onClose={() => {
+            setIsPublishPreviewOpen(false);
+            setItemToPublish(null);
+          }}
+          itemToPublish={itemToPublish}
+          onConfirmPlacement={handleConfirmPlacement}
+          existingItems={dashboardItems}
+        />
+      )}
+      {/* --- Publish Preview Modal --- END */}
     </Paper>
   );
 };

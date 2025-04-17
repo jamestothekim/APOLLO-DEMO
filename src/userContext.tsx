@@ -10,6 +10,7 @@ import axios from "axios";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "./redux/store";
 import { fetchVolumeData } from "./redux/depletionSlice";
+import { fetchDashboardConfig } from "./redux/dashboardSlice";
 
 // Types
 export interface MarketAccess {
@@ -213,11 +214,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         tokenService.setAuthHeader(token);
       }
 
+      console.log("[UserContext] Checking authentication...");
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/users/verify-token?_=${Date.now()}`
       );
 
       if (response.data.user) {
+        console.log("[UserContext] User authenticated successfully");
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
         return true;
       }
@@ -225,6 +228,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       return false;
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        console.error("[UserContext] Authentication error:", error.message);
       }
       dispatch({ type: "LOGOUT" });
       return false;
@@ -361,6 +365,21 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (state.isLoggedIn && state.user && !initialFetchPerformedRef.current) {
       initialFetchPerformedRef.current = true;
+      console.log("[UserContext] User logged in, fetching initial data");
+
+      // Fetch dashboard data
+      console.log("[UserContext] Dispatching fetchDashboardConfig");
+      appDispatch(fetchDashboardConfig())
+        .unwrap()
+        .then((dashboardData) => {
+          console.log(
+            "[UserContext] Dashboard data fetched successfully:",
+            dashboardData
+          );
+        })
+        .catch((error) => {
+          console.error("[UserContext] Error fetching dashboard data:", error);
+        });
 
       const fetchMarketDetailsAndVolumeData = async () => {
         let marketViewMarketIds: string[] = [];

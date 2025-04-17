@@ -161,6 +161,19 @@ const volumeSlice = createSlice({
                 const isCustomerView = (action.meta as any).arg.isCustomerView;
                 const payload = action.payload as { rawData: RawDepletionForecastItem[], lastActualMonthIndex: number }; // Assert payload type
 
+                // --- Add Logging --- START
+                console.log(`[volumeSlice] fetchVolumeData.fulfilled triggered. View: ${isCustomerView ? 'Customer' : 'Market'}`);
+                const previousDataLength = isCustomerView ? state.customerRawApiData.length : state.rawApiData.length;
+                console.log(`[volumeSlice] Previous data length: ${previousDataLength}, New data length: ${payload.rawData.length}`);
+                // Optional: Log if references are different (might be noisy if always different)
+                // if (!isCustomerView && state.rawApiData !== payload.rawData) {
+                //   console.log("[volumeSlice] Market rawApiData reference WILL change.");
+                // }
+                // if (isCustomerView && state.customerRawApiData !== payload.rawData) {
+                //   console.log("[volumeSlice] Customer rawApiData reference WILL change.");
+                // }
+                // --- Add Logging --- END
+
                 // Update state based on view type
                 if (isCustomerView) {
                     state.customerStatus = 'succeeded';

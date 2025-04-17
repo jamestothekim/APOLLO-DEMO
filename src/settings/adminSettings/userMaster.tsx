@@ -276,8 +276,8 @@ const UserMaster = () => {
     if (!password) {
       return "Password is required.";
     }
-    if (password.length < 7) {
-      return "Password must be at least 7 characters long.";
+    if (password.length < 8) {
+      return "Password must be at least 8 characters long.";
     }
     if (!/[A-Z]/.test(password)) {
       return "Password must contain at least one uppercase letter.";
@@ -293,35 +293,35 @@ const UserMaster = () => {
     {
       header: "Full Name",
       key: "fullName",
-      width: 180,
       render: (_: any, row: User) => `${row.first_name} ${row.last_name}`,
       sortable: true,
       sortAccessor: (row: User) => `${row.first_name} ${row.last_name}`,
+      sx: { width: 180 },
     },
     {
       header: "Email",
       key: "email",
-      width: 220,
       sortable: true,
+      sx: { width: 220 },
     },
     {
       header: "Role",
       key: "role",
-      width: 120,
       sortable: true,
+      sx: { width: 140 },
     },
     {
       header: "Division",
       key: "division",
-      width: 120,
+      width: 200,
       render: (_: any, row: User) => row.user_access?.Division || "-",
       sortable: true,
       sortAccessor: (row: User) => row.user_access?.Division,
+      sx: { width: 100 },
     },
     {
       header: "Markets",
       key: "markets",
-      width: 250,
       render: (_: any, row: User) => (
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
           {row.user_access?.Markets?.map((market) => (
@@ -346,6 +346,7 @@ const UserMaster = () => {
       ),
       sortable: true,
       sortAccessor: (row: User) => row.user_access?.Markets?.length ?? 0,
+      sx: { width: 250 },
     },
     {
       header: "Admin",
@@ -368,6 +369,7 @@ const UserMaster = () => {
           : row.user_access?.Admin === false
           ? 0
           : null,
+      sx: { width: 80 },
     },
   ];
 
@@ -500,7 +502,7 @@ const UserMaster = () => {
                       }
                       error={!!passwordError}
                       helperText={
-                        passwordError || "Min 7 chars, 1 uppercase, 1 special."
+                        passwordError || "Min 8 chars, 1 uppercase, 1 special."
                       }
                       fullWidth
                       InputProps={{

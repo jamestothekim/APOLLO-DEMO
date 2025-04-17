@@ -294,8 +294,8 @@ export const UserSettings = () => {
                 }}
                 error={!!passwordError.new} // Keep red outline logic
                 helperText={
-                  "Must be at least 7 characters, include 1 uppercase letter, and 1 special character."
-                } // Always show requirements
+                  "Must be at least 8 characters, include 1 uppercase letter, and 1 special character."
+                } // Always show requirements, updated from 7 to 8
                 // Remove FormHelperTextProps - helper text won't turn red
               />
             </Stack>

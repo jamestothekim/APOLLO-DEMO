@@ -86,8 +86,21 @@ export const AVAILABLE_DIMENSIONS: ReportDimension[] = [
   // Potentially add calculated measures later (e.g., Volume Growth %)
 ];
 
-// --- Aggregation Logic Placeholder ---
-// We will build the aggregation logic here later
+// --- Define Filterable Dimensions --- START
+const FILTERABLE_DIMENSION_IDS: Set<string> = new Set([
+  "brand",
+  "customer",
+  "market",
+  "month",
+  "variant",
+  "variant_size_pack_desc",
+  "year",
+]);
+
+export const FILTERABLE_DIMENSIONS = AVAILABLE_DIMENSIONS.filter((d) =>
+  FILTERABLE_DIMENSION_IDS.has(d.id)
+).sort((a, b) => a.label.localeCompare(b.label));
+// --- Define Filterable Dimensions --- END
 
 export interface AggregationResult {
   rows: string[]; // Actual header values for rows (e.g., ['Balvenie', 'Glenfiddich'])
@@ -104,34 +117,16 @@ export const processReportData = (
   columns: ReportDimension[],
   valueDimension: ReportDimension
 ): AggregationResult => {
-  console.log("Processing data with:", {
-    filters,
-    rows,
-    columns,
-    valueDimension,
-  });
-
-  // --- 1. Identify Value Dimension (Now passed explicitly) ---
-  // const allPlaced = [...filters, ...rows, ...columns];
-  // const valueDimension = allPlaced.find(dim => dim.type === 'measure')
-  //                     || AVAILABLE_DIMENSIONS.find(dim => dim.type === 'measure'); // Fallback removed
-
   if (!valueDimension || valueDimension.type !== "measure") {
     console.error("Invalid or missing measure dimension provided.");
     return { rows: [], columns: [], data: [[]], valueFormat: "number" };
   }
-  console.log(`Aggregating by: ${valueDimension.label} (${valueDimension.id})`);
 
   // --- 2. Filter Data ---
   let filteredData = [...rawData];
   filters.forEach((filter) => {
     // Check if there are selected values for this filter
     if (filter.filterValues && filter.filterValues.length > 0) {
-      console.log(
-        `Applying filter: ${filter.label} IN [${filter.filterValues.join(
-          ", "
-        )}]`
-      );
       // Convert selected values to a Set for efficient lookup
       const selectedValuesSet = new Set(filter.filterValues);
       filteredData = filteredData.filter((item) => {
@@ -141,7 +136,6 @@ export const processReportData = (
       });
     }
   });
-  console.log(`Data rows after filtering: ${filteredData.length}`);
   // ---------------------
 
   // --- 3. Get Unique Headers ---
@@ -164,10 +158,6 @@ export const processReportData = (
         values.add(value);
       }
     });
-
-    // if (dimensionId === 'month') { // Remove the previous month-specific log here if desired, or keep it
-    //     console.log(`Unique month numbers found in data for getUniqueValues:`, Array.from(values));
-    // }
 
     const sortedValues = Array.from(values);
     const isNumericSort = dimensionId === "year"; // Month is handled above
@@ -254,12 +244,6 @@ export const processReportData = (
   } else {
     dataMatrix.push([aggregationMap.__total__?.__total__ ?? null]);
   }
-
-  console.log("Aggregation Result:", {
-    rowHeaderValues,
-    columnHeaderValues,
-    dataMatrix,
-  });
 
   return {
     rows: rowHeaderValues, // Return the processed headers (with month names)
@@ -477,6 +461,16 @@ export const exportReportToCSV = (
 
   // 3. Trigger Download
   triggerCSVDownload(csvContent, filename);
-
-  console.log(`Triggered download for: ${filename}.csv`);
 };
+
+// --- Constants --- START
+export const TIME_SERIES_DIMENSION_IDS = ["month", "year", "date"];
+
+export interface ReportDimension {
+  id: string;
+  label: string;
+  type: "dimension" | "measure";
+  aggregation?: "sum" | "avg" | "count";
+  format?: "number" | "currency" | "string";
+}
+// --- Constants --- END

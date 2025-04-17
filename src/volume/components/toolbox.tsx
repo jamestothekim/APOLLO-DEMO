@@ -7,6 +7,9 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import DeleteIcon from "@mui/icons-material/Delete";
+import PublishIcon from "@mui/icons-material/Publish";
+import PieChartIcon from "@mui/icons-material/PieChart";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
 import { useUser } from "../../userContext";
 import axios from "axios";
 
@@ -16,7 +19,10 @@ export type ToolType =
   | "export"
   | "viewToggle"
   | "customerToggle"
-  | "clearRedis";
+  | "clearRedis"
+  | "publish"
+  | "pieChart"
+  | "lineChart";
 
 interface ToolboxProps {
   tools?: ToolType[];
@@ -29,6 +35,12 @@ interface ToolboxProps {
   viewType?: "table" | "graph";
   isCustomerView?: boolean;
   isDepletionsView?: boolean;
+  canPublish?: boolean;
+  onPublish?: () => void;
+  canPieChart?: boolean;
+  onPieChart?: () => void;
+  canLineChart?: boolean;
+  onLineChart?: () => void;
 }
 
 export const Toolbox: React.FC<ToolboxProps> = ({
@@ -42,6 +54,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   viewType = "table",
   isCustomerView = false,
   isDepletionsView = false,
+  canPublish = false,
+  onPublish,
+  canPieChart = false,
+  onPieChart,
+  canLineChart = false,
+  onLineChart,
 }) => {
   const { user } = useUser();
 
@@ -64,6 +82,24 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   const handleExport = () => {
     if (onExport) {
       onExport();
+    }
+  };
+
+  const handlePublish = () => {
+    if (onPublish) {
+      onPublish();
+    }
+  };
+
+  const handlePieChart = () => {
+    if (onPieChart) {
+      onPieChart();
+    }
+  };
+
+  const handleLineChart = () => {
+    if (onLineChart) {
+      onLineChart();
     }
   };
 
@@ -130,6 +166,36 @@ export const Toolbox: React.FC<ToolboxProps> = ({
           </Button>
         )}
 
+        {tools.includes("pieChart") && canPieChart && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<PieChartIcon />}
+            onClick={handlePieChart}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            Pie Chart
+          </Button>
+        )}
+
+        {tools.includes("lineChart") && canLineChart && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ShowChartIcon />}
+            onClick={handleLineChart}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            Line Chart
+          </Button>
+        )}
+
         {tools.includes("undo") && (
           <Button
             variant="outlined"
@@ -177,20 +243,38 @@ export const Toolbox: React.FC<ToolboxProps> = ({
         )}
       </Box>
 
-      {tools.includes("export") && (
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<FileDownloadIcon />}
-          onClick={handleExport}
-          sx={{
-            textTransform: "none",
-            borderRadius: "8px",
-          }}
-        >
-          Export CSV
-        </Button>
-      )}
+      <Box sx={{ display: "flex", gap: 1 }}>
+        {tools.includes("export") && (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExport}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            Export CSV
+          </Button>
+        )}
+
+        {tools.includes("publish") && (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<PublishIcon />}
+            onClick={handlePublish}
+            disabled={!canPublish}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            Publish to Dashboard
+          </Button>
+        )}
+      </Box>
     </Box>
   );
 };

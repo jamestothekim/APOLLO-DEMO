@@ -7,6 +7,9 @@ import guidanceSettingsReducer from './userSettingsSlice';
 // Assume depletionReducer and guidanceCalculationsReducer exist if needed
 import volumeReducer from './depletionSlice';
 import guidanceCalculationsReducer from './guidanceCalculationsSlice';
+// --- Import Dashboard Reducer --- START
+import dashboardReducer from './dashboardSlice';
+// --- Import Dashboard Reducer --- END
 
 export const store = configureStore({
   reducer: {
@@ -18,6 +21,9 @@ export const store = configureStore({
     // Add other reducers as needed
     volume: volumeReducer,
     guidanceCalculations: guidanceCalculationsReducer,
+    // --- Add Dashboard Reducer --- START
+    dashboard: dashboardReducer,
+    // --- Add Dashboard Reducer --- END
   },
 });
 
