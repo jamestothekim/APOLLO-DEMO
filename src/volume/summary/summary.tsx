@@ -30,6 +30,7 @@ import {
   type CalculatedGuidanceValue,
   aggregateSummaryData,
   calculateAllSummaryGuidance,
+  calculateTotalGuidance,
 } from "../util/volumeUtil";
 import type { MarketData } from "../../volume/volumeForecast";
 import { useSelector, useDispatch } from "react-redux";
@@ -47,7 +48,6 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import ViewHeadlineOutlinedIcon from "@mui/icons-material/ViewHeadlineOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { Toolbox } from "../components/toolbox";
-import { GuidanceDialog } from "../components/guidance";
 import { LineChart } from "@mui/x-charts";
 import { RawDepletionForecastItem } from "../../redux/depletionSlice";
 import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
@@ -55,6 +55,7 @@ import {
   selectRawVolumeData,
   selectVolumeDataStatus,
 } from "../../redux/depletionSlice";
+import { GuidanceDialog } from "../components/guidance";
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -148,11 +149,12 @@ const GuidanceCellRenderer: React.FC<GuidanceCellRendererProps> = ({
       </>
     );
   }
+
   return <>-</>; // Placeholder
 };
 // --- End Helper Component ---
 
-// --- Helper Component for Rendering Monthly Guidance Cells ---
+// --- Helper Component for Rendering Monthly Guidance Cells --- START
 interface MonthlyGuidanceCellRendererProps {
   aggregateKey: string;
   guidance: Guidance;
@@ -176,7 +178,7 @@ const MonthlyGuidanceCellRenderer: React.FC<
   }
   return <>-</>; // Placeholder
 };
-// --- End Helper Component ---
+// --- Helper Component for Rendering Monthly Guidance Cells --- END
 
 // --- NEW Component for Rendering a Single Expanded Row ---
 interface ExpandedGuidanceRowProps {
@@ -361,14 +363,30 @@ export const Summary = ({
     setBrandLevelAggregates(brandAggsMap);
     setLastActualMonthIndex(maxActualIndex);
 
-    if (selectedGuidance.length > 0 || selectedRowGuidance.length > 0) {
+    if (
+      (selectedGuidance.length > 0 || selectedRowGuidance.length > 0) &&
+      (variantsAggArray.length > 0 || brandAggsMap.size > 0)
+    ) {
       const calculatedResults = calculateAllSummaryGuidance(
         variantsAggArray,
         brandAggsMap,
         selectedGuidance,
         selectedRowGuidance
       );
+
       setGuidanceResults(calculatedResults);
+
+      console.log("--- Brand Level Guidance Calculation Results ---");
+      brandAggsMap.forEach((brandData, brandKey) => {
+        const brandAggregateKey = `brand:${brandKey}`;
+        if (calculatedResults[brandAggregateKey]) {
+          console.log(
+            `${brandData.brand} (${brandAggregateKey}):`,
+            calculatedResults[brandAggregateKey]
+          );
+        }
+      });
+      console.log("--------------------------------------------------");
     } else {
       setGuidanceResults({});
     }
@@ -426,13 +444,20 @@ export const Summary = ({
     const rows: DisplayRow[] = [];
     const sortedBrands = Array.from(brandLevelAggregates.keys()).sort();
 
+    // Calculate totals for the total row
+    const totalRowMonths: { [key: string]: number } = {};
+    let totalRowTotal = 0;
+    let totalRowPyVolume = 0;
+    let totalRowGsvTy = 0;
+    let totalRowGsvPy = 0;
+
     sortedBrands.forEach((brand) => {
       const brandAgg = brandLevelAggregates.get(brand);
       if (brandAgg) {
         const brandAggregateKey = `brand:${brandAgg.id}`;
         const brandGuidanceForRow: { [key: string]: number | undefined } = {};
         if (guidanceResults[brandAggregateKey]) {
-          selectedGuidance.forEach((guidance) => {
+          selectedRowGuidance.forEach((guidance) => {
             const result = guidanceResults[brandAggregateKey]?.[guidance.id];
             brandGuidanceForRow[`sortable_guidance_${guidance.id}`] =
               result?.total;
@@ -446,6 +471,16 @@ export const Summary = ({
           level: 0,
         };
         let brandHasVisibleChildren = false;
+
+        // Add to total row calculations
+        totalRowTotal += brandAgg.total || 0;
+        totalRowPyVolume += brandAgg.total_py_volume || 0;
+        totalRowGsvTy += brandAgg.total_gsv_ty || 0;
+        totalRowGsvPy += brandAgg.total_gsv_py || 0;
+        // Add monthly totals
+        Object.entries(brandAgg.months || {}).forEach(([month, value]) => {
+          totalRowMonths[month] = (totalRowMonths[month] || 0) + (value || 0);
+        });
 
         const variantRows: DisplayRow[] = [];
         if (expandedBrandIds.has(brand)) {
@@ -462,7 +497,7 @@ export const Summary = ({
                 [key: string]: number | undefined;
               } = {};
               if (guidanceResults[variantAggregateKey]) {
-                selectedGuidance.forEach((guidance) => {
+                selectedRowGuidance.forEach((guidance) => {
                   const result =
                     guidanceResults[variantAggregateKey]?.[guidance.id];
                   variantGuidanceForRow[`sortable_guidance_${guidance.id}`] =
@@ -489,6 +524,41 @@ export const Summary = ({
         }
       }
     });
+
+    // Add total row at the end if there are any rows
+    if (totalRowTotal > 0) {
+      // Calculate guidance for total row using the new utility function
+      const totalGuidanceResults = calculateTotalGuidance(
+        brandLevelAggregates,
+        selectedGuidance,
+        selectedRowGuidance
+      );
+
+      // Add total guidance to the guidanceResults state
+      guidanceResults["total-row"] = totalGuidanceResults;
+
+      const totalRowGuidanceForRow: { [key: string]: number | undefined } = {};
+      selectedRowGuidance.forEach((guidance) => {
+        totalRowGuidanceForRow[`sortable_guidance_${guidance.id}`] =
+          totalGuidanceResults[guidance.id]?.total;
+      });
+
+      const totalRow: DisplayRow = {
+        id: "total-row",
+        brand: "Portfolio Total",
+        months: totalRowMonths,
+        total: totalRowTotal,
+        total_py_volume: totalRowPyVolume,
+        total_gsv_ty: totalRowGsvTy,
+        total_gsv_py: totalRowGsvPy,
+        isBrandRow: true,
+        level: 0,
+        ...totalRowGuidanceForRow,
+      };
+
+      rows.push(totalRow);
+    }
+
     return rows.filter((row) => Math.abs(row.total) > 0.001 || row.isBrandRow);
   }, [
     brandLevelAggregates,
@@ -496,6 +566,7 @@ export const Summary = ({
     expandedBrandIds,
     guidanceResults,
     selectedGuidance,
+    selectedRowGuidance,
   ]);
 
   // Log the final displayData before passing to table
@@ -514,11 +585,17 @@ export const Summary = ({
       extraWide: true,
       render: (_value: any, row: DisplayRow) => {
         const isExpanded = expandedBrandIds.has(row.id);
+        const isTotalRow = row.id === "total-row";
+
         return (
           <Box
-            sx={{ display: "flex", alignItems: "center", pl: row.level * 2 }}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              pl: row.level * 2,
+            }}
           >
-            {row.isBrandRow && (
+            {row.isBrandRow && !isTotalRow && (
               <IconButton
                 size="small"
                 sx={{ mr: 0.5, p: 0.25 }}
@@ -536,7 +613,9 @@ export const Summary = ({
             )}
             <Typography
               variant="body2"
-              sx={{ fontWeight: row.isBrandRow ? "bold" : "normal" }}
+              sx={{
+                fontWeight: row.isBrandRow ? "bold" : "normal",
+              }}
             >
               {row.isBrandRow ? row.brand : row.variant}
             </Typography>
@@ -551,37 +630,63 @@ export const Summary = ({
       subHeader: "TY",
       align: "right" as const,
       sortable: true,
-      render: (value: number) => {
-        return value?.toLocaleString() ?? "0";
-      },
+      render: (value: number) => value?.toLocaleString() ?? "0",
     };
 
-    const guidanceColumns: Column[] = selectedGuidance.map(
-      (guidance): Column => ({
-        key: `guidance_${guidance.id}`,
-        header: guidance.label,
-        subHeader: guidance.sublabel,
+    const monthColumns: Column[] = MONTH_NAMES.map(
+      (month, index): Column => ({
+        key: `months.${month}`,
+        header: month,
+        subHeader: index <= lastActualMonthIndex ? "ACT" : "FCST",
         align: "right" as const,
         sortable: true,
-        sortAccessor: (row: DisplayRow) =>
-          row[`sortable_guidance_${guidance.id}`],
-        sx: { minWidth: 90 },
+        sortAccessor: (row: DisplayRow) => row.months?.[month],
         render: (_value: any, row: DisplayRow) => {
-          const aggregateKey = row.isBrandRow
-            ? `brand:${row.id}`
-            : `variant:${row.brand}_${row.variant_id || row.variant}`;
-          const calculationResult =
-            guidanceResults[aggregateKey]?.[guidance.id];
-          return (
-            <GuidanceCellRenderer
-              aggregateKey={aggregateKey}
-              guidance={guidance}
-              calculationResult={calculationResult}
-              calcStatus={localCalcStatus}
-            />
-          );
+          if (depletionsStatus === "loading" && !row.months?.[month]) {
+            return <CircularProgress size={16} thickness={4} />;
+          }
+          return row.months?.[month]?.toLocaleString() ?? "0";
         },
       })
+    );
+
+    // Map selected guidance definitions to table columns
+    const guidanceColumns: Column[] = selectedGuidance.map(
+      (guidance): Column => {
+        return {
+          key: `guidance_${guidance.id}`, // Unique key for the column
+          header: guidance.label,
+          subHeader: guidance.sublabel,
+          align: "right" as const,
+          sortable: true,
+          // Use the pre-calculated sortable value from displayData
+          sortAccessor: (row: DisplayRow) =>
+            row[`sortable_guidance_${guidance.id}`],
+          sx: { minWidth: 90 },
+          render: (_value: any, row: DisplayRow) => {
+            // --- Standard Rendering Logic --- START
+            // Always use the GuidanceCellRenderer, relying on calculatedResults
+            const aggregateKey =
+              row.id === "total-row"
+                ? "total-row"
+                : row.isBrandRow
+                ? `brand:${row.id}`
+                : `variant:${row.brand}_${row.variant_id || row.variant}`;
+            const calculationResult =
+              guidanceResults[aggregateKey]?.[guidance.id];
+
+            return (
+              <GuidanceCellRenderer
+                aggregateKey={aggregateKey}
+                guidance={guidance} // Pass the full guidance definition
+                calculationResult={calculationResult}
+                calcStatus={localCalcStatus} // Pass the status
+              />
+            );
+            // --- Standard Rendering Logic --- END
+          },
+        };
+      }
     );
 
     const rowGuidanceColumn: Column | null = hasRowGuidance
@@ -633,7 +738,7 @@ export const Summary = ({
                     top: "50%",
                     transform: "translateY(-50%)",
                     p: 0.25,
-                    visibility: "hidden",
+                    visibility: row.id === "total-row" ? "visible" : "hidden",
                     ".MuiTableRow-root:hover &": { visibility: "visible" },
                   }}
                 >
@@ -649,24 +754,11 @@ export const Summary = ({
         }
       : null;
 
-    const monthColumns: Column[] = MONTH_NAMES.map(
-      (month, index): Column => ({
-        key: `months.${month}`,
-        header: month,
-        subHeader: index <= lastActualMonthIndex ? "ACT" : "FCST",
-        align: "right" as const,
-        sortable: true,
-        sortAccessor: (row: DisplayRow) => row.months?.[month],
-        render: (_value: any, row: DisplayRow) => {
-          if (depletionsStatus === "loading" && !row.months?.[month]) {
-            return <CircularProgress size={16} thickness={4} />;
-          }
-          return row.months?.[month]?.toLocaleString() ?? "0";
-        },
-      })
-    );
-
-    let combinedColumns = [brandColumn, tyVolColumn, ...guidanceColumns];
+    let combinedColumns: Column[] = [
+      brandColumn,
+      tyVolColumn,
+      ...guidanceColumns,
+    ];
 
     if (rowGuidanceColumn) {
       combinedColumns.push(rowGuidanceColumn);
@@ -674,6 +766,7 @@ export const Summary = ({
 
     combinedColumns.push(...monthColumns);
 
+    // Add right border to the last non-month column
     const lastValueColIndex =
       1 + guidanceColumns.length + (rowGuidanceColumn ? 1 : 0);
     if (
@@ -691,7 +784,6 @@ export const Summary = ({
 
     return combinedColumns;
   }, [
-    selectedGuidance,
     selectedRowGuidance,
     expandedBrandIds,
     expandedGuidanceRowIds,
@@ -699,21 +791,9 @@ export const Summary = ({
     handleGuidanceExpandClick,
     lastActualMonthIndex,
     depletionsStatus,
+    guidanceResults,
+    localCalcStatus,
   ]);
-
-  const handleColumns = () => setColumnsDialogOpen(true);
-
-  const handleApplyColumns = (columns: Guidance[]) => {
-    const columnIds = columns.map((col) => col.id);
-    dispatch(setPendingSummaryCols(columnIds));
-    setColumnsDialogOpen(false);
-  };
-
-  const handleApplyRows = (rows: Guidance[]) => {
-    const rowIds = rows.map((row) => row.id);
-    dispatch(setPendingSummaryRows(rowIds));
-    setColumnsDialogOpen(false);
-  };
 
   const handleExport = () => {
     if (!displayData || displayData.length === 0) {
@@ -751,14 +831,14 @@ export const Summary = ({
         };
 
         // Merge calculated guidance values into the export row
-        if (selectedGuidance && selectedGuidance.length > 0) {
+        if (selectedRowGuidance && selectedRowGuidance.length > 0) {
           const aggregateKey = row.isBrandRow
             ? `brand:${row.id}`
             : `variant:${row.brand}_${row.variant_id || row.variant}`;
           const rowGuidanceResults = guidanceResults[aggregateKey];
 
           if (rowGuidanceResults) {
-            selectedGuidance.forEach((guidance) => {
+            selectedRowGuidance.forEach((guidance) => {
               const guidanceKey = `guidance_${guidance.id}`;
               const calculationResult = rowGuidanceResults[guidance.id];
               // Add the calculated total to the export row using the dynamic key
@@ -773,10 +853,10 @@ export const Summary = ({
       }
     );
 
-    // Call exportToCSV with the summary flag and last actual month index
+    // Call exportToCSV - pass empty array for selectedGuidance
     exportToCSV(
       formattedData,
-      selectedGuidance,
+      [], // No columns selected currently
       true, // isSummaryView = true
       lastActualMonthIndex
     );
@@ -787,7 +867,18 @@ export const Summary = ({
       (a, b) => a.brand.localeCompare(b.brand)
     );
 
-    return brandDataArray.map((brandAgg, index) => {
+    // Calculate total for all brands
+    const totalMonths: { [key: string]: number } = {};
+    let totalTotal = 0;
+
+    brandDataArray.forEach((brandAgg) => {
+      totalTotal += brandAgg.total || 0;
+      Object.entries(brandAgg.months || {}).forEach(([month, value]) => {
+        totalMonths[month] = (totalMonths[month] || 0) + (value || 0);
+      });
+    });
+
+    const seriesData = brandDataArray.map((brandAgg, index) => {
       const colors = [
         theme.palette.primary.main,
         theme.palette.secondary.main,
@@ -810,6 +901,8 @@ export const Summary = ({
         color: colors[index % colors.length],
       };
     });
+
+    return seriesData;
   }, [brandLevelAggregates, theme]);
 
   const renderExpandedRowContent = (
@@ -820,12 +913,19 @@ export const Summary = ({
       return null;
     }
 
-    const aggregateKey = row.isBrandRow
-      ? `brand:${row.id}`
-      : `variant:${row.brand}_${row.variant_id || row.variant}`;
+    const aggregateKey =
+      row.id === "total-row"
+        ? "total-row"
+        : row.isBrandRow
+        ? `brand:${row.id}`
+        : `variant:${row.brand}_${row.variant_id || row.variant}`;
 
     return selectedRowGuidance.map((guidance) => {
-      const calculationResult = guidanceResults[aggregateKey]?.[guidance.id];
+      const calculationResult =
+        row.id === "total-row"
+          ? guidanceResults["total-row"]?.[guidance.id]
+          : guidanceResults[aggregateKey]?.[guidance.id];
+
       return (
         <ExpandedGuidanceRow
           key={`${row.id}-expanded-${guidance.id}`}
@@ -838,6 +938,19 @@ export const Summary = ({
         />
       );
     });
+  };
+
+  const handleColumns = () => setColumnsDialogOpen(true);
+
+  const handleApplyColumns = (columns: Guidance[]) => {
+    const columnIds = columns.map((col) => col.id);
+    dispatch(setPendingSummaryCols(columnIds));
+    setColumnsDialogOpen(false);
+  };
+
+  const handleApplyRows = (rows: Guidance[]) => {
+    const rowIds = rows.map((row) => row.id);
+    dispatch(setPendingSummaryRows(rowIds));
   };
 
   return (
@@ -1119,17 +1232,17 @@ export const Summary = ({
             )}
           </Box>
         </Collapse>
+        <GuidanceDialog
+          open={columnsDialogOpen}
+          onClose={() => setColumnsDialogOpen(false)}
+          title="Select Summary Guidance"
+          availableGuidance={availableGuidance}
+          initialSelectedColumns={selectedGuidance}
+          initialSelectedRows={selectedRowGuidance}
+          onApplyColumns={handleApplyColumns}
+          onApplyRows={handleApplyRows}
+        />
       </Box>
-      <GuidanceDialog
-        open={columnsDialogOpen}
-        onClose={() => setColumnsDialogOpen(false)}
-        title="Select Summary Guidance"
-        availableGuidance={availableGuidance}
-        initialSelectedColumns={selectedGuidance}
-        initialSelectedRows={selectedRowGuidance}
-        onApplyColumns={handleApplyColumns}
-        onApplyRows={handleApplyRows}
-      />
     </Paper>
   );
 };
