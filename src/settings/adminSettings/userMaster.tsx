@@ -506,19 +506,19 @@ const UserMaster = () => {
       render: (_: any, row: User) => `${row.first_name} ${row.last_name}`,
       sortable: true,
       sortAccessor: (row: User) => `${row.first_name} ${row.last_name}`,
-      sx: { width: 180 },
+      sx: { width: 140 },
     },
     {
       header: "Email",
       key: "email",
       sortable: true,
-      sx: { width: 220 },
+      sx: { width: 200 },
     },
     {
       header: "Role",
       key: "role",
       sortable: true,
-      sx: { width: 140 },
+      sx: { width: 150 },
     },
     {
       header: "Division",
@@ -534,7 +534,7 @@ const UserMaster = () => {
       },
       sortable: true,
       sortAccessor: (row: User) => row.user_access?.Division,
-      sx: { width: 150 },
+      sx: { width: 190 },
     },
     {
       header: "Markets",

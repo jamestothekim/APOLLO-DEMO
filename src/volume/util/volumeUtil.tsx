@@ -18,7 +18,7 @@ export type ForecastOption = {
 export const FORECAST_OPTIONS: ForecastOption[] = [
   { id: 1, label: "Three Month", value: "three_month" },
   { id: 2, label: "Six Month", value: "six_month" },
-  { id: 3, label: "Nine Month", value: "nine_month" },
+  { id: 3, label: "Twelve Month", value: "twelve_month" },
   { id: 4, label: "Flat", value: "flat" },
   { id: 5, label: "Run Rate", value: "run_rate" },
 ];
