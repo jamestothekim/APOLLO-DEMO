@@ -370,15 +370,6 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       align: "left" as const,
     },
     {
-      header: "Cases (Phys)",
-      key: "quantity",
-      align: "right" as const,
-      render: (value: string) => {
-        const num = Number(value);
-        return isNaN(num) ? "0.00" : num.toFixed(2);
-      },
-    },
-    {
       header: "Cases (9L)",
       key: "case_equivalent_quantity",
       align: "right" as const,
@@ -388,11 +379,17 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       },
     },
     {
-      header: "Sales ($)",
+      header: "Sales",
       key: "sales_dollars",
       align: "right" as const,
-      render: (value: number) => {
-        return value ? value.toFixed(2) : "0.00";
+      render: (value: number | null | undefined) => {
+        if (value === null || value === undefined || isNaN(value)) {
+          return "$0.00";
+        }
+        return `$${value.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
       },
     },
   ];
