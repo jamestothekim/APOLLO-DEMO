@@ -912,7 +912,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         const total = calculateTotal(row.months);
         return isNaN(total)
           ? "-"
-          : (Math.round(total * 10) / 10).toLocaleString(undefined, {
+          : total.toLocaleString(undefined, {
               minimumFractionDigits: 1,
               maximumFractionDigits: 1,
             });
@@ -1118,7 +1118,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                     }
                   }}
                 >
-                  {(Math.round(value * 10) / 10).toLocaleString(undefined, {
+                  {value.toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                   })}
@@ -1366,7 +1366,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               const value = monthlyData ? monthlyData[month] : undefined;
               const formattedValue = formatGuidanceValue(
                 value,
-                guidance.calculation.format
+                guidance.calculation.format,
+                guidance.label
               );
 
               if (isLYGuidance) {

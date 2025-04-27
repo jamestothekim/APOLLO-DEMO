@@ -189,18 +189,18 @@ export const exportToCSV = (
       // BRAND / VARIANT column
       const brandVariant = item.isBrandRow ? item.brand : item.variant || ""; // Use brand for brand rows, variant otherwise
 
-      // Format the total volume with 0 decimal places (whole numbers)
+      // Format the total volume with 1 decimal place
       const totalVolumeTY = item.case_equivalent_volume ?? 0;
       const formattedTotalTY = totalVolumeTY.toLocaleString(undefined, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
       });
 
-      // Format the total PY volume with 0 decimal places
+      // Format the total PY volume with 1 decimal place
       const totalVolumeLY = item.py_case_equivalent_volume ?? 0;
       const formattedTotalLY = totalVolumeLY.toLocaleString(undefined, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
       });
 
       // Base columns for Summary
@@ -227,24 +227,24 @@ export const exportToCSV = (
             return new Intl.NumberFormat("en-US", {
               style: "currency",
               currency: "USD",
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
+              minimumFractionDigits: 0, // No decimals for GSV
+              maximumFractionDigits: 0, // No decimals for GSV
             }).format(value);
           } else {
-            // Standard number format with 0 decimal places for summary non-currency
+            // Standard number format with 1 decimal place for summary non-currency (Volume)
             return value.toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
             });
           }
         }) || [];
 
-      // Format month values with 0 decimal places (whole numbers)
+      // Format month values with 1 decimal place (whole numbers)
       const monthValues = monthKeys.map((month) => {
         const value = item.months[month]?.value || 0;
         return value.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0,
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
         });
       });
 
@@ -315,11 +315,11 @@ export const exportToCSV = (
 
     // Format each data row with proper formatting
     dataRows = data.map((item) => {
-      // Format the total volume with 2 decimal places (hundredths)
+      // Format the total volume with 1 decimal place
       const totalVolume = calculateTotal(item.months);
       const formattedTotal = totalVolume.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
       });
 
       // Base columns
@@ -362,20 +362,20 @@ export const exportToCSV = (
               maximumFractionDigits: 0,
             }).format(value);
           } else {
-            // Standard number format with 2 decimal places (hundredths)
+            // Standard number format with 1 decimal place (Volume)
             return value.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
             });
           }
         }) || [];
 
-      // Format month values with 2 decimal places (hundredths)
+      // Format month values with 1 decimal place
       const monthValues = monthKeys.map((month) => {
         const value = item.months[month]?.value || 0;
         return value.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
         });
       });
 
@@ -699,8 +699,8 @@ export const formatGuidanceValue = (
     const formattedValue = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 0, // No decimals for GSV
+      maximumFractionDigits: 0, // No decimals for GSV
     }).format(Math.abs(roundedValue));
 
     // Add negative sign for accounting format
@@ -715,10 +715,10 @@ export const formatGuidanceValue = (
     );
   }
 
-  // For other number values
+  // For other number values (Volume)
   const formattedValue = roundedValue.toLocaleString(undefined, {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 1, // Show one decimal place
+    maximumFractionDigits: 1, // Show one decimal place
   });
 
   // Return colored text for negative values

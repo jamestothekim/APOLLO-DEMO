@@ -175,7 +175,15 @@ const MonthlyGuidanceCellRenderer: React.FC<
     return <CircularProgress size={12} thickness={4} />;
   }
   if (calcStatus === "succeeded" && value !== undefined) {
-    return <>{formatGuidanceValue(value, guidance.calculation.format)}</>;
+    return (
+      <>
+        {formatGuidanceValue(
+          value,
+          guidance.calculation.format,
+          guidance.label
+        )}
+      </>
+    );
   }
   return <>-</>; // Placeholder
 };
@@ -695,7 +703,11 @@ export const Summary = ({
       sortable: true,
       sortAccessor: (row: DisplayRow) =>
         row.id === "total-row" ? Infinity : row.total,
-      render: (value: number) => value?.toLocaleString() ?? "0",
+      render: (value: number) =>
+        value?.toLocaleString(undefined, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }) ?? "0.0",
     };
 
     const monthColumns: Column[] = MONTH_NAMES.map(
@@ -711,7 +723,12 @@ export const Summary = ({
           if (depletionsStatus === "loading" && !row.months?.[month]) {
             return <CircularProgress size={16} thickness={4} />;
           }
-          return row.months?.[month]?.toLocaleString() ?? "0";
+          return (
+            row.months?.[month]?.toLocaleString(undefined, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }) ?? "0.0"
+          );
         },
       })
     );
