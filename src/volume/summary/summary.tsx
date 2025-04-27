@@ -49,11 +49,12 @@ import ViewHeadlineOutlinedIcon from "@mui/icons-material/ViewHeadlineOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { Toolbox } from "../components/toolbox";
 import { LineChart } from "@mui/x-charts";
-import { RawDepletionForecastItem } from "../../redux/depletionSlice";
 import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
 import {
   selectRawVolumeData,
   selectVolumeDataStatus,
+  selectCustomerRawVolumeData,
+  selectCustomerVolumeDataStatus,
 } from "../../redux/depletionSlice";
 import { GuidanceDialog } from "../components/guidance";
 
@@ -263,6 +264,8 @@ export const Summary = ({
   const dispatch: AppDispatch = useDispatch();
   const rawVolumeData = useSelector(selectRawVolumeData);
   const depletionsStatus = useSelector(selectVolumeDataStatus);
+  const customerRawVolumeData = useSelector(selectCustomerRawVolumeData);
+  const customerDepletionsStatus = useSelector(selectCustomerVolumeDataStatus);
   const lastSyncTrigger = useSelector(
     (state: RootState) => state.sync.lastSyncTrigger
   );
@@ -312,17 +315,37 @@ export const Summary = ({
 
   const MAX_CHIPS_VISIBLE = 3;
 
+  // --- Add customerToMarketMap generation here, before the useEffect that needs it ---
+  const customerToMarketMap = useMemo(() => {
+    const map = new Map<string, string>();
+    marketData.forEach((market) => {
+      market.customers?.forEach((customer) => {
+        // Ensure customer_id exists before setting it in the map
+        if (customer.customer_id) {
+          map.set(customer.customer_id, market.market_id);
+        }
+      });
+    });
+    return map;
+  }, [marketData]);
+  // --- End customerToMarketMap generation ---
+
   useEffect(() => {
     dispatch(
       fetchPendingChanges({
-        markets: selectedMarkets.length > 0 ? selectedMarkets : null,
-        brands: selectedBrands.length > 0 ? selectedBrands : null,
+        markets: null,
+        brands: null,
       })
     );
-  }, [selectedMarkets, selectedBrands, lastSyncTrigger, dispatch]);
+  }, [lastSyncTrigger, dispatch]);
 
   useEffect(() => {
-    if (depletionsStatus !== "succeeded" || !rawVolumeData) {
+    if (
+      depletionsStatus !== "succeeded" ||
+      customerDepletionsStatus !== "succeeded" ||
+      !rawVolumeData ||
+      !customerRawVolumeData
+    ) {
       setVariantAggregateData([]);
       setBrandLevelAggregates(new Map());
       setLastActualMonthIndex(-1);
@@ -331,33 +354,46 @@ export const Summary = ({
       return;
     }
 
-    setLocalCalcStatus("calculating");
+    // --- Filter raw data based on selectedMarkets ---
+    const filteredRawVolumeData =
+      selectedMarkets.length === 0
+        ? rawVolumeData // No filter applied
+        : rawVolumeData.filter((item) =>
+            selectedMarkets.includes(item.market_id)
+          );
 
-    const filteredData = rawVolumeData.filter(
-      (item: RawDepletionForecastItem) => {
-        if (!item.market_id) return false;
-        const marketMatch =
-          selectedMarkets.length === 0 ||
-          selectedMarkets.includes(item.market_id);
-        const brandMatch =
-          selectedBrands.length === 0 ||
-          (item.brand && selectedBrands.includes(item.brand));
-        return marketMatch && brandMatch;
-      }
-    );
+    // Customer data needs mapping back to market ID for filtering
+    const filteredCustomerRawVolumeData =
+      selectedMarkets.length === 0
+        ? customerRawVolumeData // No filter applied
+        : customerRawVolumeData.filter((item) => {
+            if (!item.customer_id) return false;
+            const marketId = customerToMarketMap.get(item.customer_id); // Use the map created above
+            return marketId ? selectedMarkets.includes(marketId) : false;
+          });
+    // --- End Filtering raw data ---
+
+    setLocalCalcStatus("calculating");
 
     let pendingChangesMap = new Map<string, RestoredState>();
     if (pendingChangesStatus === "succeeded") {
       pendingChanges.forEach((change: RestoredState) => {
         const key =
           change.key ||
-          `forecast:${change.market_id}:${change.variant_size_pack_desc}`;
+          (change.customer_id
+            ? `forecast:${change.customer_id}:${change.variant_size_pack_desc}:${change.customer_id}`
+            : `forecast:${change.market_id}:${change.variant_size_pack_desc}`);
         pendingChangesMap.set(key, change);
       });
     }
 
     const { variantsAggArray, brandAggsMap, maxActualIndex } =
-      aggregateSummaryData(filteredData, pendingChangesMap);
+      aggregateSummaryData(
+        filteredRawVolumeData, // Use filtered market data
+        filteredCustomerRawVolumeData, // Use filtered customer data
+        marketData, // Still need full marketData for settings/lookup
+        pendingChangesMap
+      );
 
     setVariantAggregateData(variantsAggArray);
     setBrandLevelAggregates(brandAggsMap);
@@ -394,13 +430,16 @@ export const Summary = ({
   }, [
     rawVolumeData,
     depletionsStatus,
-    selectedMarkets,
-    selectedBrands,
+    customerRawVolumeData,
+    customerDepletionsStatus,
+    marketData,
     pendingChanges,
     pendingChangesStatus,
     selectedGuidance,
     selectedRowGuidance,
     dispatch,
+    selectedMarkets,
+    customerToMarketMap,
   ]);
 
   const handleMarketChange = (event: SelectChangeEvent<string[]>) => {
@@ -442,7 +481,6 @@ export const Summary = ({
 
   const displayData = useMemo((): DisplayRow[] => {
     const rows: DisplayRow[] = [];
-    const sortedBrands = Array.from(brandLevelAggregates.keys()).sort();
 
     // Calculate totals for the total row
     const totalRowMonths: { [key: string]: number } = {};
@@ -451,7 +489,15 @@ export const Summary = ({
     let totalRowGsvTy = 0;
     let totalRowGsvPy = 0;
 
-    sortedBrands.forEach((brand) => {
+    // Filter brands based on selectedBrands *before* sorting and processing
+    const filteredBrandKeys = Array.from(brandLevelAggregates.keys())
+      .filter(
+        (brand) => selectedBrands.length === 0 || selectedBrands.includes(brand)
+      ) // Apply filter
+      .sort();
+
+    // Iterate over FILTERED brands to calculate row data and totals
+    filteredBrandKeys.forEach((brand) => {
       const brandAgg = brandLevelAggregates.get(brand);
       if (brandAgg) {
         const brandAggregateKey = `brand:${brandAgg.id}`;
@@ -528,8 +574,19 @@ export const Summary = ({
     // Add total row at the end if there are any rows
     if (totalRowTotal > 0) {
       // Calculate guidance for total row using the new utility function
+      // Calculate total guidance based on the *filtered* brand aggregates
+      // We need to pass the filtered map to calculateTotalGuidance or recalculate totals here
+      const filteredBrandAggregates = new Map<
+        string,
+        SummaryBrandAggregateData
+      >();
+      filteredBrandKeys.forEach((key) => {
+        const agg = brandLevelAggregates.get(key);
+        if (agg) filteredBrandAggregates.set(key, agg);
+      });
+
       const totalGuidanceResults = calculateTotalGuidance(
-        brandLevelAggregates,
+        filteredBrandAggregates, // Pass the filtered map
         selectedGuidance,
         selectedRowGuidance
       );
@@ -571,6 +628,7 @@ export const Summary = ({
     guidanceResults,
     selectedGuidance,
     selectedRowGuidance,
+    selectedBrands,
   ]);
 
   // Log the final displayData before passing to table
@@ -803,6 +861,7 @@ export const Summary = ({
     guidanceResults,
     localCalcStatus,
     selectedGuidance,
+    selectedBrands,
   ]);
 
   const handleExport = () => {

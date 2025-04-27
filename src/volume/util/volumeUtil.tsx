@@ -8,6 +8,7 @@ import type {
   SummaryBrandAggregateData,
 } from "../summary/summary"; // Import exported types
 import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
+import { MarketData } from "../volumeForecast"; // Import MarketData
 
 export type ForecastOption = {
   id: number;
@@ -1047,54 +1048,226 @@ interface AggregationResult {
   maxActualIndex: number;
 }
 
+// Helper function for rounding numbers (copied from depletionSlice.ts)
+function roundToWhole(num: number | null | undefined): number {
+  return Math.round(num || 0);
+}
+
+// --- Helper Type for intermediate market buckets ---
+interface MarketLevelBucket {
+  market_id: string;
+  market_name?: string;
+  brand?: string;
+  variant?: string;
+  variant_id?: string;
+  variant_size_pack_desc: string;
+  month: number; // Month number (1-12)
+  case_equivalent_volume: number;
+  py_case_equivalent_volume: number;
+  gross_sales_value: number;
+  py_gross_sales_value: number;
+  data_type?: string; // e.g., 'actual_complete', 'forecast'
+  is_manual_input?: boolean; // Keep track if source was manual
+}
+
 export const aggregateSummaryData = (
-  filteredData: RawDepletionForecastItem[],
-  pendingChangesMap: Map<string, RestoredState>
+  rawVolumeData: RawDepletionForecastItem[], // Market-level data
+  customerRawVolumeData: RawDepletionForecastItem[], // Customer-level data
+  marketData: MarketData[], // Metadata to know how each market is managed
+  pendingChangesMap: Map<string, RestoredState> // Pending changes from Depletions view
 ): AggregationResult => {
   let maxActualIndex = -1;
+  const marketLevelBuckets: { [key: string]: MarketLevelBucket } = {}; // Key: marketId_variantDesc_month
+
+  // --- Create Customer ID to Market ID lookup ---
+  const customerToMarketMap = new Map<string, string>();
+  marketData.forEach((market) => {
+    market.customers?.forEach((customer) => {
+      customerToMarketMap.set(customer.customer_id, market.market_id); // Use customer_id
+    });
+  });
+
+  // --- STEP 1: Populate marketLevelBuckets based on managed_by ---
+  marketData.forEach((market) => {
+    const marketId = market.market_id;
+    const marketName = market.market_name;
+    const managedBy = market.settings?.managed_by;
+
+    if (managedBy === "Market") {
+      // Process directly from rawVolumeData
+      rawVolumeData
+        .filter((item) => item.market_id === marketId)
+        .forEach((item) => {
+          if (!item.variant_size_pack_desc || !item.month) return;
+          const key = `${marketId}_${item.variant_size_pack_desc}_${item.month}`;
+          if (!marketLevelBuckets[key]) {
+            marketLevelBuckets[key] = {
+              market_id: marketId,
+              market_name: marketName,
+              brand: item.brand,
+              variant: item.variant,
+              variant_id: item.variant_id,
+              variant_size_pack_desc: item.variant_size_pack_desc,
+              month: item.month,
+              case_equivalent_volume: 0,
+              py_case_equivalent_volume: 0,
+              gross_sales_value: 0,
+              py_gross_sales_value: 0,
+              data_type: item.data_type, // Keep original data_type
+              is_manual_input: item.is_manual_input, // Keep original manual flag
+            };
+          }
+          marketLevelBuckets[key].case_equivalent_volume +=
+            Number(item.case_equivalent_volume) || 0;
+          marketLevelBuckets[key].py_case_equivalent_volume +=
+            Number(item.py_case_equivalent_volume) || 0;
+          marketLevelBuckets[key].gross_sales_value +=
+            Number(item.gross_sales_value) || 0;
+          marketLevelBuckets[key].py_gross_sales_value +=
+            Number(item.py_gross_sales_value) || 0;
+
+          // Update maxActualIndex from market data
+          if (item.data_type?.includes("actual")) {
+            const currentMonthIndex = Number(item.month) - 1;
+            if (currentMonthIndex >= 0 && currentMonthIndex < 12) {
+              maxActualIndex = Math.max(maxActualIndex, currentMonthIndex);
+            }
+          }
+        });
+    } else if (managedBy === "Customer") {
+      // Aggregate from customerRawVolumeData
+      customerRawVolumeData
+        .filter(
+          (item) => customerToMarketMap.get(item.customer_id || "") === marketId
+        )
+        .forEach((item) => {
+          if (!item.variant_size_pack_desc || !item.month) return;
+          const key = `${marketId}_${item.variant_size_pack_desc}_${item.month}`;
+          if (!marketLevelBuckets[key]) {
+            marketLevelBuckets[key] = {
+              market_id: marketId, // Use the parent market ID
+              market_name: marketName, // Use the parent market name
+              brand: item.brand,
+              variant: item.variant,
+              variant_id: item.variant_id,
+              variant_size_pack_desc: item.variant_size_pack_desc,
+              month: item.month,
+              case_equivalent_volume: 0,
+              py_case_equivalent_volume: 0,
+              gross_sales_value: 0,
+              py_gross_sales_value: 0,
+              data_type: item.data_type, // Try to preserve data_type from customer level
+              is_manual_input: item.is_manual_input, // Try to preserve flag
+            };
+          }
+          marketLevelBuckets[key].case_equivalent_volume +=
+            Number(item.case_equivalent_volume) || 0;
+          marketLevelBuckets[key].py_case_equivalent_volume +=
+            Number(item.py_case_equivalent_volume) || 0;
+          marketLevelBuckets[key].gross_sales_value +=
+            Number(item.gross_sales_value) || 0;
+          marketLevelBuckets[key].py_gross_sales_value +=
+            Number(item.py_gross_sales_value) || 0;
+          // Ensure data_type reflects 'actual' if any constituent customer row was actual
+          if (item.data_type?.includes("actual")) {
+            marketLevelBuckets[key].data_type = "actual_complete"; // Mark aggregate as actual if any part is
+            // Update maxActualIndex from customer data
+            const currentMonthIndex = Number(item.month) - 1;
+            if (currentMonthIndex >= 0 && currentMonthIndex < 12) {
+              maxActualIndex = Math.max(maxActualIndex, currentMonthIndex);
+            }
+          }
+        });
+    }
+  });
+
+  // --- STEP 2: Apply Pending Changes ---
+  pendingChangesMap.forEach((change, redisKey) => {
+    // Attempt to parse market_id or customer_id from the key
+    // Format: forecast:market_id:variant_desc or forecast:customer_id:variant_desc:customer_id
+    const parts = redisKey.split(":");
+    if (parts.length < 3) return; // Invalid key format
+
+    let marketId: string | undefined;
+    let variantDesc = parts[2];
+    const potentialId = parts[1]; // Could be market_id or customer_id
+
+    // Determine if it's a market or customer change based on key structure and lookup
+    if (parts.length === 4 && parts[3] === potentialId) {
+      // Likely customer key format forecast:customer_id:variant_desc:customer_id
+      marketId = customerToMarketMap.get(potentialId);
+    } else if (!customerToMarketMap.has(potentialId)) {
+      // If potentialId is not a known customer_id, assume it's a market_id
+      // Check if this market exists in marketData
+      if (marketData.some((m) => m.market_id === potentialId)) {
+        marketId = potentialId;
+      }
+    }
+
+    // If we couldn't determine a valid market ID for the change, skip it
+    if (!marketId) {
+      // console.warn(`Could not determine market ID for pending change key: ${redisKey}`);
+      return;
+    }
+
+    // Apply the changes month by month
+    Object.entries(change.months).forEach(([monthName, monthData]) => {
+      // Cast monthName to the specific union type expected by MONTH_NAMES.indexOf
+      const typedMonthName = monthName as (typeof MONTH_NAMES)[number];
+      const monthNum = MONTH_NAMES.indexOf(typedMonthName) + 1;
+      if (monthNum > 0) {
+        const bucketKey = `${marketId}_${variantDesc}_${monthNum}`;
+        if (marketLevelBuckets[bucketKey]) {
+          // Simply overwrite the volume with the value from the pending change
+          marketLevelBuckets[bucketKey].case_equivalent_volume =
+            monthData.value;
+          // Mark as manual if the change was a manual edit
+          marketLevelBuckets[bucketKey].is_manual_input =
+            monthData.isManuallyModified ?? change.isManualEdit; // Prioritize monthData flag
+          // If the pending change month is past the original maxActualIndex,
+          // we assume it's now a 'forecast' value, even if it overwrites an 'actual'.
+          // (Actuals are determined by the initial load, pending changes modify forecasts).
+          if (monthNum - 1 > maxActualIndex) {
+            marketLevelBuckets[bucketKey].data_type = "forecast";
+          }
+          // We don't adjust PY or GSV based on pending changes, only TY volume.
+        } else {
+          // If bucket doesn't exist, it means this item wasn't in the original dataset (perhaps filtered out?)
+          // We won't create new items here based on pending changes alone for summary.
+        }
+      }
+    });
+  });
+
+  // --- STEP 3: Final Aggregation into Summary Structures ---
   const variantAggregation: {
     [variantKey: string]: SummaryVariantAggregateData;
   } = {};
 
-  // --- VARIANT Aggregation Loop --- START
-  filteredData.forEach((row) => {
-    const brand = row.brand;
-    const variantName = row.variant;
-    const variantId = row.variant_id;
-    if (!brand || !variantName || !row.market_id || !row.variant_size_pack_desc)
+  // --- Use marketLevelBuckets as the source for final aggregation ---
+  Object.values(marketLevelBuckets).forEach((bucket) => {
+    const brand = bucket.brand;
+    const variantName = bucket.variant;
+    const variantId = bucket.variant_id;
+    if (
+      !brand ||
+      !variantName ||
+      !bucket.market_id ||
+      !bucket.variant_size_pack_desc
+    )
       return;
 
     const variantKey = variantId
       ? `${brand}_${variantId}`
       : `${brand}_${variantName}`;
-    const monthIndex = row.month;
+    const monthIndex = bucket.month;
     if (monthIndex < 1 || monthIndex > 12) return;
     const monthName = MONTH_NAMES[monthIndex - 1];
 
-    let volume = Number(row.case_equivalent_volume) || 0;
-    const py_volume = Number(row.py_case_equivalent_volume) || 0;
-    const gsv_ty = Number(row.gross_sales_value) || 0;
-    const gsv_py = Number(row.py_gross_sales_value) || 0;
-    // Apply pending changes if applicable
-    if (pendingChangesMap.size > 0) {
-      const potentialRedisKey = `forecast:${row.market_id}:${row.variant_size_pack_desc}`;
-      const pendingChange = pendingChangesMap.get(potentialRedisKey);
-      if (pendingChange?.months?.[monthName]?.value !== undefined) {
-        volume = pendingChange.months[monthName].value;
-      }
-    }
-
-    // Track last actual month
-    if (row.data_type?.includes("actual")) {
-      const currentMonthIndex = Number(row.month) - 1;
-      if (
-        currentMonthIndex >= 0 &&
-        currentMonthIndex < 12 &&
-        currentMonthIndex > maxActualIndex
-      ) {
-        maxActualIndex = currentMonthIndex;
-      }
-    }
+    const volume = bucket.case_equivalent_volume;
+    const py_volume = bucket.py_case_equivalent_volume;
+    const gsv_ty = bucket.gross_sales_value;
+    const gsv_py = bucket.py_gross_sales_value;
 
     // Initialize variant aggregate if it doesn't exist
     if (!variantAggregation[variantKey]) {
@@ -1117,18 +1290,17 @@ export const aggregateSummaryData = (
       };
     }
 
-    // Accumulate values
+    // Accumulate values into the FINAL summary aggregates
     variantAggregation[variantKey].months[monthName] += volume;
     variantAggregation[variantKey].months_py_volume[monthName] += py_volume;
     variantAggregation[variantKey].months_gsv_ty[monthName] += gsv_ty;
     variantAggregation[variantKey].months_gsv_py[monthName] += gsv_py;
   });
-  // --- VARIANT Aggregation Loop --- END
 
-  // --- Post-process VARIANT Aggregates (Totals, Rounding, Prep for Guidance) --- START
+  // --- Post-process VARIANT Aggregates (Totals, Rounding) ---
   let variantsAggArray = Object.values(variantAggregation)
     .map((variantAggRow) => {
-      // Calculate totals
+      // Calculate totals from accumulated monthly values
       variantAggRow.total = Object.values(variantAggRow.months).reduce(
         (s: number, v: number) => s + v,
         0
@@ -1144,101 +1316,68 @@ export const aggregateSummaryData = (
       ).reduce((s: number, v: number) => s + v, 0);
 
       // Round totals
-      variantAggRow.total = Math.round(variantAggRow.total);
-      variantAggRow.total_py_volume = Math.round(variantAggRow.total_py_volume);
-      variantAggRow.total_gsv_ty =
-        Math.round(variantAggRow.total_gsv_ty * 100) / 100;
-      variantAggRow.total_gsv_py =
-        Math.round(variantAggRow.total_gsv_py * 100) / 100;
+      variantAggRow.total = roundToWhole(variantAggRow.total); // Use helper function
+      variantAggRow.total_py_volume = roundToWhole(
+        variantAggRow.total_py_volume
+      );
+      variantAggRow.total_gsv_ty = roundToWhole(variantAggRow.total_gsv_ty);
+      variantAggRow.total_gsv_py = roundToWhole(variantAggRow.total_gsv_py);
 
       // Round monthly values
-      MONTH_NAMES.forEach((month) => {
-        variantAggRow.months[month] = Math.round(variantAggRow.months[month]);
-        variantAggRow.months_py_volume[month] = Math.round(
-          variantAggRow.months_py_volume[month]
+      MONTH_NAMES.forEach((m) => {
+        variantAggRow.months[m] = roundToWhole(variantAggRow.months[m]);
+        variantAggRow.months_py_volume[m] = roundToWhole(
+          variantAggRow.months_py_volume[m]
         );
-        variantAggRow.months_gsv_ty[month] =
-          Math.round(variantAggRow.months_gsv_ty[month] * 100) / 100;
-        variantAggRow.months_gsv_py[month] =
-          Math.round(variantAggRow.months_gsv_py[month] * 100) / 100;
+        variantAggRow.months_gsv_ty[m] = roundToWhole(
+          variantAggRow.months_gsv_ty[m]
+        );
+        variantAggRow.months_gsv_py[m] = roundToWhole(
+          variantAggRow.months_gsv_py[m]
+        );
       });
-
-      // Prepare monthly data needed by calculateSingleSummaryGuidance
-      variantAggRow.months_ty = { ...variantAggRow.months }; // Assuming 'months' is TY volume
-      variantAggRow.months_py = { ...variantAggRow.months_py_volume };
-      variantAggRow.months_gsv_ty = { ...variantAggRow.months_gsv_ty };
-      variantAggRow.months_gsv_py = { ...variantAggRow.months_gsv_py };
 
       return variantAggRow;
     })
-    .sort((a, b) => a.variant.localeCompare(b.variant));
-  // --- Post-process VARIANT Aggregates --- END
+    .filter((row) => Math.abs(row.total) > 0.001); // Filter out zero-total rows
 
-  // --- BRAND Aggregation Loop --- START
+  // --- Aggregate Brands from the processed variants ---
   const brandAggsMap = new Map<string, SummaryBrandAggregateData>();
-  variantsAggArray.forEach((variantAggRow) => {
-    const brand = variantAggRow.brand;
-
-    if (!brandAggsMap.has(brand)) {
-      brandAggsMap.set(brand, {
-        id: brand,
-        brand: brand,
-        months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}), // For display
+  variantsAggArray.forEach((variantRow) => {
+    const brandKey = variantRow.brand;
+    if (!brandAggsMap.has(brandKey)) {
+      brandAggsMap.set(brandKey, {
+        id: brandKey,
+        brand: brandKey,
+        months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
         total: 0,
         total_py_volume: 0,
         total_gsv_ty: 0,
         total_gsv_py: 0,
-        // Initialize monthly aggregates needed for guidance calculation
-        months_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
-        months_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
-        months_gsv_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
-        months_gsv_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
       });
     }
-    const brandAgg = brandAggsMap.get(brand)!;
-
-    // Aggregate monthly values (both for display and guidance)
-    MONTH_NAMES.forEach((month) => {
-      brandAgg.months[month] += variantAggRow.months[month]; // Base display months
-      brandAgg.months_ty[month] += variantAggRow.months_ty?.[month] || 0;
-      brandAgg.months_py[month] += variantAggRow.months_py?.[month] || 0;
-      brandAgg.months_gsv_ty[month] +=
-        variantAggRow.months_gsv_ty?.[month] || 0;
-      brandAgg.months_gsv_py[month] +=
-        variantAggRow.months_gsv_py?.[month] || 0;
+    const brandAgg = brandAggsMap.get(brandKey)!;
+    MONTH_NAMES.forEach((m) => {
+      brandAgg.months[m] += variantRow.months[m];
     });
-
-    // Aggregate totals for guidance
-    brandAgg.total += variantAggRow.total; // Base display total
-    brandAgg.total_py_volume += variantAggRow.total_py_volume;
-    brandAgg.total_gsv_ty += variantAggRow.total_gsv_ty;
-    brandAgg.total_gsv_py += variantAggRow.total_gsv_py;
-
-    // Log GSV aggregation for this variant
+    brandAgg.total += variantRow.total;
+    brandAgg.total_py_volume += variantRow.total_py_volume;
+    brandAgg.total_gsv_ty += variantRow.total_gsv_ty;
+    brandAgg.total_gsv_py += variantRow.total_gsv_py;
   });
-  // --- BRAND Aggregation Loop --- END
 
-  // --- Post-process BRAND Aggregates (Rounding) --- START
+  // --- Round Brand Aggregates ---
   brandAggsMap.forEach((brandAgg) => {
-    // Round totals
-    brandAgg.total = Math.round(brandAgg.total);
-    brandAgg.total_py_volume = Math.round(brandAgg.total_py_volume);
-    brandAgg.total_gsv_ty = Math.round(brandAgg.total_gsv_ty * 100) / 100;
-    brandAgg.total_gsv_py = Math.round(brandAgg.total_gsv_py * 100) / 100;
-
-    // Round monthly values
-    MONTH_NAMES.forEach((month) => {
-      brandAgg.months[month] = Math.round(brandAgg.months[month]); // Base display rounding
-      brandAgg.months_ty[month] = Math.round(brandAgg.months_ty[month]);
-      brandAgg.months_py[month] = Math.round(brandAgg.months_py[month]);
-      brandAgg.months_gsv_ty[month] =
-        Math.round(brandAgg.months_gsv_ty[month] * 100) / 100;
-      brandAgg.months_gsv_py[month] =
-        Math.round(brandAgg.months_gsv_py[month] * 100) / 100;
+    brandAgg.total = roundToWhole(brandAgg.total);
+    brandAgg.total_py_volume = roundToWhole(brandAgg.total_py_volume);
+    brandAgg.total_gsv_ty = roundToWhole(brandAgg.total_gsv_ty);
+    brandAgg.total_gsv_py = roundToWhole(brandAgg.total_gsv_py);
+    MONTH_NAMES.forEach((m) => {
+      brandAgg.months[m] = roundToWhole(brandAgg.months[m]);
     });
   });
-  // --- Post-process BRAND Aggregates --- END
 
+  // --- Return the final aggregated results ---
   return {
     variantsAggArray,
     brandAggsMap,
@@ -1247,7 +1386,10 @@ export const aggregateSummaryData = (
 };
 // --- NEW Aggregation Function --- END
 
-// --- NEW Guidance Calculation Orchestration Function --- START
+// --- Function to calculate all guidance for summary view ---
+// Takes aggregated data and selected guidance, returns state object
+// Keyed by aggregate type (brand:id or variant:brand_variantId) and then guidance ID
+// --- Calculate All Summary Guidance --- START
 export const calculateAllSummaryGuidance = (
   variantsAggArray: SummaryVariantAggregateData[],
   brandAggsMap: Map<string, SummaryBrandAggregateData>,
@@ -1317,7 +1459,7 @@ export const calculateAllSummaryGuidance = (
 
   return calculatedResults;
 };
-// --- NEW Guidance Calculation Orchestration Function --- END
+// --- Calculate All Summary Guidance --- END
 
 // --- NEW Total Guidance Calculation Function --- START
 export const calculateTotalGuidance = (

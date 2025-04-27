@@ -1011,7 +1011,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 key: "customer",
                 header: "CUSTOMER",
                 align: "left" as const,
-                sx: cellPaddingSx, // Apply padding
+                extraWide: true,
+                sx: cellPaddingSx,
                 render: (_: any, row: ExtendedForecastData) =>
                   row.customer_name || "-",
               },
