@@ -559,7 +559,11 @@ export const Summary = ({
       rows.push(totalRow);
     }
 
-    return rows.filter((row) => Math.abs(row.total) > 0.001 || row.isBrandRow);
+    // Filter out zero rows, keeping the total row if present
+    return rows.filter(
+      (row) =>
+        row.id === "total-row" || Math.abs(row.total) > 0.001 || row.isBrandRow // Keep brand rows even if total is 0 if they might have children
+    );
   }, [
     brandLevelAggregates,
     variantAggregateData,
@@ -581,7 +585,8 @@ export const Summary = ({
       header: "BRAND / VARIANT",
       align: "left",
       sortable: true,
-      sortAccessor: (row: DisplayRow) => row.brand,
+      sortAccessor: (row: DisplayRow) =>
+        row.id === "total-row" ? "\uffff" : row.brand,
       extraWide: true,
       render: (_value: any, row: DisplayRow) => {
         const isExpanded = expandedBrandIds.has(row.id);
@@ -630,6 +635,8 @@ export const Summary = ({
       subHeader: "TY",
       align: "right" as const,
       sortable: true,
+      sortAccessor: (row: DisplayRow) =>
+        row.id === "total-row" ? Infinity : row.total,
       render: (value: number) => value?.toLocaleString() ?? "0",
     };
 
@@ -640,7 +647,8 @@ export const Summary = ({
         subHeader: index <= lastActualMonthIndex ? "ACT" : "FCST",
         align: "right" as const,
         sortable: true,
-        sortAccessor: (row: DisplayRow) => row.months?.[month],
+        sortAccessor: (row: DisplayRow) =>
+          row.id === "total-row" ? Infinity : row.months?.[month],
         render: (_value: any, row: DisplayRow) => {
           if (depletionsStatus === "loading" && !row.months?.[month]) {
             return <CircularProgress size={16} thickness={4} />;
@@ -659,9 +667,10 @@ export const Summary = ({
           subHeader: guidance.sublabel,
           align: "right" as const,
           sortable: true,
-          // Use the pre-calculated sortable value from displayData
           sortAccessor: (row: DisplayRow) =>
-            row[`sortable_guidance_${guidance.id}`],
+            row.id === "total-row"
+              ? Infinity
+              : (row as any)[`sortable_guidance_${guidance.id}`],
           sx: { minWidth: 90 },
           render: (_value: any, row: DisplayRow) => {
             // --- Standard Rendering Logic --- START
@@ -793,6 +802,7 @@ export const Summary = ({
     depletionsStatus,
     guidanceResults,
     localCalcStatus,
+    selectedGuidance,
   ]);
 
   const handleExport = () => {

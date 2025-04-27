@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { DynamicTable } from "../../reusableComponents/dynamicTable";
 import QualSidebar from "../../reusableComponents/qualSidebar";
 import {
@@ -22,7 +28,6 @@ import {
 import {
   CheckCircle as CheckCircleIcon,
   Cancel as XIcon,
-  PersonAdd as PersonAddIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
 } from "@mui/icons-material";
@@ -76,8 +81,13 @@ const FIXED_ROLES = [
   DISTRIBUTOR_MANAGER_ROLE,
 ];
 
-// Main component
-const UserMaster = () => {
+// Define the type for the exposed handle
+export interface UserMasterHandle {
+  handleAdd: () => void;
+}
+
+// Main component wrapped with forwardRef
+const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
   const { user: currentUser, checkAuth } = useUser();
   const [users, setUsers] = useState<User[]>([]);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -95,6 +105,11 @@ const UserMaster = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [passwordError, setPasswordError] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
+
+  // Expose the handleAdd function via the ref
+  useImperativeHandle(ref, () => ({
+    handleAdd,
+  }));
 
   // Fetch users, market data, roles, divisions, and hierarchical markets
   useEffect(() => {
@@ -632,27 +647,7 @@ const UserMaster = () => {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<PersonAddIcon />}
-          onClick={handleAdd}
-          sx={{
-            textTransform: "none",
-            borderRadius: "8px",
-          }}
-        >
-          Add User
-        </Button>
-      </Box>
-
-      <DynamicTable
-        data={users}
-        columns={columns}
-        onRowClick={handleEdit}
-        fixedLayout={true}
-      />
+      <DynamicTable data={users} columns={columns} onRowClick={handleEdit} />
 
       <QualSidebar
         open={sidebarOpen}
@@ -982,6 +977,6 @@ const UserMaster = () => {
       </Dialog>
     </Box>
   );
-};
+});
 
 export default UserMaster;

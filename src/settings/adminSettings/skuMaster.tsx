@@ -282,7 +282,6 @@ export const SKUMaster = () => {
             }}
             page={page}
             onPageChange={(_event, newPage) => setPage(newPage)}
-            fixedLayout={true}
           />
 
           <QualSidebar

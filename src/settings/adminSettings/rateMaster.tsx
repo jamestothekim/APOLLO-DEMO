@@ -192,7 +192,6 @@ export const RateMaster = () => {
         columns={columns}
         getRowId={(row) => row.id}
         onRowClick={handleRowClick}
-        fixedLayout={true}
         rowsPerPageOptions={[25, 50, 100]}
         defaultRowsPerPage={50}
         page={page}

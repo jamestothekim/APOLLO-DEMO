@@ -14,7 +14,13 @@ import {
   SxProps,
   Theme,
   useTheme,
+  IconButton,
+  Popover,
+  TextField,
+  InputAdornment,
 } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
 import { LoadingProgress } from "./loadingProgress";
 
 type SortDirection = "asc" | "desc";
@@ -30,6 +36,7 @@ export interface Column {
   subHeader?: string;
   align?: "left" | "right" | "center";
   render?: (value: any, row: any) => React.ReactNode;
+  getValue?: (row: any) => any;
   detailsOnly?: boolean;
   width?: number;
   extraWide?: boolean;
@@ -39,6 +46,7 @@ export interface Column {
   sortAccessor?: string | ((row: any) => number | string | null | undefined);
   columnGroup?: boolean;
   columns?: Column[];
+  filterable?: boolean;
 }
 
 export interface DynamicTableProps {
@@ -63,7 +71,7 @@ export interface DynamicTableProps {
   stickyHeader?: boolean;
   maxHeight?: string | number;
   renderExpandedRow?: (row: any, flatColumns: Column[]) => React.ReactNode;
-  fixedLayout?: boolean;
+  enableColumnFiltering?: boolean;
 }
 
 const getSectionInfo = (columns: Column[], index: number) => {
@@ -110,15 +118,20 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   stickyHeader = false,
   maxHeight = "70vh",
   renderExpandedRow,
-  fixedLayout = false,
+  enableColumnFiltering = false,
 }) => {
   const theme = useTheme();
-  // All hooks must be at the top level and in the same order every time
   const [activeSection, setActiveSection] = useState(0);
   const [internalPage, setInternalPage] = useState(0);
   const [internalRowsPerPage, setInternalRowsPerPage] =
     useState(defaultRowsPerPage);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [filterAnchorEl, setFilterAnchorEl] =
+    useState<HTMLButtonElement | null>(null);
+  const [currentFilterColumn, setCurrentFilterColumn] = useState<string | null>(
+    null
+  );
 
   const page = controlledPage ?? internalPage;
   const rowsPerPage = controlledRowsPerPage ?? internalRowsPerPage;
@@ -164,7 +177,49 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     });
   };
 
-  // Flatten columns first, as displayData depends on it
+  const handleFilterIconClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    columnKey: string
+  ) => {
+    setFilterAnchorEl(event.currentTarget);
+    setCurrentFilterColumn(columnKey);
+  };
+
+  const handleFilterClose = () => {
+    setFilterAnchorEl(null);
+    setCurrentFilterColumn(null);
+  };
+
+  const handleFilterChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    if (currentFilterColumn) {
+      setFilterValues((prev) => ({
+        ...prev,
+        [currentFilterColumn]: event.target.value,
+      }));
+      if (controlledPageChange) {
+        controlledPageChange(null, 0);
+      } else {
+        setInternalPage(0);
+      }
+    }
+  };
+
+  const handleClearFilter = (columnKey: string) => {
+    setFilterValues((prev) => {
+      const newFilters = { ...prev };
+      delete newFilters[columnKey];
+      return newFilters;
+    });
+    if (controlledPageChange) {
+      controlledPageChange(null, 0);
+    } else {
+      setInternalPage(0);
+    }
+    handleFilterClose();
+  };
+
   const flatColumns = useMemo(() => {
     return columns.reduce((acc: Column[], col) => {
       if (col.columnGroup && col.columns) {
@@ -175,78 +230,130 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   }, [columns]);
 
   const displayData = useMemo(() => {
-    let sortedData = [...data];
+    let processedData = [...data];
+
+    const activeFilters = Object.entries(filterValues).filter(
+      ([, value]) => value && value.trim() !== ""
+    );
+
+    if (activeFilters.length > 0) {
+      processedData = processedData.filter((row) => {
+        return activeFilters.every(([key, filterValue]) => {
+          const column = flatColumns.find((col) => col.key === key);
+          let cellValue: any;
+
+          if (column?.getValue) {
+            cellValue = column.getValue(row);
+          } else if (column?.render) {
+            const rendered = column.render(row[key], row);
+            if (typeof rendered === "string" || typeof rendered === "number") {
+              cellValue = rendered;
+            } else {
+              cellValue = row[key];
+            }
+          } else {
+            cellValue = row[key];
+          }
+
+          return String(cellValue)
+            .toLowerCase()
+            .includes(filterValue.toLowerCase());
+        });
+      });
+    }
 
     if (sortConfig) {
-      // Get the column definition from flatColumns
       const column = flatColumns.find((col) => col.key === sortConfig.key);
-
-      sortedData.sort((a, b) => {
-        // Get the raw values
+      processedData.sort((a, b) => {
         let aValue: number | string | null | undefined;
         let bValue: number | string | null | undefined;
 
-        // --- Get sortable values --- START
         if (typeof column?.sortAccessor === "function") {
-          // 1. Use sortAccessor function if provided
           aValue = column.sortAccessor(a);
           bValue = column.sortAccessor(b);
         } else if (typeof column?.sortAccessor === "string") {
-          // 2. Use sortAccessor string as a key/path
-          // Simple implementation for direct keys; could be extended for deep paths
-          // Add error handling for invalid paths if needed
           aValue = a[column.sortAccessor];
           bValue = b[column.sortAccessor];
         } else {
-          // 3. Fallback to using the column key directly on the row data
           aValue = a[sortConfig.key];
           bValue = b[sortConfig.key];
         }
-        // --- Get sortable values --- END
 
-        // --- Comparison Logic --- START
-        // Log the values being compared for this pair
         console.log(`  Comparing:`, { aValue, bValue });
 
         const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
 
-        // Handle null/undefined values (sort them consistently, e.g., to the end)
         if (aValue == null && bValue == null) return 0;
-        if (aValue == null) return 1 * directionMultiplier; // nulls sort after defined values
-        if (bValue == null) return -1 * directionMultiplier; // nulls sort after defined values
+        if (aValue == null) return 1 * directionMultiplier;
+        if (bValue == null) return -1 * directionMultiplier;
 
-        // Numeric comparison
         if (typeof aValue === "number" && typeof bValue === "number") {
           return (aValue - bValue) * directionMultiplier;
         }
 
-        // String comparison (case-insensitive)
         const aStr = String(aValue);
         const bStr = String(bValue);
 
         return aStr.localeCompare(bStr) * directionMultiplier;
-        // --- Comparison Logic --- END
       });
     }
 
     if (!showPagination || rowsPerPage === -1) {
-      return sortedData;
+      return processedData;
     }
-    return sortedData.slice(
+    return processedData.slice(
       page * rowsPerPage,
       page * rowsPerPage + rowsPerPage
     );
-  }, [data, page, rowsPerPage, showPagination, sortConfig, flatColumns]);
+  }, [
+    data,
+    page,
+    rowsPerPage,
+    showPagination,
+    sortConfig,
+    flatColumns,
+    filterValues,
+  ]);
 
-  // Define minWidth calculation logic
   const getMinWidth = (column: Column): number | undefined => {
     if (column.extraWide) return 200;
-    if (column.wide) return 160; // 80% of 200
-    return column.width; // Fallback to width if provided, else undefined
+    if (column.wide) return 160;
+    return column.width;
   };
 
+  const totalFilteredCount = useMemo(() => {
+    let processedData = [...data];
+    const activeFilters = Object.entries(filterValues).filter(
+      ([, value]) => value && value.trim() !== ""
+    );
+    if (activeFilters.length > 0) {
+      processedData = processedData.filter((row) => {
+        return activeFilters.every(([key, filterValue]) => {
+          const column = flatColumns.find((col) => col.key === key);
+          let cellValue: any;
+          if (column?.getValue) {
+            cellValue = column.getValue(row);
+          } else if (column?.render) {
+            const rendered = column.render(row[key], row);
+            if (typeof rendered === "string" || typeof rendered === "number") {
+              cellValue = rendered;
+            } else {
+              cellValue = row[key];
+            }
+          } else {
+            cellValue = row[key];
+          }
+          return String(cellValue)
+            .toLowerCase()
+            .includes(filterValue.toLowerCase());
+        });
+      });
+    }
+    return processedData.length;
+  }, [data, filterValues, flatColumns]);
+
   return (
-    <Box>
+    <Box sx={{ width: "100%" }}>
       {loading ? (
         <Box
           sx={{
@@ -294,12 +401,12 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      borderBottom: 1,
-                      borderColor: "divider",
+                      borderBottom: `1px solid ${theme.palette.divider}`,
                     },
                   },
                 },
               }),
+              ...(!stickyHeader && { overflowX: "auto" }),
               "& .MuiTableRow-root:hover .row-expand-button": {
                 visibility: "visible",
               },
@@ -309,49 +416,53 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
               size="small"
               sx={{
                 borderCollapse: "collapse",
-                ...(fixedLayout && { tableLayout: "fixed" }),
+                width: "100%",
+                minWidth: "initial",
               }}
             >
               <TableHead>
-                {/* Group header row */}
-                <TableRow>
-                  {columns.map((col) => {
-                    if (col.columnGroup) {
-                      return (
-                        <TableCell
-                          key={col.key}
-                          colSpan={col.columns?.length}
-                          align="center"
-                          sx={{
-                            ...(theme.components?.MuiDynamicTable
-                              ?.styleOverrides?.sectionHeader || {}),
-                            minWidth: col.width,
-                            ...col.sx,
-                          }}
-                        >
-                          {col.header}
-                        </TableCell>
-                      );
-                    }
-                    return (
-                      <TableCell
-                        key={col.key}
-                        sx={{
-                          border: "none",
-                          padding: "8px 8px",
-                          borderBottom: 0,
-                          minWidth: col.width,
-                          ...col.sx,
-                        }}
-                      />
-                    );
-                  })}
-                </TableRow>
-                {/* Column headers row */}
+                {columns.some((c) => c.columnGroup) && (
+                  <TableRow>
+                    {columns.map((col) => {
+                      if (col.columnGroup) {
+                        return (
+                          <TableCell
+                            key={col.key}
+                            colSpan={col.columns?.length}
+                            align="center"
+                            sx={{
+                              ...(theme.components?.MuiDynamicTable
+                                ?.styleOverrides?.sectionHeader || {}),
+                              borderBottom: `1px solid ${theme.palette.divider}`,
+                              fontWeight: "medium",
+                              p: 1,
+                              ...col.sx,
+                            }}
+                          >
+                            {col.header}
+                          </TableCell>
+                        );
+                      } else {
+                        return (
+                          <TableCell
+                            key={`${col.key}-placeholder`}
+                            sx={{
+                              borderBottom: `1px solid ${theme.palette.divider}`,
+                            }}
+                          />
+                        );
+                      }
+                    })}
+                  </TableRow>
+                )}
+
                 <TableRow>
                   {flatColumns.map((column, index) => {
                     const sectionInfo = getSectionInfo(columns, index);
                     const minW = getMinWidth(column);
+                    const isFiltered =
+                      filterValues[column.key] &&
+                      filterValues[column.key].trim() !== "";
                     return (
                       <TableCell
                         key={column.key}
@@ -363,20 +474,26 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                             ?.columnHeader || {}),
                           width: column.width,
                           minWidth: minW,
-                          textAlign: "center",
                           cursor:
                             column.sortable !== false ? "pointer" : "default",
+                          position: "relative",
+                          pr:
+                            enableColumnFiltering && column.filterable
+                              ? "4px"
+                              : "8px",
+                          pl: "8px",
+                          py: 1,
+                          borderBottom: `1px solid ${theme.palette.divider}`,
                           ...column.sx,
                         }}
                         onClick={
-                          column.sortable !== false
+                          column.sortable !== false && !filterAnchorEl
                             ? () => handleSort(column.key)
                             : undefined
                         }
                       >
                         <Box
                           sx={{
-                            position: "relative",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -384,24 +501,52 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                             height: "100%",
                           }}
                         >
-                          {/* Centered Header Text - Apply conditional color */}
                           <Typography
                             variant="body2"
                             component="span"
                             sx={{
-                              flexGrow: 1,
                               textAlign: "center",
-                              // Apply color based on sort state
+                              fontWeight:
+                                sortConfig?.key === column.key
+                                  ? "bold"
+                                  : "normal",
                               color:
                                 sortConfig?.key === column.key
                                   ? sortConfig.direction === "desc"
-                                    ? "primary.main"
-                                    : "error.main"
-                                  : "inherit",
+                                    ? theme.palette.error.main // Descending = Error (Red)
+                                    : theme.palette.primary.main // Ascending = Primary
+                                  : "inherit", // Default color
+                              mr:
+                                enableColumnFiltering && column.filterable
+                                  ? 0.5
+                                  : 0,
                             }}
                           >
                             {column.header}
                           </Typography>
+
+                          {enableColumnFiltering && column.filterable && (
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFilterIconClick(e, column.key);
+                              }}
+                              sx={{
+                                padding: "2px",
+                                ml: 0.5,
+                                color: theme.palette.primary.main,
+                                opacity: isFiltered ? 1 : 0.6,
+                                "&:hover": {
+                                  backgroundColor: theme.palette.action.hover,
+                                  opacity: 1,
+                                },
+                              }}
+                              aria-label={`Filter ${column.header}`}
+                            >
+                              <SearchIcon sx={{ fontSize: "1.0rem" }} />
+                            </IconButton>
+                          )}
                         </Box>
                         {column.subHeader && (
                           <Typography
@@ -410,6 +555,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                             sx={{
                               fontStyle: "italic",
                               marginTop: "2px",
+                              textAlign: "center",
+                              width: "100%",
                             }}
                           >
                             {column.subHeader}
@@ -426,52 +573,124 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                   const isSelected = expandedRowIds?.has(rowId);
                   return (
                     <Fragment key={rowId}>
-                      {/* --- Main Row --- */}
                       <TableRow
                         hover={!!onRowClick}
                         onClick={() => onRowClick?.(row)}
+                        selected={isSelected}
                         sx={{
                           cursor: onRowClick ? "pointer" : "default",
+                          backgroundColor: isSelected
+                            ? theme.palette.action.selected
+                            : undefined,
+                          "&:last-child td, &:last-child th": { border: 0 },
                         }}
                       >
                         {flatColumns.map((column, index) => {
                           const sectionInfo = getSectionInfo(columns, index);
                           const minW = getMinWidth(column);
+                          const cellValue = row[column.key];
+                          const renderedValue = column.render
+                            ? column.render(cellValue, row)
+                            : cellValue;
                           return (
                             <TableCell
                               key={column.key}
-                              align={column.align}
+                              align={column.align || "left"}
                               data-section={sectionInfo.name.toLowerCase()}
                               data-first-in-section={sectionInfo.isFirst}
                               sx={{
                                 ...(theme.components?.MuiDynamicTable
                                   ?.styleOverrides?.dataCell || {}),
+                                width: column.width,
                                 minWidth: minW,
                                 ...column.sx,
                               }}
                             >
-                              {column.render
-                                ? column.render(row[column.key], row)
-                                : row[column.key]}
+                              {renderedValue}
                             </TableCell>
                           );
                         })}
                       </TableRow>
-                      {/* --- Expanded Content Row(s) --- */}
                       {renderExpandedRow &&
                         isSelected &&
                         renderExpandedRow(row, flatColumns)}
                     </Fragment>
                   );
                 })}
+                {displayData.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={flatColumns.length} align="center">
+                      <Typography variant="body2" sx={{ py: 3 }}>
+                        No matching records found.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
 
+          {enableColumnFiltering && currentFilterColumn && (
+            <Popover
+              open={Boolean(filterAnchorEl)}
+              anchorEl={filterAnchorEl}
+              onClose={handleFilterClose}
+              anchorOrigin={{
+                vertical: "bottom",
+                horizontal: "center",
+              }}
+              transformOrigin={{
+                vertical: "top",
+                horizontal: "center",
+              }}
+              PaperProps={{
+                sx: { p: 1.5, minWidth: 220, borderRadius: 1 },
+              }}
+            >
+              <Typography
+                variant="caption"
+                display="block"
+                sx={{ mb: 1, fontWeight: "medium" }}
+              >
+                Filter by{" "}
+                {flatColumns.find((c) => c.key === currentFilterColumn)
+                  ?.header || "value"}
+              </Typography>
+              <TextField
+                value={filterValues[currentFilterColumn] || ""}
+                onChange={handleFilterChange}
+                variant="outlined"
+                size="small"
+                autoFocus
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" sx={{ fontSize: "1.1rem" }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: filterValues[currentFilterColumn] ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleClearFilter(currentFilterColumn)}
+                        edge="end"
+                        aria-label="clear filter"
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                  sx: { fontSize: "0.875rem" },
+                }}
+              />
+            </Popover>
+          )}
+
           {showPagination && (
             <TablePagination
               component="div"
-              count={data.length}
+              count={totalFilteredCount}
               page={rowsPerPage === -1 ? 0 : page}
               onPageChange={handleChangePage}
               rowsPerPage={rowsPerPage}
@@ -485,11 +704,20 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                   fontSize: "0.875rem",
                 },
               }}
-              labelDisplayedRows={({ from, to, count }) =>
-                rowsPerPage === -1
-                  ? `All ${count} rows`
-                  : `${from}–${to} of ${count}`
-              }
+              labelDisplayedRows={({ from, to, count }) => {
+                const total = data.length;
+                let ofCount =
+                  count === total ? `${count}` : `${count} of ${total}`;
+                if (count === 0 && total > 0) ofCount = `0 of ${total}`;
+                if (count === 0 && total === 0) ofCount = `0`;
+
+                if (rowsPerPage === -1) {
+                  return `All ${ofCount} rows`;
+                }
+                const displayFrom = count === 0 ? 0 : from;
+                const displayTo = count === 0 ? 0 : to;
+                return `${displayFrom}–${displayTo} of ${ofCount}`;
+              }}
             />
           )}
         </>

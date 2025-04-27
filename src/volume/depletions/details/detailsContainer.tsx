@@ -8,7 +8,7 @@ import axios from "axios";
 interface DetailsContainerProps {
   open: boolean;
   onClose: () => void;
-  market: string;
+  market_id: string;
   product: string;
   value: number;
   month: any;
@@ -20,7 +20,7 @@ interface DetailsContainerProps {
 export const DetailsContainer = ({
   open,
   onClose,
-  market,
+  market_id,
   product,
   value,
   month,
@@ -28,6 +28,17 @@ export const DetailsContainer = ({
   variant_size_pack_id,
   variant_size_pack_desc,
 }: DetailsContainerProps) => {
+  console.log("DetailsContainer Props:", {
+    open,
+    onClose,
+    market_id,
+    product,
+    value,
+    month,
+    year,
+    variant_size_pack_id,
+    variant_size_pack_desc,
+  });
   const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [dataReady, setDataReady] = useState(false);
@@ -39,7 +50,7 @@ export const DetailsContainer = ({
 
     const fetchAccountLevelSales = async () => {
       const productToQuery = variant_size_pack_desc || product;
-      if (!open || !market || !productToQuery) return;
+      if (!open || !market_id || !productToQuery) return;
 
       setIsLoading(true);
       setDataReady(false);
@@ -51,7 +62,7 @@ export const DetailsContainer = ({
             params: {
               month,
               year,
-              market,
+              market: market_id,
               product: productToQuery,
             },
             headers: {
@@ -81,7 +92,7 @@ export const DetailsContainer = ({
       isMounted = false;
       controller.abort();
     };
-  }, [open, month, market, product, variant_size_pack_desc]);
+  }, [open, month, market_id, product, variant_size_pack_desc]);
 
   useEffect(() => {
     if (dataReady && accountLevelSalesData.length > 0) {
@@ -131,7 +142,7 @@ export const DetailsContainer = ({
         ) : showContent ? (
           <>
             <DepletionDetails
-              market={market}
+              market={market_id}
               value={value}
               month={Number(month)}
               year={year}

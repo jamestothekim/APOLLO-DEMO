@@ -409,7 +409,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     "success"
   );
   const [selectedDetails, setSelectedDetails] = useState<{
-    market: string;
+    market_id: string;
     product: string;
     value: number;
     month: number;
@@ -926,6 +926,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         header: guidance.label,
         subHeader: guidance.sublabel,
         align: "right" as const,
+        width: 50,
         sortable: true,
         sortAccessor: (row: ExtendedForecastData) => {
           const valueKey =
@@ -1101,14 +1102,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   onClick={(event) => {
                     if (data.isActual) {
                       event.stopPropagation();
-                      const marketInfo = marketMetadata.find(
-                        (m) => m.market_id === row.market_id
-                      );
-                      const stateCode =
-                        marketInfo?.market_code?.substring(0, 2) || "";
                       const currentYear = new Date().getFullYear();
                       setSelectedDetails({
-                        market: stateCode,
+                        market_id: row.market_id,
                         product: row.product,
                         value:
                           value === 0 && data.isActual ? -1 : Math.round(value),
@@ -1383,14 +1379,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                     }}
                     onClick={(event) => {
                       event.stopPropagation();
-                      const marketInfo = marketMetadata.find(
-                        (m) => m.market_id === row.market_id
-                      );
-                      const stateCode =
-                        marketInfo?.market_code?.substring(0, 2) || "";
-
                       setSelectedDetails({
-                        market: stateCode,
+                        market_id: row.market_id,
                         product: row.product,
                         value: value === 0 ? -1 : Math.round(value || 0),
                         month: MONTH_MAPPING[month],
@@ -1740,7 +1730,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         <DetailsContainer
           open={detailsOpen}
           onClose={() => setDetailsOpen(false)}
-          market={selectedDetails.market}
+          market_id={selectedDetails.market_id}
           product={selectedDetails.product}
           value={selectedDetails.value}
           month={selectedDetails.month}

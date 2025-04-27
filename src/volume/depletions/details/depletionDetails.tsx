@@ -1,5 +1,5 @@
 import { Box, Typography, CircularProgress } from "@mui/material";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DynamicTable } from "../../../reusableComponents/dynamicTable";
 import { AccountDetails } from "./accountDetails";
 
@@ -24,6 +24,7 @@ interface AccountLevelSalesData {
   case_equivalent_quantity: number | string;
   sales_dollars: number | string;
   outlet_id: string;
+  address_line_1: string;
 }
 
 export const DepletionDetails = ({
@@ -42,12 +43,14 @@ export const DepletionDetails = ({
   >({});
 
   // Add IDs to the data
-  const dataWithIds = accountLevelSalesData.map(
-    (row: AccountLevelSalesData) => ({
-      ...row,
-      // Create a unique ID using outlet_name and location
-      id: `${row.outlet_name}-${row.city}-${row.state}`,
-    })
+  const dataWithIds = useMemo(
+    () =>
+      accountLevelSalesData.map((row: AccountLevelSalesData) => ({
+        ...row,
+        // Create a unique ID using outlet_name and location if needed
+        id: `${row.outlet_name}-${row.city}-${row.state}-${row.outlet_id}`, // Made slightly more unique
+      })),
+    [accountLevelSalesData]
   );
 
   const handleRowClick = (row: any) => {
@@ -58,45 +61,78 @@ export const DepletionDetails = ({
     setSelectedOutletId(null);
   };
 
-  const columns = [
-    {
-      header: "Account",
-      key: "outlet_name",
-      render: (value: string) => value,
-    },
-    {
-      header: "Address",
-      key: "address_line_1",
-      render: (value: string) => value,
-    },
-    {
-      header: "City/State",
-      key: "city",
-      render: (_: any, row: AccountLevelSalesData) =>
-        `${row.city}, ${row.state}`,
-    },
-    {
-      header: "Premise Type",
-      key: "vip_cot_premise_type_desc",
-      render: (value: string) => value,
-    },
-    {
-      header: "Qty (9L)",
-      key: "case_equivalent_quantity",
-      render: (value: number) =>
-        typeof value === "number"
-          ? value.toFixed(1)
-          : parseFloat(value).toFixed(1),
-    },
-    {
-      header: "Sales ($)",
-      key: "sales_dollars",
-      render: (value: number) =>
-        typeof value === "number"
-          ? value.toFixed(2)
-          : parseFloat(value).toFixed(2),
-    },
-  ];
+  // Define columns, marking 'Account' as filterable
+  const columns = useMemo(
+    () => [
+      {
+        header: "Account",
+        key: "outlet_name",
+        width: 250,
+        render: (value: string) => value,
+        filterable: true,
+        getValue: (row: AccountLevelSalesData) => row.outlet_name,
+      },
+      {
+        header: "Address",
+        key: "address_line_1",
+        width: 200,
+        render: (value: string) => value,
+        filterable: true,
+        getValue: (row: AccountLevelSalesData) => row.address_line_1,
+      },
+      {
+        header: "City/State",
+        key: "city",
+        width: 150,
+        render: (_: any, row: AccountLevelSalesData) =>
+          `${row.city}, ${row.state}`,
+        getValue: (row: AccountLevelSalesData) => `${row.city}, ${row.state}`,
+        filterable: true,
+      },
+      {
+        header: "Type",
+        key: "vip_cot_premise_type_desc",
+        width: 120,
+        align: "center" as const,
+        render: (value: string) => value,
+        filterable: true,
+        getValue: (row: AccountLevelSalesData) => row.vip_cot_premise_type_desc,
+      },
+      {
+        header: "Qty (9L)",
+        key: "case_equivalent_quantity",
+        width: 100,
+        align: "right" as const,
+        render: (value: number | string) =>
+          typeof value === "number"
+            ? value.toFixed(1)
+            : parseFloat(String(value)).toFixed(1),
+        sortAccessor: (row: AccountLevelSalesData) =>
+          typeof row.case_equivalent_quantity === "string"
+            ? parseFloat(row.case_equivalent_quantity)
+            : row.case_equivalent_quantity,
+      },
+      {
+        header: "Sales",
+        key: "sales_dollars",
+        width: 120,
+        align: "right" as const,
+        render: (value: number | string) => {
+          const numValue =
+            typeof value === "string" ? parseFloat(value) : value;
+          return `$${numValue.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`;
+        },
+        sortAccessor: (row: AccountLevelSalesData) =>
+          typeof row.sales_dollars === "string"
+            ? parseFloat(row.sales_dollars)
+            : row.sales_dollars,
+      },
+    ],
+    []
+  );
 
   return (
     <Box>
@@ -148,19 +184,24 @@ export const DepletionDetails = ({
               No RAD data available
             </Typography>
           ) : (
-            <DynamicTable
-              data={dataWithIds}
-              columns={columns}
-              page={page}
-              rowsPerPage={rowsPerPage}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              onRowsPerPageChange={(event) => {
-                setRowsPerPage(parseInt(event.target.value, 10));
-                setPage(0);
-              }}
-              getRowId={(row) => row.id}
-              onRowClick={handleRowClick}
-            />
+            <>
+              <DynamicTable
+                data={dataWithIds} // Pass potentially ID-added data
+                columns={columns}
+                enableColumnFiltering={true} // <-- Enable the feature
+                page={page}
+                rowsPerPage={rowsPerPage}
+                onPageChange={(_, newPage) => setPage(newPage)}
+                onRowsPerPageChange={(event) => {
+                  setRowsPerPage(parseInt(event.target.value, 10));
+                  setPage(0); // Reset page on rows per page change too
+                }}
+                getRowId={(row) => row.id} // Use the generated ID
+                onRowClick={handleRowClick}
+                stickyHeader // Keep sticky header if needed
+                maxHeight="60vh" // Adjust max height if needed
+              />
+            </>
           )}
         </>
       )}
