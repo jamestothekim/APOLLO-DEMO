@@ -1351,6 +1351,13 @@ export const aggregateSummaryData = (
         brand: brandKey,
         months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
         total: 0,
+        // Initialize new monthly fields for brand aggregate
+        months_py_volume: MONTH_NAMES.reduce(
+          (acc, m) => ({ ...acc, [m]: 0 }),
+          {}
+        ),
+        months_gsv_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        months_gsv_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
         total_py_volume: 0,
         total_gsv_ty: 0,
         total_gsv_py: 0,
@@ -1359,6 +1366,10 @@ export const aggregateSummaryData = (
     const brandAgg = brandAggsMap.get(brandKey)!;
     MONTH_NAMES.forEach((m) => {
       brandAgg.months[m] += variantRow.months[m];
+      // Accumulate new monthly fields
+      brandAgg.months_py_volume[m] += variantRow.months_py_volume[m];
+      brandAgg.months_gsv_ty[m] += variantRow.months_gsv_ty[m];
+      brandAgg.months_gsv_py[m] += variantRow.months_gsv_py[m];
     });
     brandAgg.total += variantRow.total;
     brandAgg.total_py_volume += variantRow.total_py_volume;
@@ -1374,6 +1385,10 @@ export const aggregateSummaryData = (
     brandAgg.total_gsv_py = roundToWhole(brandAgg.total_gsv_py);
     MONTH_NAMES.forEach((m) => {
       brandAgg.months[m] = roundToWhole(brandAgg.months[m]);
+      // Round new monthly fields
+      brandAgg.months_py_volume[m] = roundToWhole(brandAgg.months_py_volume[m]);
+      brandAgg.months_gsv_ty[m] = roundToWhole(brandAgg.months_gsv_ty[m]);
+      brandAgg.months_gsv_py[m] = roundToWhole(brandAgg.months_gsv_py[m]);
     });
   });
 
@@ -1417,8 +1432,9 @@ export const calculateAllSummaryGuidance = (
       total_py: variantAgg.total_py_volume,
       total_gsv_ty: variantAgg.total_gsv_ty,
       total_gsv_py: variantAgg.total_gsv_py,
-      months_ty: variantAgg.months_ty,
-      months_py: variantAgg.months_py,
+      // Map source fields to expected fields
+      months_ty: variantAgg.months,
+      months_py: variantAgg.months_py_volume,
       months_gsv_ty: variantAgg.months_gsv_ty,
       months_gsv_py: variantAgg.months_gsv_py,
     };
@@ -1442,8 +1458,9 @@ export const calculateAllSummaryGuidance = (
       total_py: brandAgg.total_py_volume,
       total_gsv_ty: brandAgg.total_gsv_ty,
       total_gsv_py: brandAgg.total_gsv_py,
-      months_ty: brandAgg.months_ty,
-      months_py: brandAgg.months_py,
+      // Map source fields to expected fields (using fields added in previous step)
+      months_ty: brandAgg.months,
+      months_py: brandAgg.months_py_volume,
       months_gsv_ty: brandAgg.months_gsv_ty,
       months_gsv_py: brandAgg.months_gsv_py,
     };
