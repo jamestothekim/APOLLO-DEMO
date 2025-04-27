@@ -289,6 +289,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       key: "variant_size_pack_desc",
       header: "Size Pack",
       align: "left" as const,
+      filterable: true,
     },
     ...monthLabels.map((month, index) => ({
       key: index.toString(),
@@ -347,6 +348,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       header: "Invoice Date",
       key: "invoice_date",
       align: "left" as const,
+      filterable: true,
       render: (value: string) => {
         // Format YYYYMMDD to YYYY-MM-DD
         return value
@@ -358,16 +360,19 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       header: "Invoice #",
       key: "invoice_number",
       align: "left" as const,
+      filterable: true,
     },
     {
       header: "Brand",
       key: "brand",
       align: "left" as const,
+      filterable: true,
     },
     {
       header: "Size Pack",
       key: "variant_size_pack_desc",
       align: "left" as const,
+      filterable: true,
     },
     {
       header: "Cases (9L)",
@@ -596,6 +601,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
                 data={tableData}
                 columns={tableColumns}
                 getRowId={(row) => row.variant_size_pack_desc}
+                enableColumnFiltering={true}
               />
             )}
           </Box>
@@ -616,6 +622,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
               getRowId={(row) =>
                 `${row.invoice_number}-${row.variant_size_pack_desc}`
               }
+              enableColumnFiltering={true}
             />
           )}
         </Box>
