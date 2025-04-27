@@ -69,17 +69,13 @@ interface MarketsByDivision {
 
 // Constants for Roles
 const EXECUTIVE_ROLE = "Executive";
-const CORPORATE_FINANCE_ROLE = "Corporate Finance";
-const REGIONAL_FINANCE_ROLE = "Regional Finance";
-const DISTRIBUTOR_MANAGER_ROLE = "Distributor Manager";
+const FINANCE_ROLE = "Finance";
+const MARKET_MANAGER_ROLE = "Market Manager";
+const CORPORATE_DIVISION_LABEL = "Corporate";
+const WGS_ALL_LABEL = "WGS - All";
 
 // Hardcoded Roles as per user request
-const FIXED_ROLES = [
-  EXECUTIVE_ROLE,
-  REGIONAL_FINANCE_ROLE,
-  CORPORATE_FINANCE_ROLE, // Assuming Corporate Finance based on constant
-  DISTRIBUTOR_MANAGER_ROLE,
-];
+const FIXED_ROLES = [EXECUTIVE_ROLE, FINANCE_ROLE, MARKET_MANAGER_ROLE];
 
 // Define the type for the exposed handle
 export interface UserMasterHandle {
@@ -105,6 +101,14 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [passwordError, setPasswordError] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
+
+  // Define available divisions including the "Corporate" option for Finance role
+  const divisionsForAutocomplete = useMemo(() => {
+    if (editingUser?.role === FINANCE_ROLE) {
+      return [CORPORATE_DIVISION_LABEL, ...availableDivisions];
+    }
+    return availableDivisions;
+  }, [editingUser?.role, availableDivisions]);
 
   // Expose the handleAdd function via the ref
   useImperativeHandle(ref, () => ({
@@ -170,24 +174,25 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     const initialRole = user.role;
     const initialAdmin = user.user_access?.Admin ?? false;
 
-    // Apply rules based on the loaded user's role and division
-    if (
-      initialRole === EXECUTIVE_ROLE ||
-      initialRole === CORPORATE_FINANCE_ROLE
-    ) {
-      initialDivision = ""; // Enforce empty division
-      initialMarkets = allMarkets; // Enforce all markets
-    } else if (initialRole === REGIONAL_FINANCE_ROLE) {
-      if (initialDivision && marketsByDivision) {
-        // Enforce all markets for the *existing* division
+    // --- Logic Adjustment for consolidated Finance role ---
+    if (initialRole === EXECUTIVE_ROLE) {
+      initialDivision = CORPORATE_DIVISION_LABEL;
+      initialMarkets = allMarkets;
+    } else if (initialRole === FINANCE_ROLE) {
+      // If it's Finance role, check the division.
+      // "Corporate" means all markets, actual division means markets for that division.
+      if (initialDivision === CORPORATE_DIVISION_LABEL) {
+        initialMarkets = allMarkets;
+      } else if (initialDivision && marketsByDivision) {
         initialMarkets = getMarketOptionsForDivision(initialDivision);
       } else {
-        initialDivision = ""; // Ensure division is empty if invalid/missing
-        initialMarkets = []; // No division, so markets should be empty
+        // Default to Corporate if division is missing or invalid for Finance
+        initialDivision = CORPORATE_DIVISION_LABEL;
+        initialMarkets = allMarkets;
       }
-    } else if (initialRole === DISTRIBUTOR_MANAGER_ROLE) {
+    } else if (initialRole === MARKET_MANAGER_ROLE) {
+      // Distributor Manager logic remains largely the same, but ensure division exists
       if (initialDivision && marketsByDivision) {
-        // Filter existing markets to only those valid for the division
         const divisionMarkets = getMarketOptionsForDivision(initialDivision);
         const validMarketCodes = new Set(
           divisionMarkets.map((m) => m.market_code)
@@ -195,12 +200,17 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         initialMarkets = initialMarkets.filter((market) =>
           validMarketCodes.has(market.market_code)
         );
+        // If after filtering, no markets are left (e.g., division changed), reset markets
+        if (initialMarkets.length === 0 && divisionMarkets.length > 0) {
+          // Decide if you want to default to all markets for the division or keep empty
+          // initialMarkets = divisionMarkets; // Option: Default to all division markets
+        }
       } else {
         initialDivision = ""; // Ensure division is empty if invalid/missing
         initialMarkets = []; // No division, so markets should be empty
       }
     }
-    // For other roles, keep the loaded data as is.
+    // For other roles (if any added later), keep the loaded data as is.
 
     const userToEdit = {
       ...user,
@@ -327,34 +337,28 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       };
     } else if (field === "Division") {
       const newDivision = value as string | null;
-      let marketsToSet: MarketOption[] = updatedUser.user_access?.Markets || [];
+      let marketsToSet: MarketOption[] = [];
 
-      if (
-        updatedUser.role === REGIONAL_FINANCE_ROLE ||
-        updatedUser.role === DISTRIBUTOR_MANAGER_ROLE
-      ) {
-        if (newDivision) {
-          const divisionMarkets = getMarketOptionsForDivision(newDivision);
-          if (updatedUser.role === REGIONAL_FINANCE_ROLE) {
-            marketsToSet = divisionMarkets;
-          } else {
-            const validMarketCodes = new Set(
-              divisionMarkets.map((m) => m.market_code)
-            );
-            marketsToSet = marketsToSet.filter((market) =>
-              validMarketCodes.has(market.market_code)
-            );
-          }
-        } else {
-          marketsToSet = [];
+      if (updatedUser.role === FINANCE_ROLE) {
+        if (newDivision === CORPORATE_DIVISION_LABEL) {
+          marketsToSet = allMarkets;
+        } else if (newDivision) {
+          marketsToSet = getMarketOptionsForDivision(newDivision);
         }
+      } else if (updatedUser.role === MARKET_MANAGER_ROLE) {
+        // For Distributor Manager, changing division clears selected markets.
+        // They must re-select markets valid for the new division.
+        marketsToSet = []; // Clear markets, user must re-select
+      } else {
+        // Handle other roles or default case if needed
+        marketsToSet = updatedUser.user_access?.Markets || [];
       }
 
       updatedUser = {
         ...updatedUser,
         user_access: {
           ...updatedUser.user_access,
-          Division: newDivision ?? "",
+          Division: newDivision ?? "", // Store null as empty string or keep as null based on backend
           Markets: marketsToSet,
         },
       };
@@ -371,24 +375,34 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       let marketsToSet: MarketOption[] = updatedUser.user_access?.Markets || [];
       let divisionToSet = updatedUser.user_access?.Division || "";
 
-      if (newRole === EXECUTIVE_ROLE || newRole === CORPORATE_FINANCE_ROLE) {
+      if (newRole === EXECUTIVE_ROLE) {
         marketsToSet = allMarkets;
-        divisionToSet = "";
-      } else if (
-        newRole === REGIONAL_FINANCE_ROLE ||
-        newRole === DISTRIBUTOR_MANAGER_ROLE
-      ) {
+        divisionToSet = CORPORATE_DIVISION_LABEL;
+      } else if (newRole === FINANCE_ROLE) {
+        // When switching TO Finance, default to "Corporate" division
+        divisionToSet = CORPORATE_DIVISION_LABEL;
+        marketsToSet = allMarkets;
+      } else if (newRole === MARKET_MANAGER_ROLE) {
+        // When switching TO Distributor Manager, clear markets if division is invalid/empty
         const currentDivision = divisionToSet;
-        if (currentDivision) {
-          const validMarketNames = getMarketNamesForDivision(currentDivision);
-          marketsToSet = marketsToSet.filter((market) =>
-            validMarketNames.includes(market.market)
+        if (currentDivision && marketsByDivision?.[currentDivision]) {
+          const divisionMarkets = getMarketOptionsForDivision(currentDivision);
+          const validMarketCodes = new Set(
+            divisionMarkets.map((m) => m.market_code)
           );
+          marketsToSet = marketsToSet.filter((m) =>
+            validMarketCodes.has(m.market_code)
+          );
+          // If no valid markets remain for the current division, clear them
+          if (marketsToSet.length === 0) marketsToSet = [];
         } else {
+          // If division is not set or invalid, clear division and markets
+          divisionToSet = "";
           marketsToSet = [];
         }
       } else {
-        marketsToSet = updatedUser.user_access?.Markets || [];
+        // Handle other potential roles or reset logic
+        // For now, keep existing division/markets if role doesn't match above
       }
 
       updatedUser = {
@@ -489,17 +503,26 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     const role = editingUser.role;
     const division = editingUser.user_access?.Division;
 
-    if (role === EXECUTIVE_ROLE || role === CORPORATE_FINANCE_ROLE) {
+    if (role === EXECUTIVE_ROLE) {
       return allMarkets;
-    } else if (
-      (role === REGIONAL_FINANCE_ROLE || role === DISTRIBUTOR_MANAGER_ROLE) &&
-      division &&
-      marketsByDivision
-    ) {
+    } else if (role === FINANCE_ROLE) {
+      // Finance can select markets only if a non-Corporate division is chosen
+      if (
+        division &&
+        division !== CORPORATE_DIVISION_LABEL &&
+        marketsByDivision
+      ) {
+        return getMarketOptionsForDivision(division);
+      } else if (division === CORPORATE_DIVISION_LABEL) {
+        // If Corporate is selected, technically all markets are assigned,
+        // but the dropdown should be disabled or show "WGS - All"
+        return allMarkets; // Or return [] and disable? Let's return all and disable/manage display in component
+      }
+    } else if (role === MARKET_MANAGER_ROLE && division && marketsByDivision) {
       return getMarketOptionsForDivision(division);
     }
 
-    return [];
+    return []; // Default to empty if no division/role match allows selection
   }, [editingUser, allMarkets, marketsByDivision]);
 
   const selectedMarketOptions = useMemo((): MarketOption[] => {
@@ -520,6 +543,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       key: "fullName",
       render: (_: any, row: User) => `${row.first_name} ${row.last_name}`,
       sortable: true,
+      filterable: true,
       sortAccessor: (row: User) => `${row.first_name} ${row.last_name}`,
       sx: { width: 140 },
     },
@@ -527,24 +551,29 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       header: "Email",
       key: "email",
       sortable: true,
+      filterable: true,
       sx: { width: 200 },
     },
     {
       header: "Role",
       key: "role",
       sortable: true,
+      filterable: true,
       sx: { width: 150 },
     },
     {
       header: "Division",
       key: "division",
+      filterable: true,
       render: (_: any, row: User) => {
         if (
           row.role === EXECUTIVE_ROLE ||
-          row.role === CORPORATE_FINANCE_ROLE
+          (row.role === FINANCE_ROLE &&
+            row.user_access?.Division === CORPORATE_DIVISION_LABEL)
         ) {
-          return "WGS - All";
+          return CORPORATE_DIVISION_LABEL;
         }
+        // Display the actual division name otherwise, or '-' if none
         return row.user_access?.Division || "-";
       },
       sortable: true,
@@ -560,18 +589,34 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         const selectedMarkets = row.user_access?.Markets || [];
         const numSelected = selectedMarkets.length;
 
-        let displayLabel = "";
+        let displayLabel = "-"; // Default to '-'
+        let showIndividualChips = false;
 
-        if (role === EXECUTIVE_ROLE || role === CORPORATE_FINANCE_ROLE) {
-          if (numSelected === allMarkets.length && allMarkets.length > 0) {
-            displayLabel = "WGS - All";
-          } else if (numSelected > 0) {
-            displayLabel = "";
+        if (role === EXECUTIVE_ROLE) {
+          displayLabel = WGS_ALL_LABEL; // Executive always gets all
+        } else if (role === FINANCE_ROLE) {
+          if (division === CORPORATE_DIVISION_LABEL) {
+            displayLabel = WGS_ALL_LABEL; // Finance + Corporate gets all
+          } else if (division && marketsByDivision) {
+            // Finance + Specific Division gets all markets *for that division*
+            const marketsForDivision = getMarketOptionsForDivision(division);
+            if (
+              numSelected === marketsForDivision.length &&
+              marketsForDivision.length > 0
+            ) {
+              displayLabel = `${division} - All`;
+            } else if (numSelected > 0) {
+              // displayLabel = ""; // Old: Show individual chips
+              showIndividualChips = true; // New: Flag to show individual chips
+              displayLabel = ""; // Clear label if showing chips
+            }
           }
         } else if (
+          role === MARKET_MANAGER_ROLE &&
           division &&
-          (role === REGIONAL_FINANCE_ROLE || role === DISTRIBUTOR_MANAGER_ROLE)
+          marketsByDivision
         ) {
+          // Distributor Manager can have specific markets within their division
           const marketsForDivision = getMarketOptionsForDivision(division);
           if (
             numSelected === marketsForDivision.length &&
@@ -579,46 +624,79 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
           ) {
             displayLabel = `${division} - All`;
           } else if (numSelected > 0) {
-            displayLabel = "";
+            // displayLabel = ""; // Old: Show individual chips
+            showIndividualChips = true; // New: Flag to show individual chips
+            displayLabel = ""; // Clear label if showing chips
           }
-        } else if (numSelected > 0) {
-          displayLabel = "";
         }
+        // Fallback if numSelected is 0, displayLabel remains "-"
+
+        // Determine chips to render
+        const MAX_CHIPS = 5;
+        const chipsToRender = showIndividualChips
+          ? selectedMarkets.slice(0, MAX_CHIPS)
+          : [];
+        const remainingCount = showIndividualChips
+          ? numSelected - chipsToRender.length
+          : 0;
 
         return (
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-            {displayLabel === "" && numSelected > 0
-              ? selectedMarkets.map((market) => (
-                  <Chip
-                    key={market.market_code}
-                    label={market.market_code}
-                    size="small"
-                    sx={{
-                      borderRadius: "16px",
-                      backgroundColor: "transparent",
-                      border: "1px solid",
-                      borderColor: "primary.main",
-                      color: "primary.main",
-                      fontFamily: "theme.typography.fontFamily",
-                      "& .MuiChip-label": { px: 1 },
-                    }}
-                  />
-                ))
-              : displayLabel !== "-" && (
-                  <Chip
-                    label={displayLabel}
-                    size="small"
-                    sx={{
-                      borderRadius: "16px",
-                      backgroundColor: "transparent",
-                      border: "1px solid",
-                      borderColor: "primary.main",
-                      color: "primary.main",
-                      fontFamily: "theme.typography.fontFamily",
-                      "& .MuiChip-label": { px: 1 },
-                    }}
-                  />
-                )}
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 0.5,
+            }}
+          >
+            {/* Render summary label if applicable */}{" "}
+            {displayLabel && displayLabel !== "-" && (
+              <Chip
+                label={displayLabel}
+                size="small"
+                sx={{
+                  borderRadius: "16px",
+                  backgroundColor: "transparent",
+                  border: "1px solid",
+                  borderColor: "primary.main",
+                  color: "primary.main",
+                  fontFamily: "theme.typography.fontFamily",
+                  "& .MuiChip-label": { px: 1 },
+                }}
+              />
+            )}
+            {/* Render individual chips up to MAX_CHIPS */}{" "}
+            {chipsToRender.map((market) => (
+              <Chip
+                key={market.market_code}
+                label={market.market_code} // Display market_code for brevity
+                size="small"
+                sx={{
+                  borderRadius: "16px",
+                  backgroundColor: "transparent",
+                  border: "1px solid",
+                  borderColor: "primary.main",
+                  color: "primary.main",
+                  fontFamily: "theme.typography.fontFamily",
+                  "& .MuiChip-label": { px: 1 },
+                }}
+              />
+            ))}
+            {/* Render "+ X more" if needed */}{" "}
+            {remainingCount > 0 && (
+              <Typography
+                variant="caption"
+                sx={{ ml: 0.5, color: "text.secondary" }}
+              >
+                + {remainingCount} more
+              </Typography>
+            )}
+            {/* Render '-' if no label and no chips */}{" "}
+            {!displayLabel && !showIndividualChips && numSelected === 0 && (
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                -
+              </Typography>
+            )}
           </Box>
         );
       },
@@ -647,7 +725,12 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
 
   return (
     <Box>
-      <DynamicTable data={users} columns={columns} onRowClick={handleEdit} />
+      <DynamicTable
+        data={users}
+        columns={columns}
+        onRowClick={handleEdit}
+        enableColumnFiltering
+      />
 
       <QualSidebar
         open={sidebarOpen}
@@ -774,33 +857,40 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                   )}
                 />
                 <Autocomplete
-                  options={availableDivisions}
+                  options={divisionsForAutocomplete} // Use the dynamic list
                   value={
-                    editingUser?.role === EXECUTIVE_ROLE ||
-                    editingUser?.role === CORPORATE_FINANCE_ROLE
-                      ? "WGS - All"
-                      : editingUser?.user_access?.Division || ""
+                    // Handle display for Executive and Finance/Corporate explicitly
+                    editingUser?.role === EXECUTIVE_ROLE
+                      ? CORPORATE_DIVISION_LABEL // Value is "Corporate" for Executive
+                      : editingUser?.role === FINANCE_ROLE &&
+                        editingUser?.user_access?.Division ===
+                          CORPORATE_DIVISION_LABEL
+                      ? CORPORATE_DIVISION_LABEL // Value is "Corporate"
+                      : editingUser?.user_access?.Division || "" // Actual division or empty
                   }
                   onChange={(_, newValue) =>
                     handleEditChange("Division", newValue)
                   }
+                  getOptionLabel={(option) => option} // Display option name directly
                   renderInput={(params) => (
                     <TextField
                       {...params}
                       label="Division"
                       size="small"
                       placeholder={
-                        editingUser?.role === EXECUTIVE_ROLE ||
-                        editingUser?.role === CORPORATE_FINANCE_ROLE
-                          ? "WGS - All"
+                        editingUser?.role === EXECUTIVE_ROLE
+                          ? CORPORATE_DIVISION_LABEL // Placeholder reflects the default value
                           : ""
                       }
                     />
                   )}
                   disabled={
-                    !availableDivisions.length ||
+                    // Disable if Executive role OR
+                    // if it's Finance/Distributor role and no base divisions exist
                     editingUser?.role === EXECUTIVE_ROLE ||
-                    editingUser?.role === CORPORATE_FINANCE_ROLE
+                    (!availableDivisions.length &&
+                      (editingUser?.role === FINANCE_ROLE ||
+                        editingUser?.role === MARKET_MANAGER_ROLE))
                   }
                 />
               </Stack>
@@ -830,10 +920,15 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                       label="Select Markets"
                       size="small"
                       helperText={
-                        (editingUser?.role === REGIONAL_FINANCE_ROLE ||
-                          editingUser?.role === DISTRIBUTOR_MANAGER_ROLE) &&
+                        // Updated helper text logic
+                        editingUser?.role === MARKET_MANAGER_ROLE &&
                         !editingUser?.user_access?.Division
                           ? "Select a Division to enable market selection"
+                          : editingUser?.role === FINANCE_ROLE &&
+                            (!editingUser?.user_access?.Division ||
+                              editingUser?.user_access?.Division ===
+                                CORPORATE_DIVISION_LABEL)
+                          ? 'Select a specific Division (not "Corporate") to enable market selection'
                           : ""
                       }
                     />
@@ -846,24 +941,28 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                     let chipLabel = "";
                     let showSummaryChip = false;
 
-                    if (
-                      role === EXECUTIVE_ROLE ||
-                      role === CORPORATE_FINANCE_ROLE
-                    ) {
-                      if (
-                        numSelected === allMarkets.length &&
-                        allMarkets.length > 0
-                      ) {
-                        chipLabel = "WGS - All";
+                    if (role === EXECUTIVE_ROLE) {
+                      chipLabel = WGS_ALL_LABEL;
+                      showSummaryChip = true;
+                    } else if (role === FINANCE_ROLE) {
+                      if (division === CORPORATE_DIVISION_LABEL) {
+                        chipLabel = WGS_ALL_LABEL;
                         showSummaryChip = true;
+                      } else if (division) {
+                        const marketsForDivision =
+                          getMarketOptionsForDivision(division);
+                        if (
+                          numSelected === marketsForDivision.length &&
+                          marketsForDivision.length > 0
+                        ) {
+                          chipLabel = `${division} - All`;
+                          showSummaryChip = true;
+                        }
                       }
-                    } else if (
-                      division &&
-                      (role === REGIONAL_FINANCE_ROLE ||
-                        role === DISTRIBUTOR_MANAGER_ROLE)
-                    ) {
+                    } else if (role === MARKET_MANAGER_ROLE && division) {
                       const marketsForDivision =
                         getMarketOptionsForDivision(division);
+                      // Show summary chip only if ALL markets for the division are selected
                       if (
                         numSelected === marketsForDivision.length &&
                         marketsForDivision.length > 0
@@ -914,9 +1013,16 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                     }
                   }}
                   disabled={
+                    // Disable market selection for Executive,
+                    // for Finance if Corporate or no division is selected,
+                    // and for Distributor Manager if no division is selected.
                     !marketsByDivision ||
-                    ((editingUser?.role === REGIONAL_FINANCE_ROLE ||
-                      editingUser?.role === DISTRIBUTOR_MANAGER_ROLE) &&
+                    editingUser?.role === EXECUTIVE_ROLE ||
+                    (editingUser?.role === FINANCE_ROLE &&
+                      (!editingUser?.user_access?.Division ||
+                        editingUser?.user_access?.Division ===
+                          CORPORATE_DIVISION_LABEL)) ||
+                    (editingUser?.role === MARKET_MANAGER_ROLE &&
                       !editingUser?.user_access?.Division)
                   }
                 />

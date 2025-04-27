@@ -132,6 +132,7 @@ export const MarketMaster = () => {
       width: 250,
       render: (value) => value,
       sortable: true,
+      filterable: true,
     },
     {
       key: "market_code",
@@ -139,6 +140,7 @@ export const MarketMaster = () => {
       width: 150,
       render: (value) => value,
       sortable: true,
+      filterable: true,
     },
     {
       key: "market_coding",
@@ -146,6 +148,7 @@ export const MarketMaster = () => {
       width: 150,
       render: (value) => value,
       sortable: true,
+      filterable: true,
     },
     {
       key: "market_id",
@@ -153,6 +156,7 @@ export const MarketMaster = () => {
       width: 180,
       render: (value) => value,
       sortable: true,
+      filterable: true,
     },
     {
       key: "settings.managed_by",
@@ -160,6 +164,7 @@ export const MarketMaster = () => {
       width: 150,
       render: (_value, row) => row.settings?.managed_by || "Not Set",
       sortable: true,
+      filterable: true,
       sortAccessor: (row) => row.settings?.managed_by,
     },
   ];
@@ -182,6 +187,7 @@ export const MarketMaster = () => {
           setSelectedMarket(row);
           setSidebarOpen(true);
         }}
+        enableColumnFiltering
       />
 
       <QualSidebar

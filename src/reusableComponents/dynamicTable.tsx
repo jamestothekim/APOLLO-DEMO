@@ -279,8 +279,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
           bValue = b[sortConfig.key];
         }
 
-        console.log(`  Comparing:`, { aValue, bValue });
-
         const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
 
         if (aValue == null && bValue == null) return 0;

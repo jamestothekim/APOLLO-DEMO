@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Box, Typography, Stack, Autocomplete, TextField } from "@mui/material";
+import { Box, Typography, Stack } from "@mui/material";
 import axios from "axios";
 import { DynamicTable, Column } from "../../reusableComponents/dynamicTable";
 import QualSidebar from "../../reusableComponents/qualSidebar";
@@ -21,9 +21,6 @@ export const RateMaster = () => {
   const [selectedRate, setSelectedRate] = useState<RateData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [selectedMarket, setSelectedMarket] = useState<string | null>(null);
-  const [selectedSizePack, setSelectedSizePack] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -38,11 +35,13 @@ export const RateMaster = () => {
           }
         );
 
-        // Add unique IDs to each row
-        const dataWithIds = response.data.map((row: RateData) => ({
-          ...row,
-          id: `${row.market_code}-${row.customer_id}-${row.variant_size_pack_id}`,
-        }));
+        // Add unique IDs using index to avoid duplicates
+        const dataWithIds = response.data.map(
+          (row: RateData, index: number) => ({
+            ...row,
+            id: `${row.market_code}-${row.customer_id}-${row.variant_size_pack_id}-${index}`,
+          })
+        );
 
         setData(dataWithIds);
       } catch (error) {
@@ -54,29 +53,6 @@ export const RateMaster = () => {
 
     fetchData();
   }, []);
-
-  // Get unique markets for the filter
-  const uniqueMarkets = Array.from(
-    new Set(data.filter((item) => item.hp_market).map((item) => item.hp_market))
-  ).sort((a, b) => a.localeCompare(b));
-
-  // Get unique size packs for the filter
-  const uniqueSizePacks = Array.from(
-    new Set(
-      data.filter((item) => item.hp_size_pack).map((item) => item.hp_size_pack)
-    )
-  ).sort((a, b) => a.localeCompare(b));
-
-  // Apply filters to the data
-  const filteredData = data.filter((item) => {
-    const marketMatch = selectedMarket
-      ? item.hp_market === selectedMarket
-      : true;
-    const sizePackMatch = selectedSizePack
-      ? item.hp_size_pack === selectedSizePack
-      : true;
-    return marketMatch && sizePackMatch;
-  });
 
   const handleRowClick = (row: RateData) => {
     setSelectedRate(row);
@@ -96,6 +72,7 @@ export const RateMaster = () => {
       render: (value) =>
         value !== null && value !== undefined ? String(value) : "",
       sortable: true,
+      filterable: true,
     },
     {
       key: "hp_size_pack",
@@ -104,6 +81,7 @@ export const RateMaster = () => {
       render: (value) =>
         value !== null && value !== undefined ? String(value) : "",
       sortable: true,
+      filterable: true,
     },
     {
       key: "variant_size_pack_id",
@@ -111,7 +89,7 @@ export const RateMaster = () => {
       width: 180,
       render: (value) =>
         value !== null && value !== undefined ? String(value) : "",
-      sortable: false,
+      sortable: true,
     },
     {
       key: "gsv_rate",
@@ -141,61 +119,14 @@ export const RateMaster = () => {
 
   return (
     <Box sx={{ position: "relative", width: "100%", height: "100%" }}>
-      <Box
-        sx={{ mb: 2, display: "flex", gap: 2, justifyContent: "flex-start" }}
-      >
-        <Autocomplete
-          options={uniqueMarkets}
-          value={selectedMarket}
-          onChange={(_event, newValue) => {
-            setSelectedMarket(newValue);
-            setPage(0);
-          }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Filter by Market"
-              size="small"
-              sx={{ width: 250 }}
-            />
-          )}
-          clearOnBlur={false}
-          freeSolo={false}
-          loading={data.length === 0}
-          getOptionLabel={(option) => option || ""}
-        />
-
-        <Autocomplete
-          options={uniqueSizePacks}
-          value={selectedSizePack}
-          onChange={(_event, newValue) => {
-            setSelectedSizePack(newValue);
-            setPage(0);
-          }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Filter by Size Pack"
-              size="small"
-              sx={{ width: 350 }}
-            />
-          )}
-          clearOnBlur={false}
-          freeSolo={false}
-          loading={data.length === 0}
-          getOptionLabel={(option) => option || ""}
-        />
-      </Box>
-
       <DynamicTable
-        data={filteredData}
+        data={data}
         columns={columns}
         getRowId={(row) => row.id}
         onRowClick={handleRowClick}
         rowsPerPageOptions={[25, 50, 100]}
         defaultRowsPerPage={50}
-        page={page}
-        onPageChange={(_event, newPage) => setPage(newPage)}
+        enableColumnFiltering
       />
 
       <QualSidebar

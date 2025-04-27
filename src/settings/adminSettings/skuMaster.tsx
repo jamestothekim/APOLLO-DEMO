@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Box,
-  TextField,
-  Stack,
-  Typography,
-  Chip,
-  Autocomplete,
-} from "@mui/material";
+import { Box, TextField, Stack, Typography, Chip } from "@mui/material";
 import axios from "axios";
 import { DynamicTable, Column } from "../../reusableComponents/dynamicTable";
 import QualSidebar from "../../reusableComponents/qualSidebar";
@@ -49,9 +42,7 @@ export const SKUMaster = () => {
   const [data, setData] = useState<SKUData[]>([]);
   const [selectedSKU, setSelectedSKU] = useState<SKUData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -76,13 +67,6 @@ export const SKUMaster = () => {
     fetchData();
   }, []);
 
-  // Get unique brands for the filter, sorted in descending order
-  const uniqueBrands = Array.from(
-    new Set(data.filter((item) => item.brand).map((item) => item.brand))
-  ).sort((a, b) => {
-    if (!a || !b) return 0;
-    return b.localeCompare(a);
-  });
   // Group data by variant_size_pack_desc and get unique entries
   // Only include groups that have at least one active SKU
   const groupedData = data.reduce((acc: SKUData[], curr) => {
@@ -105,11 +89,6 @@ export const SKUMaster = () => {
     }
     return acc;
   }, []);
-
-  // Filter grouped data by selected brand
-  const filteredData = selectedBrand
-    ? groupedData.filter((item) => item.brand === selectedBrand)
-    : groupedData;
 
   // Get active and inactive SKUs for the selected variant
   const getSKUsByStatus = (status: string) => {
@@ -176,6 +155,7 @@ export const SKUMaster = () => {
       width: 180,
       render: (value) => value,
       sortable: true,
+      filterable: true,
     },
     {
       key: "variant",
@@ -183,6 +163,7 @@ export const SKUMaster = () => {
       width: 220,
       render: (value) => value,
       sortable: true,
+      filterable: true,
     },
     {
       key: "variant_size_pack_desc",
@@ -190,6 +171,7 @@ export const SKUMaster = () => {
       width: 200,
       render: (value) => value,
       sortable: true,
+      filterable: true,
     },
     {
       key: "active_hyperion",
@@ -247,31 +229,8 @@ export const SKUMaster = () => {
         <LoadingProgress onComplete={() => setLoading(false)} />
       ) : (
         <>
-          <Box sx={{ mb: 2, display: "flex", justifyContent: "flex-start" }}>
-            <Autocomplete
-              options={uniqueBrands}
-              value={selectedBrand}
-              onChange={(_event, newValue) => {
-                setSelectedBrand(newValue);
-                setPage(0);
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Filter by Brand"
-                  size="small"
-                  sx={{ width: 200 }}
-                />
-              )}
-              clearOnBlur={false}
-              freeSolo={false}
-              loading={data.length === 0}
-              getOptionLabel={(option) => option || ""}
-            />
-          </Box>
-
           <DynamicTable
-            data={filteredData}
+            data={groupedData}
             columns={columns}
             getRowId={(row) => row.variant_size_pack_id}
             defaultRowsPerPage={20}
@@ -280,8 +239,7 @@ export const SKUMaster = () => {
               setSelectedSKU(row);
               setSidebarOpen(true);
             }}
-            page={page}
-            onPageChange={(_event, newPage) => setPage(newPage)}
+            enableColumnFiltering
           />
 
           <QualSidebar
