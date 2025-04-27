@@ -305,7 +305,12 @@ export const exportToCSV = (
     });
 
     // Combine all headers for CSV
-    const headerRow = [...baseHeaders, ...guidanceHeaders, ...monthHeaders];
+    const headerRow = [
+      ...baseHeaders,
+      ...guidanceHeaders,
+      ...monthHeaders,
+      "Commentary",
+    ];
 
     // Format each data row with proper formatting
     dataRows = data.map((item) => {
@@ -374,7 +379,12 @@ export const exportToCSV = (
       });
 
       // Combine all columns for this row
-      return [...baseColumns, ...guidanceColumns, ...monthValues];
+      return [
+        ...baseColumns,
+        ...guidanceColumns,
+        ...monthValues,
+        item.commentary || "",
+      ];
     });
 
     // Convert rows to CSV format, properly handling commas and quotes
