@@ -143,9 +143,9 @@ export const NavigationAppBar = ({
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mr: 1 }}>
           <img
-            src="https://apollo-s3-media.s3.us-east-1.amazonaws.com/client_logos/WGS.png"
+            src="https://apollo-s3-media.s3.us-east-1.amazonaws.com/client_logos/WGLogo.png"
             alt="Client Logo"
-            style={{ height: "34px", display: "block" }}
+            style={{ height: "20px", display: "block" }}
           />
           {user && (
             <IconButton
