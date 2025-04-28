@@ -24,6 +24,12 @@ export interface RawDepletionForecastItem {
     is_manual_input?: boolean;
     // Include other potential fields from the API response if necessary
     // Example: id, market_name, customer_name (if consistently provided)
+    cy_3m_case_equivalent_volume?: number;
+    cy_6m_case_equivalent_volume?: number;
+    cy_12m_case_equivalent_volume?: number;
+    py_3m_case_equivalent_volume?: number;
+    py_6m_case_equivalent_volume?: number;
+    py_12m_case_equivalent_volume?: number;
     [key: string]: any; // Allow other properties
 }
 
@@ -53,16 +59,25 @@ const initialState: DepletionsState = {
     customerLastActualMonthIndex: -1, // Initialize if storing
 };
 
+// Helper function to determine the default reporting year
+const getCurrentReportingYear = (): string => {
+    // Currently returns the calendar year
+    // TODO: Adapt this function for fiscal year logic based on client/settings if needed on frontend
+    return new Date().getFullYear().toString();
+  };
+
 // --- Async Thunk for Fetching Depletions Data ---
 // Naming: 'fetchVolumeData' implies it's the core data source for the volume view.
 export const fetchVolumeData = createAsyncThunk<
     { rawData: RawDepletionForecastItem[], lastActualMonthIndex: number }, // Return type of the payload creator
-    { markets: string[] | null; brands: string[] | null, isCustomerView: boolean }, // Argument type for the payload creator
+    { markets: string[] | null; brands: string[] | null, isCustomerView: boolean, year?: string }, // Argument type: Add optional year
     { rejectValue: string, state: RootState } // Include RootState for potential future logic
 >(
     'volume/fetchData', // Slice name convention: feature/actionName
-    async ({ markets, brands, isCustomerView }, { rejectWithValue }) => {
+    async ({ markets, brands, isCustomerView, year }, { rejectWithValue }) => { // Add year to args
 
+        // Get current year if not provided, using the utility function
+        const targetYear = year || getCurrentReportingYear();
 
         try {
             const token = localStorage.getItem("token");
@@ -82,6 +97,7 @@ export const fetchVolumeData = createAsyncThunk<
                 isMarketView: !isCustomerView,
                 markets: marketsParam,
                 customers: customersParam,
+                year: targetYear, // Send the year param
                 // Only include 'brands' param if not null
                 ...(brandsParam && { brands: brandsParam }),
             };

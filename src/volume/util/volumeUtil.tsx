@@ -455,6 +455,9 @@ export interface GuidanceValue {
   numerator?: string;
   denominator?: string;
   expression?: string;
+  // Add fields for rolling growth calculation
+  cyField?: string;
+  pyField?: string;
 }
 
 export interface Guidance {
@@ -464,6 +467,41 @@ export interface Guidance {
   value: string | GuidanceValue;
   calculation: GuidanceCalculation;
 }
+
+// Add definitions for Rolling Growth Rate Guidance
+export const ROLLING_GROWTH_GUIDANCE: Guidance[] = [
+  {
+    id: 101, // Assign unique IDs
+    label: "3M Vol Growth",
+    sublabel: "vs LY",
+    value: {
+      // Use object structure for clarity
+      cyField: "cy_3m_case_equivalent_volume",
+      pyField: "py_3m_case_equivalent_volume",
+    },
+    calculation: { type: "percentage", format: "percent" },
+  },
+  {
+    id: 102,
+    label: "6M Vol Growth",
+    sublabel: "vs LY",
+    value: {
+      cyField: "cy_6m_case_equivalent_volume",
+      pyField: "py_6m_case_equivalent_volume",
+    },
+    calculation: { type: "percentage", format: "percent" },
+  },
+  {
+    id: 103,
+    label: "12M Vol Growth",
+    sublabel: "vs LY",
+    value: {
+      cyField: "cy_12m_case_equivalent_volume",
+      pyField: "py_12m_case_equivalent_volume",
+    },
+    calculation: { type: "percentage", format: "percent" },
+  },
+];
 
 export const processGuidanceValue = (
   data: any[],
@@ -655,6 +693,18 @@ export const recalculateGuidance = (
 
         // Calculate the percentage, avoiding division by zero
         const result = denominator === 0 ? 0 : numerator / denominator;
+        updatedRow[`guidance_${guidance.id}`] = result;
+      }
+      // Add logic for Rolling Growth Rates
+      else if (
+        guidance.calculation.type === "percentage" &&
+        typeof guidance.value === "object" &&
+        guidance.value.cyField &&
+        guidance.value.pyField
+      ) {
+        const cyValue = Number(updatedRow[guidance.value.cyField]) || 0;
+        const pyValue = Number(updatedRow[guidance.value.pyField]) || 0;
+        const result = pyValue === 0 ? 0 : (cyValue - pyValue) / pyValue;
         updatedRow[`guidance_${guidance.id}`] = result;
       }
     }

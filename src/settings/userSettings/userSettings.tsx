@@ -26,7 +26,8 @@ interface UserDataType {
   zip: string;
   role: string;
   division: string | undefined;
-  markets: string[];
+  markets: string[]; // Original market list
+  displayMarkets: string[]; // Markets formatted for display
   [key: string]: string | string[] | undefined; // Index signature for dynamic access
 }
 
@@ -45,20 +46,38 @@ export const UserSettings = () => {
 
   const userData = useMemo<UserDataType>(() => {
     if (!user) return {} as UserDataType;
+
+    // Construct fullAddress, filtering out empty parts
+    const addressParts = [user.address, user.city, user.state_code].filter(
+      (part) => part && part.trim() !== ""
+    );
+    let fullAddress = addressParts.join(", ");
+    if (user.zip && user.zip.trim() !== "") {
+      fullAddress = fullAddress ? `${fullAddress} ${user.zip}` : user.zip;
+    }
+
+    // Prepare markets for display (show 4 chips max before '+ X more')
+    const allMarkets = user.user_access.Markets
+      ? user.user_access.Markets.map((market) => market.market_code)
+      : [];
+    const displayMarkets =
+      allMarkets.length > 4
+        ? [...allMarkets.slice(0, 4), `+ ${allMarkets.length - 4} more`]
+        : allMarkets;
+
     return {
       name: `${user.first_name} ${user.last_name}`,
       email: user.email,
       password: "********", // Static value for display
-      fullAddress: `${user.address}, ${user.city}, ${user.state_code} ${user.zip}`,
-      address: user.address,
-      city: user.city,
-      state_code: user.state_code,
-      zip: user.zip,
+      fullAddress: fullAddress, // Use the constructed fullAddress
+      address: user.address || "", // Default to empty string if null/undefined
+      city: user.city || "",
+      state_code: user.state_code || "",
+      zip: user.zip || "",
       role: user.role,
-      division: user.user_access.Division,
-      markets: user.user_access.Markets
-        ? user.user_access.Markets.map((market) => market.market_code)
-        : [],
+      division: user.user_access.Division || "", // Default to empty string
+      markets: allMarkets, // Keep the original list
+      displayMarkets: displayMarkets, // Use this for the DynamicForm
     };
   }, [user]);
 
@@ -112,7 +131,7 @@ export const UserSettings = () => {
       editable: false,
     },
     {
-      name: "markets",
+      name: "displayMarkets",
       label: "Markets",
       fieldType: "chip",
       editable: false,

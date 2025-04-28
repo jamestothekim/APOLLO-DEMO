@@ -58,6 +58,7 @@ import {
   SIDEBAR_GUIDANCE_OPTIONS,
   getGuidanceDataForSidebar,
   calculateRowGuidanceMonthlyData,
+  ROLLING_GROWTH_GUIDANCE,
 } from "../util/volumeUtil";
 import {
   Save as SaveIcon,
@@ -86,6 +87,12 @@ export interface ExtendedForecastData {
   py_gross_sales_value?: number;
   gross_sales_value?: number;
   case_equivalent_volume?: number;
+  cy_3m_case_equivalent_volume?: number;
+  cy_6m_case_equivalent_volume?: number;
+  cy_12m_case_equivalent_volume?: number;
+  py_3m_case_equivalent_volume?: number;
+  py_6m_case_equivalent_volume?: number;
+  py_12m_case_equivalent_volume?: number;
   months: {
     [key: string]: {
       value: number;
@@ -181,6 +188,13 @@ const processRawData = (
         gross_sales_value: 0,
         py_gross_sales_value: 0,
         py_case_equivalent_volume: 0,
+        // Initialize new rolling volumes to zero
+        cy_3m_case_equivalent_volume: 0,
+        cy_6m_case_equivalent_volume: 0,
+        cy_12m_case_equivalent_volume: 0,
+        py_3m_case_equivalent_volume: 0,
+        py_6m_case_equivalent_volume: 0,
+        py_12m_case_equivalent_volume: 0,
       };
 
       // Initialize all months with proper actual status
@@ -247,6 +261,32 @@ const processRawData = (
     if (item.py_case_equivalent_volume !== undefined) {
       acc[key].py_case_equivalent_volume +=
         Number(item.py_case_equivalent_volume) || 0;
+    }
+
+    // Sum up new rolling volumes
+    if (item.cy_3m_case_equivalent_volume !== undefined) {
+      acc[key].cy_3m_case_equivalent_volume +=
+        Number(item.cy_3m_case_equivalent_volume) || 0;
+    }
+    if (item.cy_6m_case_equivalent_volume !== undefined) {
+      acc[key].cy_6m_case_equivalent_volume +=
+        Number(item.cy_6m_case_equivalent_volume) || 0;
+    }
+    if (item.cy_12m_case_equivalent_volume !== undefined) {
+      acc[key].cy_12m_case_equivalent_volume +=
+        Number(item.cy_12m_case_equivalent_volume) || 0;
+    }
+    if (item.py_3m_case_equivalent_volume !== undefined) {
+      acc[key].py_3m_case_equivalent_volume +=
+        Number(item.py_3m_case_equivalent_volume) || 0;
+    }
+    if (item.py_6m_case_equivalent_volume !== undefined) {
+      acc[key].py_6m_case_equivalent_volume +=
+        Number(item.py_6m_case_equivalent_volume) || 0;
+    }
+    if (item.py_12m_case_equivalent_volume !== undefined) {
+      acc[key].py_12m_case_equivalent_volume +=
+        Number(item.py_12m_case_equivalent_volume) || 0;
     }
 
     return acc;
@@ -1565,6 +1605,56 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           );
           const nonZeroData = processed.filter(hasNonZeroTotal);
           setForecastData(nonZeroData);
+
+          // --- START: Temporary Log Growth Rates using recalculateGuidance --- //
+          console.log(
+            "--- Verifying Rolling Growth Calculations (First 5 Rows) ---"
+          );
+          nonZeroData.slice(0, 5).forEach((row, index) => {
+            // Call the utility function to get the row with calculated guidance
+            const rowWithCalculatedGrowth = recalculateGuidance(
+              row,
+              ROLLING_GROWTH_GUIDANCE
+            );
+
+            // Extract the calculated growth rates (formatted)
+            const formatGrowth = (value: number | undefined): string => {
+              if (value === undefined || isNaN(value)) return "N/A";
+              return (value * 100).toFixed(1) + "%";
+            };
+
+            const growth3m = formatGrowth(
+              rowWithCalculatedGrowth["guidance_101"]
+            );
+            const growth6m = formatGrowth(
+              rowWithCalculatedGrowth["guidance_102"]
+            );
+            const growth12m = formatGrowth(
+              rowWithCalculatedGrowth["guidance_103"]
+            );
+
+            console.log(
+              `Row ${index + 1} (${row.market_name || row.customer_name} - ${
+                row.product
+              }):`
+            );
+            console.log(
+              `  Input -> 3M (CY: ${row.cy_3m_case_equivalent_volume}, PY: ${row.py_3m_case_equivalent_volume})`
+            );
+            console.log(`  Output -> 3M Growth [guidance_101]: ${growth3m}`);
+            console.log(
+              `  Input -> 6M (CY: ${row.cy_6m_case_equivalent_volume}, PY: ${row.py_6m_case_equivalent_volume})`
+            );
+            console.log(`  Output -> 6M Growth [guidance_102]: ${growth6m}`);
+            console.log(
+              `  Input -> 12M (CY: ${row.cy_12m_case_equivalent_volume}, PY: ${row.py_12m_case_equivalent_volume})`
+            );
+            console.log(`  Output -> 12M Growth [guidance_103]: ${growth12m}`);
+          });
+          console.log(
+            "-------------------------------------------------------------"
+          );
+          // --- END: Temporary Log Growth Rates --- //
 
           // Update available brands based on the processed data
           const brands = Array.from(

@@ -632,7 +632,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         // Fallback if numSelected is 0, displayLabel remains "-"
 
         // Determine chips to render
-        const MAX_CHIPS = 5;
+        const MAX_CHIPS = 4;
         const chipsToRender = showIndividualChips
           ? selectedMarkets.slice(0, MAX_CHIPS)
           : [];
@@ -684,12 +684,20 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
             ))}
             {/* Render "+ X more" if needed */}{" "}
             {remainingCount > 0 && (
-              <Typography
-                variant="caption"
-                sx={{ ml: 0.5, color: "text.secondary" }}
-              >
-                + {remainingCount} more
-              </Typography>
+              <Chip
+                label={`+ ${remainingCount} more`}
+                size="small"
+                sx={{
+                  ml: 0.5,
+                  borderRadius: "16px",
+                  backgroundColor: "transparent",
+                  border: "1px solid",
+                  borderColor: "primary.main",
+                  color: "primary.main",
+                  fontFamily: "theme.typography.fontFamily",
+                  "& .MuiChip-label": { px: 1 },
+                }}
+              />
             )}
             {/* Render '-' if no label and no chips */}{" "}
             {!displayLabel && !showIndividualChips && numSelected === 0 && (

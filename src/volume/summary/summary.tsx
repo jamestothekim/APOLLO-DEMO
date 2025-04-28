@@ -455,18 +455,6 @@ export const Summary = ({
       );
 
       setGuidanceResults(calculatedResults);
-
-      console.log("--- Brand Level Guidance Calculation Results ---");
-      brandAggsMap.forEach((brandData, brandKey) => {
-        const brandAggregateKey = `brand:${brandKey}`;
-        if (calculatedResults[brandAggregateKey]) {
-          console.log(
-            `${brandData.brand} (${brandAggregateKey}):`,
-            calculatedResults[brandAggregateKey]
-          );
-        }
-      });
-      console.log("--------------------------------------------------");
     } else {
       setGuidanceResults({});
     }
