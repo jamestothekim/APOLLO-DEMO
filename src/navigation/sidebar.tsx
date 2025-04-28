@@ -5,12 +5,15 @@ import {
   ListItemIcon,
   ListItemText,
   Toolbar,
+  Box,
 } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import SettingsIcon from "@mui/icons-material/Settings";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import LogoutIcon from "@mui/icons-material/Logout";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "../userContext";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -20,6 +23,7 @@ interface SidebarProps {
 
 export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
   const navigate = useNavigate();
+  const { logout } = useUser();
 
   const navigationItems = [
     { text: "Dashboard", icon: <DashboardIcon />, path: "/" },
@@ -31,6 +35,14 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
     { text: "Volume", icon: <ShowChartIcon />, path: "/volume" },
     { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Error during sidebar logout process:", error);
+    }
+  };
 
   return (
     <Drawer
@@ -50,15 +62,30 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
         },
       }}
     >
-      <Toolbar />
-      <List>
-        {navigationItems.map((item) => (
-          <ListItem button key={item.text} onClick={() => navigate(item.path)}>
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
+      <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <Toolbar />
+        <List>
+          {navigationItems.map((item) => (
+            <ListItem
+              button
+              key={item.text}
+              onClick={() => navigate(item.path)}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItem>
+          ))}
+        </List>
+        <Box sx={{ flexGrow: 1 }} />
+        <List>
+          <ListItem button key="logout" onClick={handleLogout}>
+            <ListItemIcon>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="Log Out" />
           </ListItem>
-        ))}
-      </List>
+        </List>
+      </Box>
     </Drawer>
   );
 };

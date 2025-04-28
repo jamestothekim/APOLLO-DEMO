@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   TextField,
-  Typography,
   Container,
   Paper,
   InputAdornment,
@@ -150,28 +149,15 @@ export const Login: React.FC = () => {
             transformOrigin: "center",
           }}
         >
-          <Typography
-            component="h1"
-            variant="h5"
-            sx={{
-              mb: 2,
-              color: theme.palette.primary.main,
-              fontWeight: "bold",
+          <img
+            src="https://apollo-s3-media.s3.amazonaws.com/logo/APOLLO.png"
+            alt="APOLLO Logo"
+            style={{
+              height: "100px", // Adjust height as needed
+              width: "auto", // Maintain aspect ratio
+              marginBottom: theme.spacing(2),
             }}
-          >
-            APOLLO
-          </Typography>
-
-          <Typography
-            component="h2"
-            variant="h6"
-            sx={{
-              mb: 2,
-              color: theme.palette.text.primary,
-            }}
-          >
-            Sign In
-          </Typography>
+          />
 
           <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
             <TextField
@@ -269,6 +255,7 @@ export const Login: React.FC = () => {
                   backgroundColor: theme.palette.primary.dark,
                 },
                 fontWeight: "bold",
+                fontSize: ".85em",
               }}
             >
               {isLoading ? "Signing In..." : "Sign In"}

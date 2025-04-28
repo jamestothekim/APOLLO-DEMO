@@ -44,7 +44,10 @@ const AppLayout = () => {
   // Otherwise render the full app layout with navigation
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
-      <NavigationAppBar toggleSidebar={toggleSidebar} />
+      <NavigationAppBar
+        toggleSidebar={toggleSidebar}
+        isSidebarOpen={sidebarOpen}
+      />
       <Sidebar
         isOpen={sidebarOpen}
         drawerWidth={drawerWidth}
