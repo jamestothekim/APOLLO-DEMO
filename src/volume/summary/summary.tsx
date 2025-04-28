@@ -348,40 +348,76 @@ export const Summary = ({
   }, [lastSyncTrigger, dispatch]);
 
   useEffect(() => {
-    if (
-      depletionsStatus !== "succeeded" ||
-      customerDepletionsStatus !== "succeeded" ||
-      !rawVolumeData ||
-      !customerRawVolumeData
-    ) {
+    // Determine required data sources based on marketData
+    const requiresMarketData = marketData.some(
+      (m) => m.settings?.managed_by === "Market"
+    );
+    const requiresCustomerData = marketData.some(
+      (m) => m.settings?.managed_by === "Customer"
+    );
+
+    // Check status and data presence for each required source
+    const marketDataSucceeded =
+      depletionsStatus === "succeeded" && rawVolumeData;
+    const customerDataSucceeded =
+      customerDepletionsStatus === "succeeded" && customerRawVolumeData;
+
+    // Determine if all necessary data is ready
+    const marketDataReady = !requiresMarketData || marketDataSucceeded;
+    const customerDataReady = !requiresCustomerData || customerDataSucceeded;
+
+    // Check if we are still loading necessary data
+    const isLoadingMarket =
+      requiresMarketData && depletionsStatus === "loading";
+    const isLoadingCustomer =
+      requiresCustomerData && customerDepletionsStatus === "loading";
+
+    if (isLoadingMarket || isLoadingCustomer) {
+      // Still loading necessary data, reflect this in local status and wait
+      setLocalCalcStatus("calculating"); // Show loading state
+      setVariantAggregateData([]);
+      setBrandLevelAggregates(new Map());
+      setLastActualMonthIndex(-1);
+      setGuidanceResults({});
+      return; // Wait for data
+    }
+
+    // Check if required data fetching failed or is not ready yet (e.g., 'idle' or 'failed')
+    if (!marketDataReady || !customerDataReady) {
+      // Necessary data isn't ready (failed or idle), clear and reset status
       setVariantAggregateData([]);
       setBrandLevelAggregates(new Map());
       setLastActualMonthIndex(-1);
       setGuidanceResults({});
       setLocalCalcStatus("idle");
-      return;
+      return; // Cannot proceed
     }
+
+    // --- If we reach here, all necessary data has succeeded ---
 
     // --- Filter raw data based on selectedMarkets ---
     const filteredRawVolumeData =
       selectedMarkets.length === 0
         ? rawVolumeData // No filter applied
-        : rawVolumeData.filter((item) =>
-            selectedMarkets.includes(item.market_id)
+        : (rawVolumeData || []).filter(
+            (
+              item // Add null check for safety
+            ) => selectedMarkets.includes(item.market_id)
           );
 
     // Customer data needs mapping back to market ID for filtering
     const filteredCustomerRawVolumeData =
       selectedMarkets.length === 0
         ? customerRawVolumeData // No filter applied
-        : customerRawVolumeData.filter((item) => {
+        : (customerRawVolumeData || []).filter((item) => {
+            // Add null check for safety
             if (!item.customer_id) return false;
             const marketId = customerToMarketMap.get(item.customer_id); // Use the map created above
             return marketId ? selectedMarkets.includes(marketId) : false;
           });
     // --- End Filtering raw data ---
 
-    setLocalCalcStatus("calculating");
+    setLocalCalcStatus("calculating"); // Start the aggregation calculation
 
     let pendingChangesMap = new Map<string, RestoredState>();
     if (pendingChangesStatus === "succeeded") {

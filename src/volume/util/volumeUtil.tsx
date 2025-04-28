@@ -1512,9 +1512,10 @@ export const calculateTotalGuidance = (
     // Add to monthly totals
     MONTH_NAMES.forEach((month) => {
       totalMonths_ty[month] =
-        (totalMonths_ty[month] || 0) + (brandAgg.months_ty?.[month] || 0);
+        (totalMonths_ty[month] || 0) + (brandAgg.months?.[month] || 0);
       totalMonths_py[month] =
-        (totalMonths_py[month] || 0) + (brandAgg.months_py?.[month] || 0);
+        (totalMonths_py[month] || 0) +
+        (brandAgg.months_py_volume?.[month] || 0);
       totalMonths_gsv_ty[month] =
         (totalMonths_gsv_ty[month] || 0) +
         (brandAgg.months_gsv_ty?.[month] || 0);
