@@ -142,210 +142,170 @@ const processRawData = (
   isCustomerView: boolean,
   selectedGuidance?: Guidance[]
 ): ExtendedForecastData[] => {
-  // First identify all actual months from the data
-  const actualMonths = new Set<(typeof MONTH_NAMES)[number]>();
-  let hasAnyActuals = false;
-  data.forEach((item) => {
-    if (item?.data_type?.includes("actual")) {
-      hasAnyActuals = true;
-      const monthName = MONTH_NAMES[item.month - 1];
-      if (monthName) {
-        actualMonths.add(monthName);
-      }
-    }
-  });
-
-  // Find the last actual month index
-  const lastActualMonthIndex =
-    hasAnyActuals && actualMonths.size > 0
-      ? Math.max(...Array.from(actualMonths).map((m) => MONTH_NAMES.indexOf(m)))
-      : -1;
-
-  // Group data by market/customer and variant_size_pack_id combination
-  const groupedData = data.reduce((acc: { [key: string]: any }, item: any) => {
-    // Construct the key consistently with how it's done in Redis
+  // Create a map to easily access all raw items for a given key
+  const rawItemsByKey = data.reduce((map, item) => {
     const key = isCustomerView
       ? `forecast:${item.customer_id}:${item.variant_size_pack_desc}:${item.customer_id}`
       : `forecast:${item.market_id}:${item.variant_size_pack_desc}`;
-
-    if (!acc[key]) {
-      acc[key] = {
-        id: key, // Use the same key format as Redis
-        market_id: item.market_id,
-        market_name: item.market,
-        customer_id: item.customer_id,
-        customer_name: item.customer,
-        product: item.variant_size_pack_desc,
-        brand: item.brand,
-        variant: item.variant,
-        variant_id: item.variant_id,
-        variant_size_pack_id: item.variant_size_pack_id,
-        variant_size_pack_desc: item.variant_size_pack_desc,
-        forecastLogic: item.forecast_method || "flat",
-        months: {},
-        py_case_equivalent_volume_months: {},
-        // Initialize GSV values to zero
-        gross_sales_value: 0,
-        py_gross_sales_value: 0,
-        py_case_equivalent_volume: 0,
-        // Initialize new rolling volumes to zero
-        cy_3m_case_equivalent_volume: 0,
-        cy_6m_case_equivalent_volume: 0,
-        cy_12m_case_equivalent_volume: 0,
-        py_3m_case_equivalent_volume: 0,
-        py_6m_case_equivalent_volume: 0,
-        py_12m_case_equivalent_volume: 0,
-      };
-
-      // Initialize all months with proper actual status
-      MONTH_NAMES.forEach((month, index) => {
-        const shouldBeActual = hasAnyActuals && index <= lastActualMonthIndex;
-        acc[key].months[month] = {
-          value: 0,
-          isActual: shouldBeActual,
-          isManuallyModified: false, // Initial state is false
-          data_type: shouldBeActual ? "actual_complete" : "forecast",
-        };
-      });
+    if (!map.has(key)) {
+      map.set(key, []);
     }
+    map.get(key)!.push(item); // Use non-null assertion as we just set it
+    return map;
+  }, new Map<string, any[]>());
 
-    // Process month data as it comes in
-    const monthName = MONTH_NAMES[item.month - 1];
-    if (monthName) {
-      const isActual = Boolean(item.data_type?.includes("actual"));
-      const isManualInputFromDB = Boolean(item.is_manual_input);
+  const finalAggregatedData: { [key: string]: ExtendedForecastData } = {};
 
-      // Process current year data
-      if (acc[key].months[monthName]) {
-        // If month exists, add value and update manual status if this item is manual
-        acc[key].months[monthName].value +=
-          Math.round(item.case_equivalent_volume * 100) / 100;
-        // Set isManuallyModified to true if it's already true OR if the current DB item is manual
-        acc[key].months[monthName].isManuallyModified =
-          acc[key].months[monthName].isManuallyModified || isManualInputFromDB;
-      } else {
-        // If month doesn't exist, create it, setting manual status from DB item
-        acc[key].months[monthName] = {
-          value: Math.round(item.case_equivalent_volume * 100) / 100,
-          isActual,
-          isManuallyModified: isManualInputFromDB, // Set based on DB flag
-          data_type: isActual ? "actual_complete" : "forecast",
-        };
-      }
+  // Process each group (key/items)
+  rawItemsByKey.forEach((items: any[], key: string) => {
+    if (!items || items.length === 0) return; // Skip empty groups
+    const firstItem = items[0]!;
 
-      // Process historical (last year) data - LY data is never considered manually modified
-      if (item.py_case_equivalent_volume !== undefined) {
-        if (acc[key].py_case_equivalent_volume_months[monthName]) {
-          acc[key].py_case_equivalent_volume_months[monthName].value +=
-            Math.round(item.py_case_equivalent_volume * 100) / 100;
-        } else {
-          acc[key].py_case_equivalent_volume_months[monthName] = {
-            value: Math.round(item.py_case_equivalent_volume * 100) / 100,
-            isActual: true, // Historical data is always actual
-            isManuallyModified: false, // PY data is never manually modified
-            data_type: "actual_complete",
-          };
+    // Determine last actual month FOR THIS GROUP
+    let lastActualMonthIndex = -1;
+    let hasAnyActuals = false;
+    items.forEach((item: any) => {
+      if (item?.data_type?.includes("actual")) {
+        hasAnyActuals = true;
+        const monthIndex = (item.month || 0) - 1;
+        if (monthIndex >= 0 && monthIndex < 12) {
+          lastActualMonthIndex = Math.max(lastActualMonthIndex, monthIndex);
         }
       }
-    }
+    });
 
-    // Sum up GSV values - add them to the accumulated values
-    if (item.gross_sales_value !== undefined) {
-      acc[key].gross_sales_value += Number(item.gross_sales_value) || 0;
-    }
+    // Initialize the aggregated item for this key
+    const aggregatedItem: ExtendedForecastData = {
+      id: key,
+      market_id: firstItem.market_id,
+      market_name: firstItem.market,
+      customer_id: firstItem.customer_id,
+      customer_name: firstItem.customer,
+      product: firstItem.variant_size_pack_desc,
+      brand: firstItem.brand,
+      variant: firstItem.variant,
+      variant_id: firstItem.variant_id,
+      variant_size_pack_id: firstItem.variant_size_pack_id,
+      variant_size_pack_desc: firstItem.variant_size_pack_desc,
+      forecastLogic: firstItem.forecast_method || "flat",
+      months: {}, // Will be populated below
+      py_case_equivalent_volume_months: {}, // Initialize PY months object
+      gross_sales_value: 0,
+      py_gross_sales_value: 0,
+      py_case_equivalent_volume: 0,
+      cy_3m_case_equivalent_volume: 0, // Placeholder
+      cy_6m_case_equivalent_volume: 0, // Placeholder
+      cy_12m_case_equivalent_volume: 0, // Placeholder
+      py_3m_case_equivalent_volume: 0, // Placeholder
+      py_6m_case_equivalent_volume: 0, // Placeholder
+      py_12m_case_equivalent_volume: 0, // Placeholder
+    };
 
-    if (item.py_gross_sales_value !== undefined) {
-      acc[key].py_gross_sales_value += Number(item.py_gross_sales_value) || 0;
-    }
+    // Initialize months structure
+    MONTH_NAMES.forEach((month, index) => {
+      const shouldBeActual = hasAnyActuals && index <= lastActualMonthIndex;
+      aggregatedItem.months[month] = {
+        value: 0,
+        isActual: shouldBeActual,
+        isManuallyModified: false,
+      };
+      // Initialize PY months structure here as well
+      aggregatedItem.py_case_equivalent_volume_months[month] = {
+        value: 0,
+        isActual: true,
+        isManuallyModified: false,
+      };
+    });
 
-    if (item.py_case_equivalent_volume !== undefined) {
-      acc[key].py_case_equivalent_volume +=
-        Number(item.py_case_equivalent_volume) || 0;
-    }
+    // Aggregate monthly volumes, GSV, etc. from all items in the group
+    items.forEach((item: any) => {
+      const monthIndex = (item.month || 0) - 1;
+      if (monthIndex >= 0 && monthIndex < 12) {
+        const monthName = MONTH_NAMES[monthIndex];
+        const isManualInputFromDB = Boolean(item.is_manual_input);
 
-    // Sum up new rolling volumes
-    if (item.cy_3m_case_equivalent_volume !== undefined) {
-      acc[key].cy_3m_case_equivalent_volume +=
-        Number(item.cy_3m_case_equivalent_volume) || 0;
-    }
-    if (item.cy_6m_case_equivalent_volume !== undefined) {
-      acc[key].cy_6m_case_equivalent_volume +=
-        Number(item.cy_6m_case_equivalent_volume) || 0;
-    }
-    if (item.cy_12m_case_equivalent_volume !== undefined) {
-      acc[key].cy_12m_case_equivalent_volume +=
-        Number(item.cy_12m_case_equivalent_volume) || 0;
-    }
-    if (item.py_3m_case_equivalent_volume !== undefined) {
-      acc[key].py_3m_case_equivalent_volume +=
-        Number(item.py_3m_case_equivalent_volume) || 0;
-    }
-    if (item.py_6m_case_equivalent_volume !== undefined) {
-      acc[key].py_6m_case_equivalent_volume +=
-        Number(item.py_6m_case_equivalent_volume) || 0;
-    }
-    if (item.py_12m_case_equivalent_volume !== undefined) {
-      acc[key].py_12m_case_equivalent_volume +=
-        Number(item.py_12m_case_equivalent_volume) || 0;
-    }
+        // Aggregate TY Volume
+        aggregatedItem.months[monthName]!.value +=
+          Math.round((item.case_equivalent_volume || 0) * 100) / 100;
+        aggregatedItem.months[monthName]!.isManuallyModified =
+          aggregatedItem.months[monthName]!.isManuallyModified ||
+          isManualInputFromDB;
 
-    return acc;
-  }, {});
-
-  // Fill in any missing months with zeros for both current and historical data
-  Object.values(groupedData).forEach((item: any) => {
-    MONTH_NAMES.forEach((month) => {
-      // Fill current year data
-      if (!item.months[month]) {
-        item.months[month] = {
-          value: 0,
-          isActual: false,
-          isManuallyModified: false,
-        };
+        // Aggregate PY Volume (total AND monthly)
+        if (item.py_case_equivalent_volume !== undefined) {
+          const pyVol = Number(item.py_case_equivalent_volume) || 0;
+          aggregatedItem.py_case_equivalent_volume =
+            (aggregatedItem.py_case_equivalent_volume || 0) + pyVol;
+          // Add aggregation for the monthly PY breakdown
+          aggregatedItem.py_case_equivalent_volume_months[monthName]!.value +=
+            Math.round(pyVol * 100) / 100;
+        }
       }
-      // Fill historical data
-      if (!item.py_case_equivalent_volume_months[month]) {
-        item.py_case_equivalent_volume_months[month] = {
-          value: 0,
-          isActual: true,
-          isManuallyModified: false,
-        };
+      // Aggregate total GSV
+      if (item.gross_sales_value !== undefined) {
+        aggregatedItem.gross_sales_value =
+          (aggregatedItem.gross_sales_value || 0) +
+          (Number(item.gross_sales_value) || 0);
+      }
+      if (item.py_gross_sales_value !== undefined) {
+        aggregatedItem.py_gross_sales_value =
+          (aggregatedItem.py_gross_sales_value || 0) +
+          (Number(item.py_gross_sales_value) || 0);
       }
     });
+
+    // Find the specific raw item for trend data (last actual or month 1)
+    const trendMonthTarget =
+      lastActualMonthIndex === -1 ? 1 : lastActualMonthIndex + 1;
+    const trendSourceItem = items.find(
+      (item: any) => item.month === trendMonthTarget
+    );
+
+    // Assign trend values from the specific source item
+    if (trendSourceItem) {
+      aggregatedItem.cy_3m_case_equivalent_volume =
+        Number(trendSourceItem.cy_3m_case_equivalent_volume) || 0;
+      aggregatedItem.cy_6m_case_equivalent_volume =
+        Number(trendSourceItem.cy_6m_case_equivalent_volume) || 0;
+      aggregatedItem.cy_12m_case_equivalent_volume =
+        Number(trendSourceItem.cy_12m_case_equivalent_volume) || 0;
+      aggregatedItem.py_3m_case_equivalent_volume =
+        Number(trendSourceItem.py_3m_case_equivalent_volume) || 0;
+      aggregatedItem.py_6m_case_equivalent_volume =
+        Number(trendSourceItem.py_6m_case_equivalent_volume) || 0;
+      aggregatedItem.py_12m_case_equivalent_volume =
+        Number(trendSourceItem.py_12m_case_equivalent_volume) || 0;
+    }
+
+    // Store the fully aggregated item
+    finalAggregatedData[key] = aggregatedItem;
   });
 
-  // Apply any logged changes from Redis (these will overwrite initial DB values, including isManuallyModified)
+  // Apply logged changes (these overwrite monthly values)
   loggedChanges.forEach((change) => {
     const key = isCustomerView
       ? `forecast:${change.customer_id}:${change.variant_size_pack_desc}:${change.customer_id}`
       : `forecast:${change.market_id}:${change.variant_size_pack_desc}`;
 
-    if (groupedData[key]) {
+    if (finalAggregatedData[key]) {
       // Overwrite forecast logic and months object entirely from Redis log
-      // This ensures the latest state (including isManuallyModified flags set via UI) is shown
-      groupedData[key].forecastLogic = change.forecastType;
-      groupedData[key].months = change.months;
+      finalAggregatedData[key].forecastLogic = change.forecastType;
+      finalAggregatedData[key].months = change.months; // Assuming change.months has the correct { value, isActual, isManuallyModified } structure
       if (change.comment) {
-        groupedData[key].commentary = change.comment;
+        finalAggregatedData[key].commentary = change.comment;
       }
-    } else {
-      // Key from Redis log not found in current data, maybe filtered out?
-      // Or potentially a mismatch in key generation/data.
-      // console.warn(`Key '${key}' from logged change not found in current dataset.`);
     }
   });
 
-  // Now calculate the derived guidance values for each row
-  if (selectedGuidance && selectedGuidance.length > 0) {
-    Object.keys(groupedData).forEach((key) => {
-      groupedData[key] = recalculateGuidance(
-        groupedData[key],
-        selectedGuidance
-      );
-    });
-  }
+  // Recalculate guidance AFTER all aggregation and logged changes are applied
+  const resultData = Object.values(finalAggregatedData).map((item) => {
+    // Recalculate total volume based on potentially modified months
+    item.case_equivalent_volume = calculateTotal(item.months);
+    // Now recalculate guidance using the final aggregated data
+    return recalculateGuidance(item, selectedGuidance || []);
+  });
 
-  return Object.values(groupedData);
+  return resultData;
 };
 
 // Add this interface
