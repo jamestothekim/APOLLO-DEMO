@@ -1,4 +1,4 @@
-import { ReportConfig } from '../../redux/dashboardSlice';
+import { ReportConfig } from '../../redux/slices/dashboardSlice';
 import { AggregationResult, TIME_SERIES_DIMENSION_IDS } from '../../reportBuilder/reportUtil/reportUtil';
 
 /**

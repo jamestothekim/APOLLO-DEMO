@@ -25,7 +25,6 @@ import {
   exportToCSV,
   MONTH_NAMES,
   formatGuidanceValue,
-  Guidance,
   ExportableData,
   type CalculatedGuidanceValue,
   aggregateSummaryData,
@@ -35,27 +34,28 @@ import {
 import type { MarketData } from "../../volume/volumeForecast";
 import { useSelector, useDispatch } from "react-redux";
 import type { RootState, AppDispatch } from "../../redux/store";
-import { fetchPendingChanges } from "../../redux/pendingChangesSlice";
-import type { RestoredState } from "../../redux/pendingChangesSlice";
+import { fetchPendingChanges } from "../../redux/slices/pendingChangesSlice";
+import type { RestoredState } from "../../redux/slices/pendingChangesSlice";
 import {
   setPendingSummaryCols,
   setPendingSummaryRows,
   selectPendingGuidanceSummaryColumns,
   selectPendingGuidanceSummaryRows,
-} from "../../redux/userSettingsSlice";
+  Guidance,
+} from "../../redux/slices/userSettingsSlice";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import ViewHeadlineOutlinedIcon from "@mui/icons-material/ViewHeadlineOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { Toolbox } from "../components/toolbox";
 import { LineChart } from "@mui/x-charts";
-import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
+import type { SummaryCalculationsState } from "../../redux/slices/guidanceCalculationsSlice";
 import {
   selectRawVolumeData,
   selectVolumeDataStatus,
   selectCustomerRawVolumeData,
   selectCustomerVolumeDataStatus,
-} from "../../redux/depletionSlice";
+} from "../../redux/slices/depletionSlice";
 import { GuidanceDialog } from "../components/guidance";
 
 // --- Export these types --- START
@@ -1351,6 +1351,7 @@ export const Summary = ({
           initialSelectedRows={selectedRowGuidance}
           onApplyColumns={handleApplyColumns}
           onApplyRows={handleApplyRows}
+          viewContext="summary"
         />
       </Box>
     </Paper>

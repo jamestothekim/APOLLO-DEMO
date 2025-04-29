@@ -15,7 +15,7 @@ import {
   removeItem,
   fetchDashboardConfig,
   syncDashboardToBackend,
-} from "../redux/dashboardSlice"; // Import syncDashboardToBackend
+} from "../redux/slices/dashboardSlice"; // Import syncDashboardToBackend
 import { DashboardTable } from "./components/dashboardTable";
 import { useDispatch } from "react-redux"; // Import useDispatch
 

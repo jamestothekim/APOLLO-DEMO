@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RawDepletionForecastItem } from './depletionSlice';
-import { MONTH_NAMES } from '../volume/util/volumeUtil';
+import { MONTH_NAMES } from '../../volume/util/volumeUtil';
 
 // Types
 export interface GuidanceCalculation {

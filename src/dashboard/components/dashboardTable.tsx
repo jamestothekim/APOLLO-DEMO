@@ -17,12 +17,12 @@ import {
   OutlinedInput,
   Chip,
 } from "@mui/material";
-import { ReportConfig } from "../../redux/dashboardSlice";
+import { ReportConfig } from "../../redux/slices/dashboardSlice";
 import { useAppSelector } from "../../redux/store";
 import {
   selectRawVolumeData,
   selectVolumeDataStatus,
-} from "../../redux/depletionSlice";
+} from "../../redux/slices/depletionSlice";
 import {
   processReportData,
   getUniqueValuesForDimension,

@@ -11,7 +11,7 @@ import {
   Chip,
   Stack,
 } from "@mui/material";
-import { PublishedItem, ReportConfig } from "../redux/dashboardSlice";
+import { PublishedItem, ReportConfig } from "../redux/slices/dashboardSlice";
 import {
   DragDropContext,
   Droppable,

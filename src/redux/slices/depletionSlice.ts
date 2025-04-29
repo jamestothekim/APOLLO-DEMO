@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import axios from 'axios';
-import type { RootState } from './store'; // Assuming your store file is named store.ts
+import type { RootState } from '../store'; // Assuming your store file is named store.ts
 
 // Define the shape of a single raw depletion forecast item from the API
 // This reflects the data structure BEFORE aggregation/processing

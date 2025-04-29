@@ -2,21 +2,51 @@ import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@r
 import axios from 'axios';
 
 // Updated Guidance type to match backend response and component usage
+
+// Define the structure for a single sub-calculation within multi_calc
+interface SubCalculation {
+  id: string; // e.g., "3M", "6M", "12M"
+  cyField: string; // Field name for current year value
+  pyField: string; // Field name for prior year value
+  calculationType: 'percentage' | 'difference' | 'direct'; // Type of calculation for this part
+}
+
+// Define the possible structures for the calculation field
+interface BaseCalculation {
+  type: string; // 'direct', 'percentage', 'difference', 'multi_calc'
+  format?: 'number' | 'percent';
+}
+
+interface StandardCalculation extends BaseCalculation {
+  type: 'direct' | 'percentage' | 'difference';
+}
+
+interface MultiCalculation extends BaseCalculation {
+  type: 'multi_calc';
+  subCalculations: SubCalculation[];
+}
+
+// Define the possible structures for the value field
+interface ExpressionValue {
+  expression: string;
+}
+
+interface FractionValue {
+  numerator: string;
+  denominator: string;
+}
+
+// Main Guidance Interface
 export interface Guidance {
-  id: number; // Changed from string to number
-  label: string; // Renamed from name
+  id: number;
+  label: string;
   sublabel?: string;
-  value:
-    | string
-    | {
-        numerator?: string;
-        denominator?: string;
-        expression?: string;
-      };
-  calculation: {
-    type: "direct" | "percentage" | "difference";
-    format?: "number" | "percent";
-  };
+  // Value can be a string, an object for expression/fraction, or null for multi_calc
+  value: string | ExpressionValue | FractionValue | null;
+  // Calculation uses the union type
+  calculation: StandardCalculation | MultiCalculation;
+  displayType: 'row' | 'column' | 'both';
+  availability: 'summary' | 'depletions' | 'both';
 }
 
 // Simplified State for Guidance Settings

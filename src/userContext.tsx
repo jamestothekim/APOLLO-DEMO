@@ -9,8 +9,8 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "./redux/store";
-import { fetchVolumeData } from "./redux/depletionSlice";
-import { fetchDashboardConfig } from "./redux/dashboardSlice";
+import { fetchVolumeData } from "./redux/slices/depletionSlice";
+import { fetchDashboardConfig } from "./redux/slices/dashboardSlice";
 
 // Types
 export interface MarketAccess {

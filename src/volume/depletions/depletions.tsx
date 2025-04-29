@@ -24,19 +24,20 @@ import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
 import { DetailsContainer } from "./details/detailsContainer";
 import type { MarketData } from "../volumeForecast";
-import type { Guidance } from "../components/guidance";
+// Import Guidance from the canonical source in the Redux slice
+import type { Guidance } from "../../redux/slices/userSettingsSlice";
 import axios from "axios";
 
 // --- Redux Imports ---
 import { useDispatch, useSelector } from "react-redux";
-import { triggerSync } from "../../redux/syncSlice"; // Import the action creator
+import { triggerSync } from "../../redux/slices/syncSlice"; // Import the action creator
 import type { AppDispatch } from "../../redux/store"; // Added RootState
 import {
   selectRawVolumeData, // Added import
   selectVolumeDataStatus, // Added import
   selectCustomerRawVolumeData,
   selectCustomerVolumeDataStatus,
-} from "../../redux/depletionSlice";
+} from "../../redux/slices/depletionSlice";
 // ---------------------
 
 import {
@@ -58,7 +59,6 @@ import {
   SIDEBAR_GUIDANCE_OPTIONS,
   getGuidanceDataForSidebar,
   calculateRowGuidanceMonthlyData,
-  ROLLING_GROWTH_GUIDANCE,
 } from "../util/volumeUtil";
 import {
   Save as SaveIcon,
@@ -969,6 +969,18 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         width: 50,
         sortable: true,
         sortAccessor: (row: ExtendedForecastData) => {
+          // For multi_calc, sorting might be complex. Sort by the first sub-calc value for now?
+          if (guidance.calculation.type === "multi_calc") {
+            const valueKey = `guidance_${guidance.id}`;
+            const value = row[valueKey];
+            if (typeof value === "object" && value !== null) {
+              const firstSubCalcId =
+                guidance.calculation.subCalculations?.[0]?.id;
+              return firstSubCalcId ? value[firstSubCalcId] : undefined;
+            }
+            return undefined;
+          }
+          // Original sort accessor for single values
           const valueKey =
             typeof guidance.value === "string"
               ? guidance.value
@@ -977,7 +989,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             | number
             | undefined;
         },
-        sx: cellPaddingSx, // Apply consistent padding
+        sx: {
+          ...cellPaddingSx,
+          // Set extra width specifically for the Trends column (ID 8)
+          ...(guidance.id === 8 && { minWidth: 150 }),
+        }, // Apply consistent padding and conditional width
         render: (_: any, row: ExtendedForecastData) => {
           // Check if the entire row is loading
           if (row.isLoading) {
@@ -988,29 +1004,68 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             );
           }
 
-          // Check if the specific guidance value exists on the row
-          let value: number | undefined;
-          const valueKey =
-            typeof guidance.value === "string"
-              ? guidance.value
-              : `guidance_${guidance.id}`;
+          const valueKey = `guidance_${guidance.id}`;
+          const value = row[valueKey];
 
+          // Handle multi_calc display
           if (
-            valueKey in row &&
-            typeof row[valueKey as keyof ExtendedForecastData] === "number"
+            guidance.calculation.type === "multi_calc" &&
+            typeof value === "object" &&
+            value !== null
           ) {
-            value = row[valueKey as keyof ExtendedForecastData] as number;
+            // Assuming value is { "3M": 0.1, "6M": 0.05, ... }
+            // And subCalculations array is ordered [3M, 6M, 12M]
+            const subCalcOrder =
+              guidance.calculation.subCalculations?.map((sc) => sc.id) || [];
+            const formattedParts = subCalcOrder.map((subId) => {
+              const subResult = value[subId];
+              // Use formatGuidanceValue for consistent formatting
+              return formatGuidanceValue(
+                subResult,
+                guidance.calculation.format
+              );
+            });
+            // Use MUI Box with Flexbox for better layout
+            return (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-around", // Distribute items evenly
+                  alignItems: "center",
+                  width: "100%", // Ensure the Box takes full cell width
+                  textAlign: "right", // Align content within the flex container to the right
+                }}
+              >
+                {formattedParts.map((part, index) => (
+                  // Each part is already formatted by formatGuidanceValue,
+                  // which returns a node (string or Box for negative numbers)
+                  <Box key={index} sx={{ minWidth: "35px" }}>
+                    {" "}
+                    {/* Give each part some minimum space */}
+                    {part}
+                  </Box>
+                ))}
+              </Box>
+            );
+          }
+
+          // Handle single value display (existing logic)
+          else if (typeof value === "number") {
             // Value exists, format and return it
             return formatGuidanceValue(
               value,
               guidance.calculation?.format,
               guidance.label
             );
-          } else {
-            // Value doesn't exist yet for this row, show loader
+          }
+          // Handle cases where value might not be ready or is not the expected type
+          else {
+            // Value doesn't exist yet or is wrong type, show loader or placeholder
             return (
               <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <CircularProgress size={16} thickness={4} />
+                {/* Optionally show loader only if value is explicitly undefined? */}
+                {/* For now, show placeholder if not number or expected object */}
+                -{/* <CircularProgress size={16} thickness={4} /> */}
               </Box>
             );
           }
@@ -1605,56 +1660,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           );
           const nonZeroData = processed.filter(hasNonZeroTotal);
           setForecastData(nonZeroData);
-
-          // --- START: Temporary Log Growth Rates using recalculateGuidance --- //
-          console.log(
-            "--- Verifying Rolling Growth Calculations (First 5 Rows) ---"
-          );
-          nonZeroData.slice(0, 5).forEach((row, index) => {
-            // Call the utility function to get the row with calculated guidance
-            const rowWithCalculatedGrowth = recalculateGuidance(
-              row,
-              ROLLING_GROWTH_GUIDANCE
-            );
-
-            // Extract the calculated growth rates (formatted)
-            const formatGrowth = (value: number | undefined): string => {
-              if (value === undefined || isNaN(value)) return "N/A";
-              return (value * 100).toFixed(1) + "%";
-            };
-
-            const growth3m = formatGrowth(
-              rowWithCalculatedGrowth["guidance_101"]
-            );
-            const growth6m = formatGrowth(
-              rowWithCalculatedGrowth["guidance_102"]
-            );
-            const growth12m = formatGrowth(
-              rowWithCalculatedGrowth["guidance_103"]
-            );
-
-            console.log(
-              `Row ${index + 1} (${row.market_name || row.customer_name} - ${
-                row.product
-              }):`
-            );
-            console.log(
-              `  Input -> 3M (CY: ${row.cy_3m_case_equivalent_volume}, PY: ${row.py_3m_case_equivalent_volume})`
-            );
-            console.log(`  Output -> 3M Growth [guidance_101]: ${growth3m}`);
-            console.log(
-              `  Input -> 6M (CY: ${row.cy_6m_case_equivalent_volume}, PY: ${row.py_6m_case_equivalent_volume})`
-            );
-            console.log(`  Output -> 6M Growth [guidance_102]: ${growth6m}`);
-            console.log(
-              `  Input -> 12M (CY: ${row.cy_12m_case_equivalent_volume}, PY: ${row.py_12m_case_equivalent_volume})`
-            );
-            console.log(`  Output -> 12M Growth [guidance_103]: ${growth12m}`);
-          });
-          console.log(
-            "-------------------------------------------------------------"
-          );
-          // --- END: Temporary Log Growth Rates --- //
 
           // Update available brands based on the processed data
           const brands = Array.from(

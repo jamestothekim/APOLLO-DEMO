@@ -1,14 +1,16 @@
 import { ExtendedForecastData } from "../depletions/depletions";
 import { Box } from "@mui/material";
 import type { GuidanceForecastOption } from "../../reusableComponents/quantSidebar";
-import type { RawDepletionForecastItem } from "../../redux/depletionSlice";
-import type { RestoredState } from "../../redux/pendingChangesSlice";
+import type { RawDepletionForecastItem } from "../../redux/slices/depletionSlice";
+import type { RestoredState } from "../../redux/slices/pendingChangesSlice";
 import type {
   SummaryVariantAggregateData,
   SummaryBrandAggregateData,
 } from "../summary/summary"; // Import exported types
-import type { SummaryCalculationsState } from "../../redux/guidanceCalculationsSlice";
+import type { SummaryCalculationsState } from "../../redux/slices/guidanceCalculationsSlice";
 import { MarketData } from "../volumeForecast"; // Import MarketData
+// Import the canonical Guidance type
+import type { Guidance } from "../../redux/slices/userSettingsSlice";
 
 export type ForecastOption = {
   id: number;
@@ -440,147 +442,6 @@ export const calculateTotal = (months: {
   return Object.values(months).reduce((acc, curr) => acc + curr.value, 0);
 };
 
-// Add this type to handle guidance data
-export interface GuidanceData {
-  [key: string]: number;
-}
-
-// Add new types for calculation structure
-export interface GuidanceCalculation {
-  type: "direct" | "percentage" | "difference";
-  format?: "number" | "percent";
-}
-
-export interface GuidanceValue {
-  numerator?: string;
-  denominator?: string;
-  expression?: string;
-  // Add fields for rolling growth calculation
-  cyField?: string;
-  pyField?: string;
-}
-
-export interface Guidance {
-  id: number;
-  label: string;
-  sublabel?: string;
-  value: string | GuidanceValue;
-  calculation: GuidanceCalculation;
-}
-
-// Add definitions for Rolling Growth Rate Guidance
-export const ROLLING_GROWTH_GUIDANCE: Guidance[] = [
-  {
-    id: 101, // Assign unique IDs
-    label: "3M Vol Growth",
-    sublabel: "vs LY",
-    value: {
-      // Use object structure for clarity
-      cyField: "cy_3m_case_equivalent_volume",
-      pyField: "py_3m_case_equivalent_volume",
-    },
-    calculation: { type: "percentage", format: "percent" },
-  },
-  {
-    id: 102,
-    label: "6M Vol Growth",
-    sublabel: "vs LY",
-    value: {
-      cyField: "cy_6m_case_equivalent_volume",
-      pyField: "py_6m_case_equivalent_volume",
-    },
-    calculation: { type: "percentage", format: "percent" },
-  },
-  {
-    id: 103,
-    label: "12M Vol Growth",
-    sublabel: "vs LY",
-    value: {
-      cyField: "cy_12m_case_equivalent_volume",
-      pyField: "py_12m_case_equivalent_volume",
-    },
-    calculation: { type: "percentage", format: "percent" },
-  },
-];
-
-export const processGuidanceValue = (
-  data: any[],
-  guidance: Guidance,
-  isCustomerView: boolean
-): { [key: string]: number } => {
-  const guidanceData: { [key: string]: number } = {};
-  const aggregatedData: { [key: string]: { [field: string]: number } } = {};
-
-  // First, aggregate the data by market/size-pack
-  data.forEach((item) => {
-    const key = isCustomerView
-      ? `forecast:${item.customer_id}:${item.variant_size_pack_desc}:${item.customer_id}`
-      : `forecast:${item.market_id}:${item.variant_size_pack_desc}`;
-
-    if (!aggregatedData[key]) {
-      aggregatedData[key] = {
-        gross_sales_value: 0,
-        py_gross_sales_value: 0,
-        case_equivalent_volume: 0,
-        py_case_equivalent_volume: 0,
-      };
-    }
-
-    // Sum up all the values we might need
-    aggregatedData[key].gross_sales_value +=
-      Number(item.gross_sales_value) || 0;
-    aggregatedData[key].py_gross_sales_value +=
-      Number(item.py_gross_sales_value) || 0;
-    aggregatedData[key].case_equivalent_volume +=
-      Number(item.case_equivalent_volume) || 0;
-    aggregatedData[key].py_case_equivalent_volume +=
-      Number(item.py_case_equivalent_volume) || 0;
-  });
-
-  // Then process the aggregated data according to guidance type
-  Object.entries(aggregatedData).forEach(([key, values]) => {
-    if (typeof guidance.value === "string") {
-      // Direct value (like py_case_equivalent_volume)
-      const fieldName = guidance.value;
-      guidanceData[key] = Math.round(values[fieldName] * 100) / 100;
-    } else {
-      // Calculated value
-      const value = guidance.value as GuidanceValue;
-
-      if (
-        guidance.calculation.type === "percentage" &&
-        value.numerator &&
-        value.denominator
-      ) {
-        // Handle percentage calculations - parse the expressions
-        // For example: "gross_sales_value - py_gross_sales_value" / "py_gross_sales_value"
-        const numeratorParts = value.numerator.split(" - ");
-        const minuend = values[numeratorParts[0]];
-        const subtrahend = values[numeratorParts[1]];
-        const numeratorValue = minuend - subtrahend;
-
-        const denominatorValue = values[value.denominator];
-        guidanceData[key] =
-          denominatorValue === 0 ? 0 : numeratorValue / denominatorValue;
-      } else if (
-        guidance.calculation.type === "difference" &&
-        value.expression
-      ) {
-        // Handle difference calculations
-        // For example: "gross_sales_value - py_gross_sales_value"
-        const expressionParts = value.expression.split(" - ");
-        const minuend = values[expressionParts[0]];
-        const subtrahend = values[expressionParts[1]];
-        guidanceData[key] = minuend - subtrahend;
-      } else {
-        guidanceData[key] = 0;
-      }
-    }
-  });
-
-  return guidanceData;
-};
-
 // Add this new centralized function to recalculate guidance values
 export const recalculateGuidance = (
   row: any,
@@ -633,20 +494,51 @@ export const recalculateGuidance = (
 
   // Now recalculate all guidance
   selectedGuidance.forEach((guidance) => {
-    if (typeof guidance.value === "string") {
-      // Direct values don't need recalculation as they come directly from the source data
-      // These include py_case_equivalent_volume, gross_sales_value, py_gross_sales_value, etc.
-    } else {
-      // For calculated values (difference, percentage)
+    // Handle direct value assignment
+    if (
+      guidance.calculation.type === "direct" &&
+      typeof guidance.value === "string"
+    ) {
+      updatedRow[`guidance_${guidance.id}`] = updatedRow[guidance.value] ?? 0;
+    }
+    // Handle multi_calc
+    else if (guidance.calculation.type === "multi_calc") {
+      const results: { [subId: string]: number } = {};
+      guidance.calculation.subCalculations.forEach((subCalc) => {
+        // (Keep existing multi_calc sub-calculation logic here)
+        const cyValue = Number(updatedRow[subCalc.cyField]) || 0;
+        const pyValue = Number(updatedRow[subCalc.pyField]) || 0;
+        console.log(
+          `    [multi_calc] cyField (${subCalc.cyField}): ${cyValue}, pyField (${subCalc.pyField}): ${pyValue}`
+        ); // Log input values
+        let subResult = 0;
+        if (subCalc.calculationType === "percentage") {
+          subResult = pyValue === 0 ? 0 : (cyValue - pyValue) / pyValue;
+        } else if (subCalc.calculationType === "difference") {
+          subResult = cyValue - pyValue;
+        } else if (subCalc.calculationType === "direct") {
+          subResult = cyValue;
+        }
+        console.log(
+          `    [multi_calc] Sub-result (${subCalc.id}): ${subResult}`
+        ); // Log sub-result
+        results[subCalc.id] = subResult;
+      });
+      console.log(
+        `  [multi_calc] Final results object for guidance ID ${guidance.id}:`,
+        results
+      ); // Log final object
+      updatedRow[`guidance_${guidance.id}`] = results;
+    }
+    // Handle other calculated types (difference, percentage) where value is an object
+    else if (guidance.value !== null && typeof guidance.value === "object") {
       if (
         guidance.calculation.type === "difference" &&
-        guidance.value.expression
+        "expression" in guidance.value
       ) {
         const expressionParts = guidance.value.expression.split(" - ");
         const field1 = expressionParts[0].trim();
         const field2 = expressionParts[1].trim();
-
-        // Get the values for fields, handling special cases
         const value1 =
           field1 === "case_equivalent_volume"
             ? totalVolume
@@ -655,24 +547,17 @@ export const recalculateGuidance = (
           field2 === "case_equivalent_volume"
             ? totalVolume
             : updatedRow[field2];
-
-        // Calculate the difference
         const result = (Number(value1) || 0) - (Number(value2) || 0);
         updatedRow[`guidance_${guidance.id}`] = result;
       } else if (
         guidance.calculation.type === "percentage" &&
-        guidance.value.numerator &&
-        guidance.value.denominator
+        "numerator" in guidance.value &&
+        "denominator" in guidance.value
       ) {
-        // Parse the numerator which is an expression like "field1 - field2"
         const numeratorParts = guidance.value.numerator.split(" - ");
         const numerField1 = numeratorParts[0].trim();
         const numerField2 = numeratorParts[1].trim();
-
-        // Get denominator field
         const denomField = guidance.value.denominator.trim();
-
-        // Get all the values, handling special cases
         const numerValue1 =
           numerField1 === "case_equivalent_volume"
             ? totalVolume
@@ -685,26 +570,10 @@ export const recalculateGuidance = (
           denomField === "case_equivalent_volume"
             ? totalVolume
             : updatedRow[denomField];
-
-        // Calculate the numerator
         const numerator =
           (Number(numerValue1) || 0) - (Number(numerValue2) || 0);
         const denominator = Number(denomValue) || 0;
-
-        // Calculate the percentage, avoiding division by zero
         const result = denominator === 0 ? 0 : numerator / denominator;
-        updatedRow[`guidance_${guidance.id}`] = result;
-      }
-      // Add logic for Rolling Growth Rates
-      else if (
-        guidance.calculation.type === "percentage" &&
-        typeof guidance.value === "object" &&
-        guidance.value.cyField &&
-        guidance.value.pyField
-      ) {
-        const cyValue = Number(updatedRow[guidance.value.cyField]) || 0;
-        const pyValue = Number(updatedRow[guidance.value.pyField]) || 0;
-        const result = pyValue === 0 ? 0 : (cyValue - pyValue) / pyValue;
         updatedRow[`guidance_${guidance.id}`] = result;
       }
     }
@@ -876,7 +745,6 @@ export const calculateRowGuidanceMonthlyData = (
   }
 
   // Calculated Value (Difference or Percentage)
-  const guidanceValue = guidance.value as GuidanceValue; // Use local GuidanceValue type
   const currentMonths = rowData.months;
 
   // Helper to get monthly values, prioritizing specific monthly fields
@@ -932,8 +800,14 @@ export const calculateRowGuidanceMonthlyData = (
 
   const resultMonthlyData: { [month: string]: number } = {};
 
-  if (guidance.calculation.type === "difference" && guidanceValue.expression) {
-    const expressionParts = guidanceValue.expression.split(" - ");
+  // Use type guards for guidance.value
+  if (
+    guidance.calculation.type === "difference" &&
+    guidance.value !== null &&
+    typeof guidance.value === "object" &&
+    "expression" in guidance.value
+  ) {
+    const expressionParts = guidance.value.expression.split(" - ");
     const field1 = expressionParts[0].trim();
     const field2 = expressionParts[1].trim();
 
@@ -945,13 +819,15 @@ export const calculateRowGuidanceMonthlyData = (
     return resultMonthlyData;
   } else if (
     guidance.calculation.type === "percentage" &&
-    guidanceValue.numerator &&
-    guidanceValue.denominator
+    guidance.value !== null &&
+    typeof guidance.value === "object" &&
+    "numerator" in guidance.value &&
+    "denominator" in guidance.value
   ) {
-    const numeratorParts = guidanceValue.numerator.split(" - ");
+    const numeratorParts = guidance.value.numerator.split(" - ");
     const numerField1 = numeratorParts[0].trim();
     const numerField2 = numeratorParts[1].trim();
-    const denomField = guidanceValue.denominator.trim();
+    const denomField = guidance.value.denominator.trim();
 
     MONTH_NAMES.forEach((month) => {
       const numerValue1 = getMonthlyValue(numerField1, month);
@@ -1023,24 +899,32 @@ export const calculateSingleSummaryGuidance = (
   if (typeof guidance.value === "string") {
     result.total = getTotalValue(guidance.value);
   } else {
-    const valueDef = guidance.value as GuidanceValue; // Use local GuidanceValue
     const calcType = guidance.calculation.type;
 
-    if (calcType === "difference" && valueDef.expression) {
-      const parts = valueDef.expression.split(" - ");
+    // Add type guards for guidance.value
+    if (
+      calcType === "difference" &&
+      guidance.value !== null &&
+      typeof guidance.value === "object" &&
+      "expression" in guidance.value
+    ) {
+      const parts = guidance.value.expression.split(" - ");
       result.total =
         getTotalValue(parts[0]?.trim()) - getTotalValue(parts[1]?.trim());
     } else if (
       calcType === "percentage" &&
-      valueDef.numerator &&
-      valueDef.denominator
+      guidance.value !== null &&
+      typeof guidance.value === "object" &&
+      "numerator" in guidance.value &&
+      "denominator" in guidance.value
     ) {
-      const numParts = valueDef.numerator.split(" - ");
+      const numParts = guidance.value.numerator.split(" - ");
       const numerator =
         getTotalValue(numParts[0]?.trim()) - getTotalValue(numParts[1]?.trim());
-      const denominator = getTotalValue(valueDef.denominator.trim());
+      const denominator = getTotalValue(guidance.value.denominator.trim());
       result.total = denominator === 0 ? 0 : numerator / denominator;
     }
+    // Note: multi_calc is handled at a higher level (calculateAllSummaryGuidance) and shouldn't reach here directly for a single metric.
   }
   // Apply rounding (or other formatting logic) consistently
   result.total = result.total ? Math.round(result.total * 1000) / 1000 : 0;
@@ -1054,26 +938,37 @@ export const calculateSingleSummaryGuidance = (
       if (typeof guidance.value === "string") {
         monthlyVal = getMonthlyValue(guidance.value, month);
       } else {
-        const valueDef = guidance.value as GuidanceValue; // Use local GuidanceValue
         const calcType = guidance.calculation.type;
 
-        if (calcType === "difference" && valueDef.expression) {
-          const parts = valueDef.expression.split(" - ");
+        // Add type guards for guidance.value
+        if (
+          calcType === "difference" &&
+          guidance.value !== null &&
+          typeof guidance.value === "object" &&
+          "expression" in guidance.value
+        ) {
+          const parts = guidance.value.expression.split(" - ");
           const val1 = getMonthlyValue(parts[0]?.trim(), month);
           const val2 = getMonthlyValue(parts[1]?.trim(), month);
           monthlyVal = val1 - val2;
         } else if (
           calcType === "percentage" &&
-          valueDef.numerator &&
-          valueDef.denominator
+          guidance.value !== null &&
+          typeof guidance.value === "object" &&
+          "numerator" in guidance.value &&
+          "denominator" in guidance.value
         ) {
-          const numParts = valueDef.numerator.split(" - ");
+          const numParts = guidance.value.numerator.split(" - ");
           const numerVal1 = getMonthlyValue(numParts[0]?.trim(), month);
           const numerVal2 = getMonthlyValue(numParts[1]?.trim(), month);
-          const denomVal = getMonthlyValue(valueDef.denominator.trim(), month);
+          const denomVal = getMonthlyValue(
+            guidance.value.denominator.trim(),
+            month
+          );
           const numerator = numerVal1 - numerVal2;
           monthlyVal = denomVal === 0 ? 0 : numerator / denomVal;
         }
+        // Note: multi_calc is handled at a higher level.
       }
       // Apply rounding (or other formatting logic) consistently
       result.monthly![month] =

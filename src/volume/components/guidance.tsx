@@ -21,22 +21,8 @@ import ViewColumnOutlinedIcon from "@mui/icons-material/ViewColumnOutlined";
 import ViewHeadlineOutlinedIcon from "@mui/icons-material/ViewHeadlineOutlined";
 import axios from "axios";
 
-export interface Guidance {
-  id: number;
-  label: string;
-  sublabel?: string;
-  value:
-    | string
-    | {
-        numerator?: string;
-        denominator?: string;
-        expression?: string;
-      };
-  calculation: {
-    type: "direct" | "percentage" | "difference";
-    format?: "number" | "percent";
-  };
-}
+// Import Guidance type from the Redux slice
+import type { Guidance } from "../../redux/slices/userSettingsSlice";
 
 interface GuidanceDialogProps {
   open: boolean;
@@ -47,6 +33,7 @@ interface GuidanceDialogProps {
   initialSelectedRows: Guidance[];
   onApplyColumns: (columns: Guidance[]) => void;
   onApplyRows: (rows: Guidance[]) => void;
+  viewContext: "summary" | "depletions";
 }
 
 // Helper to get token
@@ -63,6 +50,7 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
   initialSelectedRows,
   onApplyColumns,
   onApplyRows,
+  viewContext,
 }) => {
   const [selectedColumnGuidance, setSelectedColumnGuidance] = useState<
     Guidance[]
@@ -166,13 +154,20 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
     }
   }, [selectedColumnGuidance, selectedRowGuidance, title]);
 
-  const filteredGuidanceOptions = availableGuidance.filter((item) => {
-    const lowerFilter = filterText.toLowerCase();
-    const labelMatch = item.label.toLowerCase().includes(lowerFilter);
-    const sublabelMatch =
-      item.sublabel?.toLowerCase().includes(lowerFilter) || false;
-    return labelMatch || sublabelMatch;
-  });
+  const filteredGuidanceOptions = availableGuidance
+    // Filter by view context first
+    .filter(
+      (item) =>
+        item.availability === viewContext || item.availability === "both"
+    )
+    // Then filter by text input
+    .filter((item) => {
+      const lowerFilter = filterText.toLowerCase();
+      const labelMatch = item.label.toLowerCase().includes(lowerFilter);
+      const sublabelMatch =
+        item.sublabel?.toLowerCase().includes(lowerFilter) || false;
+      return labelMatch || sublabelMatch;
+    });
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
@@ -206,6 +201,10 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
             filteredGuidanceOptions.map((item) => {
               const isColSelected = isSelected(item, "columns");
               const isRowSelected = isSelected(item, "rows");
+              const canSelectColumn =
+                item.displayType === "column" || item.displayType === "both";
+              const canSelectRow =
+                item.displayType === "row" || item.displayType === "both";
               return (
                 <ListItem key={item.id} disablePadding sx={{ paddingY: 0.5 }}>
                   <ListItemText
@@ -217,39 +216,58 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
                   <ListItemSecondaryAction>
                     <Tooltip
                       title={
-                        isColSelected ? "Remove from Columns" : "Add to Columns"
+                        canSelectColumn
+                          ? isColSelected
+                            ? "Remove from Columns"
+                            : "Add to Columns"
+                          : "Not applicable for Columns"
                       }
                     >
                       <IconButton
                         size="small"
                         edge="end"
                         onClick={() => handleToggle(item, "columns")}
+                        disabled={!canSelectColumn}
                       >
                         {isColSelected ? (
                           <ViewColumnIcon fontSize="small" color="primary" />
                         ) : (
-                          <ViewColumnOutlinedIcon fontSize="small" />
+                          <ViewColumnOutlinedIcon
+                            fontSize="small"
+                            color={canSelectColumn ? undefined : "disabled"}
+                          />
                         )}
                       </IconButton>
                     </Tooltip>
                     <Tooltip
-                      title={isRowSelected ? "Remove from Rows" : "Add to Rows"}
+                      title={
+                        canSelectRow
+                          ? isRowSelected
+                            ? "Remove from Rows"
+                            : "Add to Rows"
+                          : "Not applicable for Rows"
+                      }
                     >
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        onClick={() => handleToggle(item, "rows")}
-                        sx={{ ml: 0.25 }}
-                      >
-                        {isRowSelected ? (
-                          <ViewHeadlineOutlinedIcon
-                            fontSize="small"
-                            color="primary"
-                          />
-                        ) : (
-                          <ViewHeadlineOutlinedIcon fontSize="small" />
-                        )}
-                      </IconButton>
+                      <span style={{ marginLeft: "0.25rem" }}>
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          onClick={() => handleToggle(item, "rows")}
+                          disabled={!canSelectRow}
+                        >
+                          {isRowSelected ? (
+                            <ViewHeadlineOutlinedIcon
+                              fontSize="small"
+                              color="primary"
+                            />
+                          ) : (
+                            <ViewHeadlineOutlinedIcon
+                              fontSize="small"
+                              color={canSelectRow ? undefined : "disabled"}
+                            />
+                          )}
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </ListItemSecondaryAction>
                 </ListItem>

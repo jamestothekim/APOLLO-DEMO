@@ -29,8 +29,8 @@ import {
   selectPendingGuidanceForecastColumns,
   selectPendingGuidanceForecastRows,
   selectAvailableGuidance,
-} from "../redux/userSettingsSlice";
-import type { Guidance } from "../redux/userSettingsSlice";
+} from "../redux/slices/userSettingsSlice";
+import type { Guidance } from "../redux/slices/userSettingsSlice";
 
 const MAX_CHIPS_VISIBLE = 3; // Define how many chips to show
 
@@ -421,6 +421,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
         initialSelectedRows={selectedGuidanceRows}
         onApplyColumns={handleApplyColumns}
         onApplyRows={handleApplyRows}
+        viewContext="depletions"
       />
     </Paper>
   );

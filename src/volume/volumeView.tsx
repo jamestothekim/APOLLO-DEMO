@@ -14,7 +14,7 @@ import {
   initializePendingGuidance,
   selectIsGuidanceInitialized,
   selectAvailableGuidance,
-} from "../redux/userSettingsSlice"; // Use correct filename
+} from "../redux/slices/userSettingsSlice"; // Use correct filename
 
 export const VolumeView = () => {
   const { user, isLoggedIn } = useUser();

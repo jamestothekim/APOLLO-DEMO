@@ -26,9 +26,13 @@ import {
   selectRawVolumeData,
   selectVolumeDataStatus,
   selectVolumeDataError,
-} from "../redux/depletionSlice";
-import { addItem, ReportConfig, PublishedItem } from "../redux/dashboardSlice";
-import { syncDashboardToBackend } from "../redux/dashboardSlice";
+} from "../redux/slices/depletionSlice";
+import {
+  addItem,
+  ReportConfig,
+  PublishedItem,
+} from "../redux/slices/dashboardSlice";
+import { syncDashboardToBackend } from "../redux/slices/dashboardSlice";
 // --- Redux Imports --- END
 // --- Dashboard Component Imports (from VisualizationRenderer) --- START
 // import { DashboardTable } from "../dashboard/components/DashboardTable";
