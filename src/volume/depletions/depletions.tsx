@@ -69,6 +69,7 @@ import {
 } from "@mui/icons-material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 export interface ExtendedForecastData {
   id: string;
@@ -1121,16 +1122,51 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       ],
     };
 
+    // Find the index of the last actual month globally
+    let lastActualMonthIndex = -1;
+    forecastData.forEach((row) => {
+      MONTH_NAMES.forEach((m, index) => {
+        if (row.months[m]?.isActual) {
+          lastActualMonthIndex = Math.max(lastActualMonthIndex, index);
+        }
+      });
+    });
+
     // Define Phasing Columns (Months + Commentary)
     const monthAndCommentaryColumns: Column[] = [
-      ...MONTH_NAMES.map((month) => {
-        const isActualMonth = forecastData.some(
-          (row) => row.months[month]?.isActual
-        );
+      ...MONTH_NAMES.map((month, monthIndex) => {
         return {
           key: `months.${month}`,
           header: month,
-          subHeader: isActualMonth ? "ACT" : "FCST",
+          subHeader:
+            monthIndex <= lastActualMonthIndex ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                  width: "100%",
+                }}
+              >
+                <Box component="span" sx={{ flexGrow: 1, textAlign: "center" }}>
+                  ACT
+                </Box>
+                <CheckCircleIcon
+                  fontSize="inherit"
+                  color="primary"
+                  sx={{
+                    fontSize: "1.0em",
+                    position: "absolute",
+                    right: 0,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                  }}
+                />
+              </Box>
+            ) : (
+              "FCST"
+            ),
           align: "right" as const,
           sortable: true,
           sortAccessor: (row: ExtendedForecastData) => row.months[month]?.value,
@@ -1146,32 +1182,55 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             if (!row?.months?.[month]) return "-";
             const data = row.months[month];
             const value = data.value ?? 0;
+            const isRowActual = data.isActual;
+            // Determine if this specific cell should be treated as preview
+            // We override the global isPreviewMonth if this row's actuals differ
+            let isCellPreview = false;
+            if (!isRowActual) {
+              let rowLastActualIndex = -1;
+              MONTH_NAMES.forEach((m, idx) => {
+                if (row.months[m]?.isActual) {
+                  rowLastActualIndex = Math.max(rowLastActualIndex, idx);
+                }
+              });
+              isCellPreview = monthIndex === rowLastActualIndex + 1;
+            }
+
+            const handleClick = (event: React.MouseEvent) => {
+              event.stopPropagation();
+              const currentYear = new Date().getFullYear();
+              setSelectedDetails({
+                market_id: row.market_id,
+                product: row.product,
+                // Pass -1 if value is 0 for actuals/preview to indicate potentially missing data
+                value:
+                  value === 0 && (isRowActual || isCellPreview)
+                    ? -1
+                    : Math.round(value),
+                month: MONTH_MAPPING[month],
+                year: currentYear,
+                variant_size_pack_id: row.variant_size_pack_id,
+                variant_size_pack_desc: row.variant_size_pack_desc,
+              });
+              setDetailsOpen(true);
+            };
 
             return (
               <div style={{ position: "relative" }}>
                 <Box
                   component="span"
-                  sx={{
-                    color: data.isActual ? "primary.main" : "inherit",
-                    cursor: data.isActual ? "pointer" : "inherit",
-                  }}
-                  onClick={(event) => {
-                    if (data.isActual) {
-                      event.stopPropagation();
-                      const currentYear = new Date().getFullYear();
-                      setSelectedDetails({
-                        market_id: row.market_id,
-                        product: row.product,
-                        value:
-                          value === 0 && data.isActual ? -1 : Math.round(value),
-                        month: MONTH_MAPPING[month],
-                        year: currentYear,
-                        variant_size_pack_id: row.variant_size_pack_id,
-                        variant_size_pack_desc: row.variant_size_pack_desc,
-                      });
-                      setDetailsOpen(true);
-                    }
-                  }}
+                  sx={(theme) => ({
+                    color:
+                      isRowActual || isCellPreview
+                        ? theme.palette.primary.main
+                        : theme.palette.text.primary,
+                    cursor:
+                      isRowActual || isCellPreview ? "pointer" : "inherit",
+                    textDecoration: "none",
+                  })}
+                  onClick={
+                    isRowActual || isCellPreview ? handleClick : undefined
+                  }
                 >
                   {value.toLocaleString(undefined, {
                     minimumFractionDigits: 1,

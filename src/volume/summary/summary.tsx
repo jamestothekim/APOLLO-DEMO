@@ -106,7 +106,6 @@ const DEFAULT_SELECTED_BRANDS = [
   "Hendricks",
   "Tullamore Dew",
   "Reyka",
-  "Clan MacGregor",
   "Monkey Shoulder",
 ];
 
@@ -524,7 +523,7 @@ export const Summary = ({
     // Filter brands based on selectedBrands *before* sorting and processing
     const filteredBrandKeys = Array.from(brandLevelAggregates.keys())
       .filter(
-        (brand) => selectedBrands.length === 0 || selectedBrands.includes(brand)
+        (brand) => selectedBrands.includes(brand) // Only include explicitly selected brands
       ) // Apply filter
       .sort();
 

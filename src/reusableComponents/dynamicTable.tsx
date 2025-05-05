@@ -33,7 +33,7 @@ interface SortConfig {
 export interface Column {
   key: string;
   header: string | React.ReactNode;
-  subHeader?: string;
+  subHeader?: string | React.ReactNode;
   align?: "left" | "right" | "center";
   render?: (value: any, row: any) => React.ReactNode;
   getValue?: (row: any) => any;

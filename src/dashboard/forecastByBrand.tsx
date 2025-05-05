@@ -38,7 +38,6 @@ const DEFAULT_SELECTED_BRANDS = [
   "Hendricks",
   "Tullamore Dew",
   "Reyka",
-  "Clan MacGregor",
   "Monkey Shoulder",
 ];
 
