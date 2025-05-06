@@ -22,6 +22,7 @@ import {
 } from "@mui/material";
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
+import LockIcon from "@mui/icons-material/Lock";
 import { DetailsContainer } from "./details/detailsContainer";
 import type { MarketData } from "../volumeForecast";
 // Import Guidance from the canonical source in the Redux slice
@@ -103,6 +104,7 @@ export interface ExtendedForecastData {
   };
   commentary?: string;
   isLoading?: boolean;
+  forecast_status?: string;
   [key: string]: any; // Allow dynamic guidance values
 }
 
@@ -189,6 +191,7 @@ const processRawData = (
       variant_size_pack_id: firstItem.variant_size_pack_id,
       variant_size_pack_desc: firstItem.variant_size_pack_desc,
       forecastLogic: firstItem.forecast_method || "flat",
+      forecast_status: firstItem.forecast_status || "draft",
       months: {}, // Will be populated below
       py_case_equivalent_volume_months: {}, // Initialize PY months object
       gross_sales_value: 0,
@@ -461,7 +464,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       const customerIds = marketMetadata
         .filter((market) => market.settings?.managed_by === "Customer")
         .flatMap((market) => market.customers || [])
-        .map((customer) => customer.customer_coding);
+        .map((customer) => customer.customer_id);
       setAvailableMarkets(customerIds);
     } else {
       const marketIds = marketMetadata
@@ -573,8 +576,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Handler for clicking the row itself (Sidebar selection)
   const handleSidebarSelect = (row: ExtendedForecastData) => {
+    if (row.forecast_status !== "draft") return;
+
     setSelectedRowForSidebar(row.id);
-    const selectedData = filteredData.find((r) => r.id === row.id); // Make sure filteredData is accessible
+    const selectedData = filteredData.find((r) => r.id === row.id);
     if (selectedData) {
       // Deep clone to prevent mutation issues
       const clonedData = JSON.parse(JSON.stringify(selectedData));
@@ -1048,8 +1053,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           align: "center" as const,
           sortable: true,
           sortAccessor: "market_name",
-          sx: { ...cellPaddingSx, minWidth: 150 }, // Apply padding, slightly reduce minWidth
+          sx: { ...cellPaddingSx, minWidth: 150 }, // Apply padding
+          filterable: true, // <-- Enable filtering
+          // Add getValue to extract the string for filtering
+          getValue: (row: ExtendedForecastData) => row.market_name,
           render: (_: any, row: ExtendedForecastData) => {
+            const isLocked = row.forecast_status !== "draft";
             const marketName = row.market_name;
             return (
               <Box
@@ -1057,8 +1066,23 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  cursor: isLocked ? "default" : "pointer",
+                  position: "relative",
+                  pl: isLocked ? "24px" : "0px",
                 }}
               >
+                {isLocked && (
+                  <LockIcon
+                    sx={{
+                      position: "absolute",
+                      left: 0,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      fontSize: "1rem",
+                      color: "action.disabled",
+                    }}
+                  />
+                )}
                 {isCustomerView ? row.market_name : marketName}
               </Box>
             );
@@ -1072,6 +1096,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 align: "left" as const,
                 extraWide: true,
                 sx: cellPaddingSx,
+                // Potentially make filterable too if needed
                 render: (_: any, row: ExtendedForecastData) =>
                   row.customer_name || "-",
               },
@@ -1089,10 +1114,28 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           },
           extraWide: true,
           sx: cellPaddingSx, // Apply padding
+          filterable: true, // <-- Enable filtering
+          // Add getValue to extract the string part for filtering
+          getValue: (row: ExtendedForecastData) => {
+            if (!row.product) return "";
+            const parts = row.product.split(" - ");
+            return parts.length > 1 ? parts[1] : row.product;
+          },
           render: (_: any, row: ExtendedForecastData) => {
             if (!row.product) return "-";
             const parts = row.product.split(" - ");
-            return parts.length > 1 ? parts[1] : row.product;
+            const productName = parts.length > 1 ? parts[1] : row.product;
+            // Apply default cursor if locked
+            return (
+              <Box
+                sx={{
+                  cursor:
+                    row.forecast_status !== "draft" ? "default" : "pointer",
+                }}
+              >
+                {productName}
+              </Box>
+            );
           },
         },
         {
@@ -1105,22 +1148,25 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             borderRight: "1px solid rgba(224, 224, 224, 1)",
             minWidth: 130,
           }, // Apply padding, increase minWidth
-          render: (value: string, row: ExtendedForecastData) => (
-            <Select
-              value={value}
-              onChange={(e) => handleLogicChange(e, row.id)}
-              onClick={(e) => e.stopPropagation()}
-              size="small"
-              sx={{ fontSize: "inherit", minWidth: 130 }} // Increase minWidth here as well
-              disabled={row.isLoading}
-            >
-              {FORECAST_OPTIONS.map((option) => (
-                <MenuItem key={option.id} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          ),
+          render: (value: string, row: ExtendedForecastData) => {
+            const isLocked = row.forecast_status !== "draft";
+            return (
+              <Select
+                value={value}
+                onChange={(e) => handleLogicChange(e, row.id)}
+                onClick={(e) => e.stopPropagation()}
+                size="small"
+                sx={{ fontSize: "inherit", minWidth: 130 }}
+                disabled={isLocked || row.isLoading}
+              >
+                {FORECAST_OPTIONS.map((option) => (
+                  <MenuItem key={option.id} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            );
+          },
         },
       ],
     };
@@ -1186,8 +1232,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             const data = row.months[month];
             const value = data.value ?? 0;
             const isRowActual = data.isActual;
+            const isLocked = row.forecast_status !== "draft";
+
             // Determine if this specific cell should be treated as preview
-            // We override the global isPreviewMonth if this row's actuals differ
             let isCellPreview = false;
             if (!isRowActual) {
               let rowLastActualIndex = -1;
@@ -1199,13 +1246,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               isCellPreview = monthIndex === rowLastActualIndex + 1;
             }
 
+            // Click handler remains, but internal lock check is removed
             const handleClick = (event: React.MouseEvent) => {
               event.stopPropagation();
+              // REMOVED: if (isLocked) return;
+
               const currentYear = new Date().getFullYear();
               setSelectedDetails({
                 market_id: row.market_id,
                 product: row.product,
-                // Pass -1 if value is 0 for actuals/preview to indicate potentially missing data
                 value:
                   value === 0 && (isRowActual || isCellPreview)
                     ? -1
@@ -1218,6 +1267,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               setDetailsOpen(true);
             };
 
+            const isClickable = isRowActual || isCellPreview;
+
             return (
               <div style={{ position: "relative" }}>
                 <Box
@@ -1225,15 +1276,16 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   sx={(theme) => ({
                     color:
                       isRowActual || isCellPreview
-                        ? theme.palette.primary.main
+                        ? theme.palette.primary.main // Always primary color if actual/preview
+                        : isLocked // Mute color if locked AND forecast
+                        ? theme.palette.text.disabled
                         : theme.palette.text.primary,
-                    cursor:
-                      isRowActual || isCellPreview ? "pointer" : "inherit",
+                    // Cursor is pointer ONLY if it's an actual/preview month
+                    cursor: isClickable ? "pointer" : "default",
                     textDecoration: "none",
                   })}
-                  onClick={
-                    isRowActual || isCellPreview ? handleClick : undefined
-                  }
+                  // Assign onClick ONLY if it's an actual/preview month
+                  onClick={isClickable ? handleClick : undefined}
                 >
                   {value.toLocaleString(undefined, {
                     minimumFractionDigits: 1,
@@ -1408,6 +1460,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     isCustomerView,
     forecastData,
     marketMetadata,
+    handleLogicChange,
+    handleCommentClick,
+    handleExpandClick,
   ]);
 
   // --- Function to render the expanded content ---
@@ -1816,6 +1871,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         rowsPerPageOptions={[10, 15, 25, 50, { value: -1, label: "All" }]}
         stickyHeader={true}
         maxHeight="calc(100vh)"
+        enableColumnFiltering={true}
       />
 
       <Box

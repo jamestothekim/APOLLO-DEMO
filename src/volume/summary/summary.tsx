@@ -2,20 +2,16 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Box,
   Paper,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  SelectChangeEvent,
   Typography,
   IconButton,
   useTheme,
-  OutlinedInput,
   Chip,
   CircularProgress,
   Collapse,
   TableCell,
   TableRow,
+  TextField,
+  Autocomplete,
 } from "@mui/material";
 import {
   DynamicTable,
@@ -471,16 +467,6 @@ export const Summary = ({
     selectedMarkets,
     customerToMarketMap,
   ]);
-
-  const handleMarketChange = (event: SelectChangeEvent<string[]>) => {
-    const value = event.target.value;
-    setSelectedMarkets(typeof value === "string" ? value.split(",") : value);
-  };
-
-  const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
-    const value = event.target.value;
-    setSelectedBrands(typeof value === "string" ? value.split(",") : value);
-  };
 
   const handleBrandExpandClick = useCallback((brandId: string) => {
     setExpandedBrandIds((prevIds) => {
@@ -1100,136 +1086,82 @@ export const Summary = ({
             }}
           >
             <Box sx={{ p: 2, display: "flex", gap: 2 }}>
-              <FormControl sx={{ minWidth: 300, flex: 1 }}>
-                <InputLabel id="market-select-label">Filter Markets</InputLabel>
-                <Select
-                  labelId="market-select-label"
-                  multiple
-                  value={selectedMarkets}
-                  onChange={handleMarketChange}
-                  input={<OutlinedInput label="Filter Markets" />}
-                  renderValue={(selected) => (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexWrap: "nowrap",
-                        gap: 0.5,
-                        overflow: "hidden",
-                        alignItems: "flex-end",
-                      }}
-                    >
-                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => {
-                        const market = marketData.find(
-                          (m) => m.market_id === value
-                        );
-                        return (
-                          <Chip
-                            key={value}
-                            label={market ? market.market_name : value}
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            sx={{
-                              borderRadius: "16px",
-                              backgroundColor: "transparent",
-                              flexShrink: 0,
-                              "& .MuiChip-label": { px: 1 },
-                            }}
-                            onDelete={(e) => {
-                              e.stopPropagation();
-                              setSelectedMarkets((prev) =>
-                                prev.filter((m) => m !== value)
-                              );
-                            }}
-                          />
-                        );
-                      })}
-                      {selected.length > MAX_CHIPS_VISIBLE && (
-                        <Typography
-                          variant="body2"
-                          sx={{ pl: 0.5, flexShrink: 0, pb: 0.25 }}
-                        >
-                          +{selected.length - MAX_CHIPS_VISIBLE} more
-                        </Typography>
-                      )}
-                      {selected.length === 0 && (
-                        <Box sx={{ minHeight: "24px" }} />
-                      )}
-                    </Box>
-                  )}
-                  MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}
-                >
-                  {marketData.map((market) => (
-                    <MenuItem key={market.market_id} value={market.market_id}>
-                      {market.market_name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                multiple
+                limitTags={MAX_CHIPS_VISIBLE}
+                options={marketData}
+                value={marketData.filter((m) =>
+                  selectedMarkets.includes(m.market_id)
+                )}
+                onChange={(_, newValue) => {
+                  setSelectedMarkets(newValue.map((m) => m.market_id));
+                }}
+                isOptionEqualToValue={(option, value) =>
+                  option.market_id === value.market_id
+                }
+                getOptionLabel={(option) => option.market_name}
+                renderInput={(params) => (
+                  <TextField {...params} label="Filter Markets" />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => {
+                    const { key, ...tagProps } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key}
+                        label={option.market_name}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{
+                          borderRadius: "16px",
+                          backgroundColor: "transparent",
+                          "& .MuiChip-label": { px: 1 },
+                        }}
+                        {...tagProps}
+                      />
+                    );
+                  })
+                }
+                sx={{ minWidth: 300, flex: 1 }}
+              />
 
-              <FormControl sx={{ minWidth: 300, flex: 1 }}>
-                <InputLabel id="brand-select-label">Filter Brands</InputLabel>
-                <Select
-                  labelId="brand-select-label"
-                  multiple
-                  value={selectedBrands}
-                  onChange={handleBrandChange}
-                  input={<OutlinedInput label="Filter Brands" />}
-                  renderValue={(selected) => (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexWrap: "nowrap",
-                        gap: 0.5,
-                        overflow: "hidden",
-                        alignItems: "flex-end",
-                      }}
-                    >
-                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => (
-                        <Chip
-                          key={value}
-                          label={value}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          sx={{
-                            borderRadius: "16px",
-                            backgroundColor: "transparent",
-                            flexShrink: 0,
-                            "& .MuiChip-label": {
-                              px: 1,
-                            },
-                          }}
-                          onDelete={(e) => {
-                            e.stopPropagation();
-                            setSelectedBrands((prev) =>
-                              prev.filter((b) => b !== value)
-                            );
-                          }}
-                        />
-                      ))}
-                      {selected.length > MAX_CHIPS_VISIBLE && (
-                        <Typography
-                          variant="body2"
-                          sx={{ pl: 0.5, flexShrink: 0, pb: 0.25 }}
-                        >
-                          +{selected.length - MAX_CHIPS_VISIBLE} more
-                        </Typography>
-                      )}
-                      {selected.length === 0 && (
-                        <Box sx={{ minHeight: "24px" }} />
-                      )}
-                    </Box>
-                  )}
-                  MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}
-                >
-                  {availableBrands.map((brand) => (
-                    <MenuItem key={brand} value={brand}>
-                      {brand}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                multiple
+                limitTags={MAX_CHIPS_VISIBLE}
+                options={availableBrands}
+                value={selectedBrands}
+                onChange={(_, newValue) => {
+                  setSelectedBrands(newValue);
+                }}
+                getOptionLabel={(option) => option}
+                renderInput={(params) => (
+                  <TextField {...params} label="Filter Brands" />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => {
+                    const { key, ...tagProps } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key}
+                        label={option}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{
+                          borderRadius: "16px",
+                          backgroundColor: "transparent",
+                          "& .MuiChip-label": {
+                            px: 1,
+                          },
+                        }}
+                        {...tagProps}
+                      />
+                    );
+                  })
+                }
+                sx={{ minWidth: 300, flex: 1 }}
+              />
             </Box>
 
             <Box sx={{ px: 2 }}>

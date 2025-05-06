@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
-  FormControl,
-  OutlinedInput,
-  Select,
   Typography,
-  SelectChangeEvent,
-  MenuItem,
   Chip,
   Paper,
   Tabs,
   Tab,
   IconButton,
   Collapse,
-  InputLabel,
+  TextField,
+  Autocomplete,
 } from "@mui/material";
 import { Depletions } from "./depletions/depletions";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -65,7 +61,7 @@ export interface MarketData {
   market_hyperion: string;
   market_coding: string;
   market_id: string;
-  customers: any[];
+  customers: CustomerData[];
   settings: any;
   raw: string;
 }
@@ -76,6 +72,9 @@ interface CustomerData {
   code: string;
   display: string;
   raw: string;
+  customer_id: string;
+  customer_actual_data?: string;
+  customer_coding?: string;
 }
 
 interface VolumeForecastProps {
@@ -105,17 +104,6 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
     setTabValue(newValue);
   };
 
-  const handleMarketChange = (event: SelectChangeEvent<string[]>) => {
-    const value = event.target.value;
-    const selectedValues = typeof value === "string" ? value.split(",") : value;
-    setSelectedMarkets(selectedValues);
-  };
-
-  const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
-    const value = event.target.value;
-    setSelectedBrands(typeof value === "string" ? value.split(",") : value);
-  };
-
   const handleUndo = async () => {
     if (undoHandler) {
       await undoHandler();
@@ -139,11 +127,14 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
       ? marketData
           .filter((market) => market.settings?.managed_by === "Customer")
           .flatMap((market) =>
-            (market.customers || []).map((customer) => ({
+            (market.customers || []).map((customer: any) => ({
               id: customer.customer_id,
+              customer_id: customer.customer_id,
               code: customer.customer_id,
               display: getCleanCustomerName(customer.customer_actual_data),
               raw: customer.customer_actual_data,
+              customer_actual_data: customer.customer_actual_data,
+              customer_coding: customer.customer_coding,
             }))
           )
       : marketData.filter((market) => market.settings?.managed_by === "Market");
@@ -157,7 +148,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   const isCustomerData = (
     item: MarketData | CustomerData
   ): item is CustomerData => {
-    return "raw" in item;
+    return "code" in item && "display" in item;
   };
 
   const handleColumns = () => {
@@ -212,163 +203,100 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
         <Box>
           <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
             <Box sx={{ flex: 1 }}>
-              <FormControl fullWidth>
-                <InputLabel>
-                  Filter {isCustomerView ? "Customers" : "Markets"}
-                </InputLabel>
-                <Select
-                  multiple
-                  value={selectedMarkets}
-                  onChange={handleMarketChange}
-                  input={
-                    <OutlinedInput
-                      label={`Filter ${
-                        isCustomerView ? "Customers" : "Markets"
-                      }`}
-                    />
-                  }
-                  renderValue={(selected) => (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexWrap: "nowrap",
-                        gap: 0.5,
-                        overflow: "hidden",
-                        alignItems: "center",
-                        minHeight: "24px",
-                      }}
-                    >
-                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => {
-                        const item = filteredData.find(
-                          (item) =>
-                            (isCustomerData(item)
-                              ? item.code
-                              : item.market_id) === value
-                        );
-                        const label = item
-                          ? isCustomerData(item)
-                            ? item.display
-                            : item.market_name
-                          : value;
-                        return (
-                          <Chip
-                            key={value}
-                            label={label}
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            sx={{
-                              borderRadius: "16px",
-                              backgroundColor: "transparent",
-                              flexShrink: 0,
-                              "& .MuiChip-label": { px: 1 },
-                            }}
-                            onDelete={(e) => {
-                              e.stopPropagation();
-                              setSelectedMarkets((prev) =>
-                                prev.filter((market) => market !== value)
-                              );
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        );
-                      })}
-                      {selected.length > MAX_CHIPS_VISIBLE && (
-                        <Typography
-                          variant="body2"
-                          sx={{ pl: 0.5, flexShrink: 0 }}
-                        >
-                          +{selected.length - MAX_CHIPS_VISIBLE} more
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        "& .MuiMenuItem-root": {},
-                      },
-                    },
-                  }}
-                >
-                  {filteredData.map((item) => (
-                    <MenuItem
-                      key={isCustomerData(item) ? item.code : item.market_id}
-                      value={isCustomerData(item) ? item.code : item.market_id}
-                    >
-                      {isCustomerData(item) ? item.display : item.market_name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                multiple
+                limitTags={MAX_CHIPS_VISIBLE}
+                options={filteredData}
+                value={filteredData.filter((item) =>
+                  selectedMarkets.includes(
+                    isCustomerView
+                      ? (item as CustomerData).customer_coding ||
+                          (item as CustomerData).code
+                      : (item as MarketData).market_id
+                  )
+                )}
+                onChange={(_, newValue) => {
+                  setSelectedMarkets(
+                    newValue.map((item) =>
+                      isCustomerView
+                        ? (item as CustomerData).customer_coding ||
+                          (item as CustomerData).code
+                        : (item as MarketData).market_id
+                    )
+                  );
+                }}
+                isOptionEqualToValue={(option, value) =>
+                  isCustomerView
+                    ? (option as CustomerData).code ===
+                      (value as CustomerData).code
+                    : (option as MarketData).market_id ===
+                      (value as MarketData).market_id
+                }
+                getOptionLabel={(option) =>
+                  isCustomerData(option) ? option.display : option.market_name
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={`Filter ${isCustomerView ? "Customers" : "Markets"}`}
+                  />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => {
+                    const label = isCustomerData(option)
+                      ? option.display
+                      : option.market_name;
+                    return (
+                      <Chip
+                        label={label}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{
+                          borderRadius: "16px",
+                          backgroundColor: "transparent",
+                          "& .MuiChip-label": { px: 1 },
+                        }}
+                        {...getTagProps({ index })}
+                      />
+                    );
+                  })
+                }
+                sx={{ width: "100%" }}
+              />
             </Box>
 
             <Box sx={{ flex: 1 }}>
-              <FormControl fullWidth>
-                <InputLabel>Filter Brands</InputLabel>
-                <Select
-                  multiple
-                  value={selectedBrands}
-                  onChange={handleBrandChange}
-                  input={<OutlinedInput label="Filter Brands" />}
-                  renderValue={(selected) => (
-                    <Box
+              <Autocomplete
+                multiple
+                limitTags={MAX_CHIPS_VISIBLE}
+                options={availableBrands}
+                value={selectedBrands}
+                onChange={(_, newValue) => {
+                  setSelectedBrands(newValue);
+                }}
+                getOptionLabel={(option) => option}
+                renderInput={(params) => (
+                  <TextField {...params} label="Filter Brands" />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip
+                      label={option}
+                      size="small"
+                      variant="outlined"
+                      color="primary"
                       sx={{
-                        display: "flex",
-                        flexWrap: "nowrap",
-                        gap: 0.5,
-                        overflow: "hidden",
-                        alignItems: "center",
-                        minHeight: "24px",
+                        borderRadius: "16px",
+                        backgroundColor: "transparent",
+                        "& .MuiChip-label": { px: 1 },
                       }}
-                    >
-                      {selected.slice(0, MAX_CHIPS_VISIBLE).map((value) => (
-                        <Chip
-                          key={value}
-                          label={value}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          sx={{
-                            borderRadius: "16px",
-                            backgroundColor: "transparent",
-                            flexShrink: 0,
-                            "& .MuiChip-label": { px: 1 },
-                          }}
-                          onDelete={(e) => {
-                            e.stopPropagation();
-                            setSelectedBrands((prev) =>
-                              prev.filter((brand) => brand !== value)
-                            );
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ))}
-                      {selected.length > MAX_CHIPS_VISIBLE && (
-                        <Typography
-                          variant="body2"
-                          sx={{ pl: 0.5, flexShrink: 0 }}
-                        >
-                          +{selected.length - MAX_CHIPS_VISIBLE} more
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        "& .MuiMenuItem-root": {},
-                      },
-                    },
-                  }}
-                >
-                  {availableBrands.map((brand) => (
-                    <MenuItem key={brand} value={brand}>
-                      {brand}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                      {...getTagProps({ index })}
+                    />
+                  ))
+                }
+                sx={{ width: "100%" }}
+              />
             </Box>
           </Box>
 
