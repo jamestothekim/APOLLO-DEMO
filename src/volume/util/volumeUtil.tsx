@@ -508,9 +508,7 @@ export const recalculateGuidance = (
         // (Keep existing multi_calc sub-calculation logic here)
         const cyValue = Number(updatedRow[subCalc.cyField]) || 0;
         const pyValue = Number(updatedRow[subCalc.pyField]) || 0;
-        console.log(
-          `    [multi_calc] cyField (${subCalc.cyField}): ${cyValue}, pyField (${subCalc.pyField}): ${pyValue}`
-        ); // Log input values
+
         let subResult = 0;
         if (subCalc.calculationType === "percentage") {
           subResult = pyValue === 0 ? 0 : (cyValue - pyValue) / pyValue;
@@ -519,15 +517,10 @@ export const recalculateGuidance = (
         } else if (subCalc.calculationType === "direct") {
           subResult = cyValue;
         }
-        console.log(
-          `    [multi_calc] Sub-result (${subCalc.id}): ${subResult}`
-        ); // Log sub-result
+
         results[subCalc.id] = subResult;
       });
-      console.log(
-        `  [multi_calc] Final results object for guidance ID ${guidance.id}:`,
-        results
-      ); // Log final object
+
       updatedRow[`guidance_${guidance.id}`] = results;
     }
     // Handle other calculated types (difference, percentage) where value is an object
@@ -714,87 +707,92 @@ export const calculateRowGuidanceMonthlyData = (
   rowData: ExtendedForecastData,
   guidance: Guidance // Uses local Guidance type from this file
 ): { [month: string]: number } | null => {
+  // --- Calculate Overall Rates (needed for direct GSV fallback) --- START ---
+  const totalVolumeTY = rowData.case_equivalent_volume || 0;
+  const totalVolumePY = rowData.py_case_equivalent_volume || 0;
+  const totalGsvTY = rowData.gross_sales_value || 0;
+  const totalGsvPY = rowData.py_gross_sales_value || 0;
+
+  const tyRate = totalVolumeTY === 0 ? 0 : totalGsvTY / totalVolumeTY;
+  const pyRate = totalVolumePY === 0 ? 0 : totalGsvPY / totalVolumePY;
+  // --- Calculate Overall Rates --- END ---
+
   // Direct Value (e.g., py_case_equivalent_volume)
   if (typeof guidance.value === "string") {
     const fieldName = guidance.value;
-    // Assumes convention like 'py_case_equivalent_volume_months' exists on rowData if applicable
     const monthlyDataSource = `${fieldName}_months`;
 
     if (
       rowData[monthlyDataSource] &&
       typeof rowData[monthlyDataSource] === "object"
     ) {
+      // --- Path 1: Use Direct Monthly Source ---
       const monthlyData: { [month: string]: number } = {};
       MONTH_NAMES.forEach((month) => {
         monthlyData[month] = rowData[monthlyDataSource][month]?.value || 0;
       });
       return monthlyData;
     } else {
-      // Distribute total if monthly source doesn't exist (less accurate)
-      console.warn(
-        `Monthly data source ${monthlyDataSource} not found for row ${rowData.id}. Distributing total.`
-      );
-      const totalValue = Number(rowData[fieldName]) || 0;
-      const monthlyValue = totalValue / 12;
+      // --- Path 2: Direct Source NOT Found - Calculate or Distribute ---
       const monthlyData: { [month: string]: number } = {};
-      MONTH_NAMES.forEach((month) => {
-        monthlyData[month] = monthlyValue;
-      });
+
+      if (fieldName === "gross_sales_value") {
+        // Calculate Monthly GSV TY = Monthly Volume TY * Overall TY Rate
+        MONTH_NAMES.forEach((month) => {
+          const monthVolumeTY = rowData.months?.[month]?.value || 0;
+          monthlyData[month] = monthVolumeTY * tyRate;
+        });
+      } else if (fieldName === "py_gross_sales_value") {
+        // Calculate Monthly GSV PY = Monthly Volume PY * Overall PY Rate
+        MONTH_NAMES.forEach((month) => {
+          const monthVolumePY =
+            rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
+          monthlyData[month] = monthVolumePY * pyRate;
+        });
+      } else {
+        // Fallback: Distribute total for other direct fields without monthly source
+        const totalValue = Number(rowData[fieldName]) || 0;
+        const monthlyValue = totalValue / 12;
+        MONTH_NAMES.forEach((month) => {
+          monthlyData[month] = monthlyValue;
+        });
+      }
       return monthlyData;
     }
   }
 
-  // Calculated Value (Difference or Percentage)
+  // --- Path 3: Calculated Value (Difference or Percentage) ---
   const currentMonths = rowData.months;
 
   // Helper to get monthly values, prioritizing specific monthly fields
   const getMonthlyValue = (fieldName: string, month: string): number => {
+    // This helper is now primarily for the CALCULATED path
+    // It retains the logic to find direct monthly sources or calculate GSV as fallbacks
     const monthlyDataSource = `${fieldName}_months`;
     if (
       rowData[monthlyDataSource] &&
       typeof rowData[monthlyDataSource] === "object" &&
       rowData[monthlyDataSource][month]
     ) {
-      return rowData[monthlyDataSource][month]?.value || 0;
+      const value = rowData[monthlyDataSource][month]?.value || 0;
+      return value;
     } else {
-      // Fallback calculations for specific fields if monthly breakdown isn't directly available
+      let calculatedValue = 0;
       if (fieldName === "gross_sales_value") {
-        // Estimate monthly TY GSV using LY Rate applied to TY Volume
-        const monthVolume = currentMonths[month]?.value || 0;
-        const pyTotalVolume = rowData.py_case_equivalent_volume || 1; // Avoid div by zero
-        const pyTotalGSV = rowData.py_gross_sales_value || 0;
-        const lyRate = pyTotalVolume === 0 ? 0 : pyTotalGSV / pyTotalVolume;
-        return monthVolume * lyRate; // Apply LY rate to TY monthly volume
-      }
-      if (fieldName === "py_gross_sales_value") {
-        // Estimate monthly PY GSV: Prioritize specific monthly PY GSV if available, else use LY Rate applied to PY Volume
-        const pyMonthlyDataSource = "py_gross_sales_value_months";
-        if (
-          rowData[pyMonthlyDataSource] &&
-          typeof rowData[pyMonthlyDataSource] === "object" &&
-          rowData[pyMonthlyDataSource][month]
-        ) {
-          return rowData[pyMonthlyDataSource][month]?.value || 0;
-        }
-        // Fallback: Use the overall LY rate applied to the PY monthly volume
-        const pyMonthVolume =
+        const monthVolumeTY = currentMonths[month]?.value || 0;
+        calculatedValue = monthVolumeTY * tyRate; // Apply overall TY rate
+      } else if (fieldName === "py_gross_sales_value") {
+        const monthVolumePY =
           rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
-        const pyTotalVolume = rowData.py_case_equivalent_volume || 1; // Avoid div by zero
-        const pyTotalGSV = rowData.py_gross_sales_value || 0;
-        const lyRate = pyTotalVolume === 0 ? 0 : pyTotalGSV / pyTotalVolume;
-        return pyMonthVolume * lyRate; // Apply LY rate to PY monthly volume
+        calculatedValue = monthVolumePY * pyRate; // Apply overall PY rate
+      } else if (fieldName === "py_case_equivalent_volume") {
+        calculatedValue = currentMonths[month]?.value || 0;
+      } else if (fieldName === "case_equivalent_volume") {
+        calculatedValue = currentMonths[month]?.value || 0;
+      } else {
+        calculatedValue = 0; // Default to 0 if field cannot be determined
       }
-      if (fieldName === "py_case_equivalent_volume") {
-        return rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
-      }
-      if (fieldName === "case_equivalent_volume") {
-        // Current forecast volume for the month
-        return currentMonths[month]?.value || 0;
-      }
-      console.warn(
-        `Cannot determine monthly value for ${fieldName} in ${month}`
-      );
-      return 0;
+      return calculatedValue;
     }
   };
 
@@ -840,7 +838,6 @@ export const calculateRowGuidanceMonthlyData = (
     return resultMonthlyData;
   }
 
-  console.error("Unhandled guidance calculation type or structure:", guidance);
   return null; // Indicate calculation failed or wasn't applicable
 };
 
@@ -859,49 +856,45 @@ export const calculateSingleSummaryGuidance = (
     total_py: number;
     total_gsv_ty: number;
     total_gsv_py: number;
-    months_ty?: { [key: string]: number }; // Only needed for monthly calcs
-    months_py?: { [key: string]: number };
-    months_gsv_ty?: { [key: string]: number };
-    months_gsv_py?: { [key: string]: number };
+    // Use distinct names for the input monthly data to avoid conflict
+    input_months_ty?: { [key: string]: number };
+    input_months_py?: { [key: string]: number };
+    // Removed months_gsv_ty and months_gsv_py from input
   },
   guidance: Guidance,
   calculateMonthly: boolean = false
 ): CalculatedGuidanceValue => {
   const result: CalculatedGuidanceValue = {};
 
+  // --- Calculate Overall Rates --- START ---
+  const totalVolumeTY = baseData.total_ty || 0;
+  const totalVolumePY = baseData.total_py || 0;
+  const totalGsvTY = baseData.total_gsv_ty || 0;
+  const totalGsvPY = baseData.total_gsv_py || 0;
+
+  const tyRate = totalVolumeTY === 0 ? 0 : totalGsvTY / totalVolumeTY;
+  const pyRate = totalVolumePY === 0 ? 0 : totalGsvPY / totalVolumePY;
+  // --- Calculate Overall Rates --- END ---
+
   // Helper to get total value based on field name
   const getTotalValue = (fieldName: string): number => {
-    const value = (() => {
-      if (fieldName === "case_equivalent_volume") return baseData.total_ty;
-      if (fieldName === "py_case_equivalent_volume") return baseData.total_py;
-      if (fieldName === "gross_sales_value") return baseData.total_gsv_ty;
-      if (fieldName === "py_gross_sales_value") return baseData.total_gsv_py;
-      return 0;
-    })();
-
-    return value;
-  };
-
-  // Helper to get monthly value based on field name
-  const getMonthlyValue = (fieldName: string, month: string): number => {
-    if (fieldName === "case_equivalent_volume")
-      return baseData.months_ty?.[month] ?? 0;
-    if (fieldName === "py_case_equivalent_volume")
-      return baseData.months_py?.[month] ?? 0;
-    if (fieldName === "gross_sales_value")
-      return baseData.months_gsv_ty?.[month] ?? 0;
-    if (fieldName === "py_gross_sales_value")
-      return baseData.months_gsv_py?.[month] ?? 0;
+    // Use the calculated totals from baseData
+    if (fieldName === "case_equivalent_volume") return totalVolumeTY;
+    if (fieldName === "py_case_equivalent_volume") return totalVolumePY;
+    if (fieldName === "gross_sales_value") return totalGsvTY;
+    if (fieldName === "py_gross_sales_value") return totalGsvPY;
+    // Add Rate calculation if requested directly (though unlikely for total)
+    if (fieldName === "gsv_rate") return tyRate;
+    if (fieldName === "py_gsv_rate") return pyRate;
+    console.warn(`Unknown total field requested: ${fieldName}`);
     return 0;
   };
 
-  // --- Calculate Total ---
+  // --- Calculate Total Guidance Value --- (Logic remains similar)
   if (typeof guidance.value === "string") {
     result.total = getTotalValue(guidance.value);
   } else {
     const calcType = guidance.calculation.type;
-
-    // Add type guards for guidance.value
     if (
       calcType === "difference" &&
       guidance.value !== null &&
@@ -924,23 +917,44 @@ export const calculateSingleSummaryGuidance = (
       const denominator = getTotalValue(guidance.value.denominator.trim());
       result.total = denominator === 0 ? 0 : numerator / denominator;
     }
-    // Note: multi_calc is handled at a higher level (calculateAllSummaryGuidance) and shouldn't reach here directly for a single metric.
   }
   // Apply rounding (or other formatting logic) consistently
   result.total = result.total ? Math.round(result.total * 1000) / 1000 : 0;
 
-  // --- Calculate Monthly (if requested) ---
-  if (calculateMonthly && baseData.months_ty) {
-    // Ensure monthly source data exists
+  // --- Calculate Monthly Guidance Value (if requested) ---
+  // Use the renamed input field name here
+  if (calculateMonthly && baseData.input_months_ty) {
     result.monthly = {};
     MONTH_NAMES.forEach((month) => {
       let monthlyVal: number | undefined = undefined;
+
+      // Helper to get the specific monthly value based on field name for THIS month
+      const getMonthlyValue = (
+        fieldName: string,
+        currentMonth: string
+      ): number => {
+        // Use the renamed input field names inside the helper
+        if (fieldName === "case_equivalent_volume")
+          return baseData.input_months_ty?.[currentMonth] ?? 0;
+        if (fieldName === "py_case_equivalent_volume")
+          return baseData.input_months_py?.[currentMonth] ?? 0;
+        // Calculate monthly GSV based on volume and overall rate
+        if (fieldName === "gross_sales_value")
+          return (baseData.input_months_ty?.[currentMonth] ?? 0) * tyRate;
+        if (fieldName === "py_gross_sales_value")
+          return (baseData.input_months_py?.[currentMonth] ?? 0) * pyRate;
+        // Add Rate calculation if requested directly
+        if (fieldName === "gsv_rate") return tyRate; // Rate is constant for all months in this model
+        if (fieldName === "py_gsv_rate") return pyRate;
+        console.warn(`Unknown monthly field requested: ${fieldName}`);
+        return 0;
+      };
+
+      // --- Calculate specific guidance for the current month ---
       if (typeof guidance.value === "string") {
         monthlyVal = getMonthlyValue(guidance.value, month);
       } else {
         const calcType = guidance.calculation.type;
-
-        // Add type guards for guidance.value
         if (
           calcType === "difference" &&
           guidance.value !== null &&
@@ -968,9 +982,8 @@ export const calculateSingleSummaryGuidance = (
           const numerator = numerVal1 - numerVal2;
           monthlyVal = denomVal === 0 ? 0 : numerator / denomVal;
         }
-        // Note: multi_calc is handled at a higher level.
       }
-      // Apply rounding (or other formatting logic) consistently
+      // Apply rounding (or other formatting logic) consistently to the monthly value
       result.monthly![month] =
         monthlyVal !== undefined ? Math.round(monthlyVal * 1000) / 1000 : 0;
     });
@@ -1151,7 +1164,6 @@ export const aggregateSummaryData = (
 
     // If we couldn't determine a valid market ID for the change, skip it
     if (!marketId) {
-      // console.warn(`Could not determine market ID for pending change key: ${redisKey}`);
       return;
     }
 
@@ -1211,8 +1223,9 @@ export const aggregateSummaryData = (
 
     const volume = bucket.case_equivalent_volume;
     const py_volume = bucket.py_case_equivalent_volume;
-    const gsv_ty = bucket.gross_sales_value;
-    const gsv_py = bucket.py_gross_sales_value;
+    // Keep total gsv values from bucket for later total aggregation
+    const gsv_ty_from_bucket = bucket.gross_sales_value;
+    const gsv_py_from_bucket = bucket.py_gross_sales_value;
 
     // Initialize variant aggregate if it doesn't exist
     if (!variantAggregation[variantKey]) {
@@ -1228,24 +1241,26 @@ export const aggregateSummaryData = (
           {}
         ),
         total_py_volume: 0,
-        months_gsv_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        // monthly GSV properties are optional now, no need to initialize
         total_gsv_ty: 0,
-        months_gsv_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
         total_gsv_py: 0,
       };
     }
 
-    // Accumulate values into the FINAL summary aggregates
+    // Accumulate ONLY volumes monthly
     variantAggregation[variantKey].months[monthName] += volume;
     variantAggregation[variantKey].months_py_volume[monthName] += py_volume;
-    variantAggregation[variantKey].months_gsv_ty[monthName] += gsv_ty;
-    variantAggregation[variantKey].months_gsv_py[monthName] += gsv_py;
+    // Accumulate TOTAL GSV values (not monthly)
+    variantAggregation[variantKey].total_gsv_ty += gsv_ty_from_bucket;
+    variantAggregation[variantKey].total_gsv_py += gsv_py_from_bucket;
+
+    // Do NOT accumulate monthly GSV from buckets
   });
 
   // --- Post-process VARIANT Aggregates (Totals, Rounding) ---
   let variantsAggArray = Object.values(variantAggregation)
     .map((variantAggRow) => {
-      // Calculate totals from accumulated monthly values
+      // Calculate totals from accumulated monthly volumes
       variantAggRow.total = Object.values(variantAggRow.months).reduce(
         (s: number, v: number) => s + v,
         0
@@ -1253,33 +1268,24 @@ export const aggregateSummaryData = (
       variantAggRow.total_py_volume = Object.values(
         variantAggRow.months_py_volume
       ).reduce((s: number, v: number) => s + v, 0);
-      variantAggRow.total_gsv_ty = Object.values(
-        variantAggRow.months_gsv_ty
-      ).reduce((s: number, v: number) => s + v, 0);
-      variantAggRow.total_gsv_py = Object.values(
-        variantAggRow.months_gsv_py
-      ).reduce((s: number, v: number) => s + v, 0);
+      // Total GSV is already accumulated, just keep it.
 
       // Round totals
       variantAggRow.total = roundToWhole(variantAggRow.total); // Use helper function
       variantAggRow.total_py_volume = roundToWhole(
         variantAggRow.total_py_volume
       );
+      // Round total GSV directly
       variantAggRow.total_gsv_ty = roundToWhole(variantAggRow.total_gsv_ty);
       variantAggRow.total_gsv_py = roundToWhole(variantAggRow.total_gsv_py);
 
-      // Round monthly values
+      // Round monthly volume values
       MONTH_NAMES.forEach((m) => {
         variantAggRow.months[m] = roundToWhole(variantAggRow.months[m]);
         variantAggRow.months_py_volume[m] = roundToWhole(
           variantAggRow.months_py_volume[m]
         );
-        variantAggRow.months_gsv_ty[m] = roundToWhole(
-          variantAggRow.months_gsv_ty[m]
-        );
-        variantAggRow.months_gsv_py[m] = roundToWhole(
-          variantAggRow.months_gsv_py[m]
-        );
+        // No monthly GSV fields to round here
       });
 
       return variantAggRow;
@@ -1296,13 +1302,11 @@ export const aggregateSummaryData = (
         brand: brandKey,
         months: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
         total: 0,
-        // Initialize new monthly fields for brand aggregate
         months_py_volume: MONTH_NAMES.reduce(
           (acc, m) => ({ ...acc, [m]: 0 }),
           {}
         ),
-        months_gsv_ty: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
-        months_gsv_py: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
+        // No monthly GSV fields needed for Brand aggregate either
         total_py_volume: 0,
         total_gsv_ty: 0,
         total_gsv_py: 0,
@@ -1311,10 +1315,8 @@ export const aggregateSummaryData = (
     const brandAgg = brandAggsMap.get(brandKey)!;
     MONTH_NAMES.forEach((m) => {
       brandAgg.months[m] += variantRow.months[m];
-      // Accumulate new monthly fields
       brandAgg.months_py_volume[m] += variantRow.months_py_volume[m];
-      brandAgg.months_gsv_ty[m] += variantRow.months_gsv_ty[m];
-      brandAgg.months_gsv_py[m] += variantRow.months_gsv_py[m];
+      // Do not accumulate monthly GSV here
     });
     brandAgg.total += variantRow.total;
     brandAgg.total_py_volume += variantRow.total_py_volume;
@@ -1330,18 +1332,16 @@ export const aggregateSummaryData = (
     brandAgg.total_gsv_py = roundToWhole(brandAgg.total_gsv_py);
     MONTH_NAMES.forEach((m) => {
       brandAgg.months[m] = roundToWhole(brandAgg.months[m]);
-      // Round new monthly fields
       brandAgg.months_py_volume[m] = roundToWhole(brandAgg.months_py_volume[m]);
-      brandAgg.months_gsv_ty[m] = roundToWhole(brandAgg.months_gsv_ty[m]);
-      brandAgg.months_gsv_py[m] = roundToWhole(brandAgg.months_gsv_py[m]);
+      // No monthly GSV fields to round
     });
   });
 
-  // --- Return the final aggregated results ---
+  // --- Return the final aggregated results --- (maxActualIndex is still needed)
   return {
     variantsAggArray,
     brandAggsMap,
-    maxActualIndex,
+    maxActualIndex, // Ensure this is still correctly calculated and returned
   };
 };
 // --- NEW Aggregation Function --- END
@@ -1378,10 +1378,10 @@ export const calculateAllSummaryGuidance = (
       total_gsv_ty: variantAgg.total_gsv_ty,
       total_gsv_py: variantAgg.total_gsv_py,
       // Map source fields to expected fields
-      months_ty: variantAgg.months,
-      months_py: variantAgg.months_py_volume,
-      months_gsv_ty: variantAgg.months_gsv_ty,
-      months_gsv_py: variantAgg.months_gsv_py,
+      input_months_ty: variantAgg.months,
+      input_months_py: variantAgg.months_py_volume,
+      input_months_gsv_ty: variantAgg.months_gsv_ty,
+      input_months_gsv_py: variantAgg.months_gsv_py,
     };
     uniqueGuidanceDefs.forEach((guidanceDef) => {
       const needsMonthly = rowGuidanceIds.has(guidanceDef.id);
@@ -1404,10 +1404,10 @@ export const calculateAllSummaryGuidance = (
       total_gsv_ty: brandAgg.total_gsv_ty,
       total_gsv_py: brandAgg.total_gsv_py,
       // Map source fields to expected fields (using fields added in previous step)
-      months_ty: brandAgg.months,
-      months_py: brandAgg.months_py_volume,
-      months_gsv_ty: brandAgg.months_gsv_ty,
-      months_gsv_py: brandAgg.months_gsv_py,
+      input_months_ty: brandAgg.months,
+      input_months_py: brandAgg.months_py_volume,
+      input_months_gsv_ty: brandAgg.months_gsv_ty,
+      input_months_gsv_py: brandAgg.months_gsv_py,
     };
     uniqueGuidanceDefs.forEach((guidanceDef) => {
       const needsMonthly = rowGuidanceIds.has(guidanceDef.id);
@@ -1492,10 +1492,10 @@ export const calculateTotalGuidance = (
     total_py,
     total_gsv_ty,
     total_gsv_py,
-    months_ty: totalMonths_ty,
-    months_py: totalMonths_py,
-    months_gsv_ty: totalMonths_gsv_ty,
-    months_gsv_py: totalMonths_gsv_py,
+    input_months_ty: totalMonths_ty,
+    input_months_py: totalMonths_py,
+    input_months_gsv_ty: totalMonths_gsv_ty,
+    input_months_gsv_py: totalMonths_gsv_py,
   };
 
   uniqueGuidanceDefs.forEach((guidanceDef) => {

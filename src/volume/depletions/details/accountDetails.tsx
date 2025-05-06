@@ -124,11 +124,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
           }
         );
         const data = response.data;
-        console.log("Fetched account details response:", {
-          rowCount: data.length,
-          firstRow: data[0],
-          lastRow: data[data.length - 1],
-        });
+
         setAccountData(data);
         onDataFetched(data); // Cache the fetched data
         // Set initial brand selection

@@ -28,17 +28,6 @@ export const DetailsContainer = ({
   variant_size_pack_id,
   variant_size_pack_desc,
 }: DetailsContainerProps) => {
-  console.log("DetailsContainer Props:", {
-    open,
-    onClose,
-    market_id,
-    product,
-    value,
-    month,
-    year,
-    variant_size_pack_id,
-    variant_size_pack_desc,
-  });
   const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [dataReady, setDataReady] = useState(false);

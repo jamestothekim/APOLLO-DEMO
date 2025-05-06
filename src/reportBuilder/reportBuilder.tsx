@@ -156,7 +156,6 @@ const ReportBuilder = () => {
   };
 
   const handleExport = () => {
-    console.log("Export requested");
     console.warn(
       "Export functionality needs refactoring after removing direct aggregation."
     );

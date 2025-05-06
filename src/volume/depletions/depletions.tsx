@@ -420,7 +420,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   } | null>(null);
   const [comment, setComment] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
-  // const [expandedGuidanceStates, setExpandedGuidanceStates] = useState<{ [guidanceId: string]: boolean }>({});
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [publishComment, setPublishComment] = useState("");
+  const [publishCommentError, setPublishCommentError] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Reset sub-row icon states when main expanded row changes
   // useEffect(() => {
@@ -1555,7 +1558,71 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   };
 
   const handlePublish = () => {
-    // TODO: Implement publish functionality
+    setPublishComment(""); // Reset comment
+    setPublishCommentError(false); // Reset error
+    setIsPublishing(false); // Reset loading state
+    setPublishDialogOpen(true); // Open dialog
+  };
+
+  const handleClosePublishDialog = () => {
+    if (isPublishing) return; // Don't close while publishing
+    setPublishDialogOpen(false);
+  };
+
+  const handleConfirmPublish = async () => {
+    if (!publishComment.trim()) {
+      setPublishCommentError(true);
+      return;
+    }
+    setPublishCommentError(false);
+    setIsPublishing(true);
+
+    if (!user || !userAccess || !userAccess.Division) {
+      // Added check for Division
+      showSnackbar("User information or Division not available.", "error");
+      setIsPublishing(false);
+      return;
+    }
+
+    const isCorporate = userAccess.Division === "Corporate";
+    // Use 'corporate' specifically if division is 'Corporate', otherwise use the division name
+    const divisionParam = isCorporate ? "corporate" : userAccess.Division;
+    const publicationStatus = isCorporate ? "consensus" : "review";
+    const userId = user.id;
+
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/admin/publish-forecast`, // Updated endpoint to /admin/
+        {
+          division_name: divisionParam,
+          user_id: userId,
+          publication_status: publicationStatus,
+          comment: publishComment.trim(),
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        showSnackbar("Forecast published successfully!", "success");
+        setPublishDialogOpen(false);
+        // Optionally trigger data refresh or sync
+        // dispatch(triggerSync());
+      } else {
+        throw new Error(response.data.message || "Publishing failed");
+      }
+    } catch (error) {
+      console.error("Error publishing forecast:", error);
+      const errorMessage = axios.isAxiosError(error)
+        ? error.response?.data?.message || error.message
+        : "An unexpected error occurred during publishing.";
+      showSnackbar(`Publish failed: ${errorMessage}`, "error");
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   // Add handleExport function
@@ -1710,6 +1777,29 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     selectedGuidance,
   ]);
 
+  // Parse user_access if it's a string
+  const userAccess = useMemo(() => {
+    if (!user?.user_access) return null;
+    // Ensure user_access is an object, attempting to parse if it's a string
+    if (typeof user.user_access === "string") {
+      try {
+        // Make sure to handle potential null/undefined after parsing
+        const parsed = JSON.parse(user.user_access);
+        return typeof parsed === "object" && parsed !== null ? parsed : null;
+      } catch (error) {
+        console.error("Failed to parse user_access:", error);
+        return null;
+      }
+    }
+    // Return as is if already an object (and not null)
+    return typeof user.user_access === "object" && user.user_access !== null
+      ? user.user_access
+      : null;
+  }, [user?.user_access]);
+
+  // Check if the publish button should be visible
+  const canPublish = user?.role === "Finance" && userAccess?.Admin === true;
+
   return (
     <Box>
       <DynamicTable
@@ -1740,10 +1830,18 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           <SaveIcon sx={{ mr: 1 }} />
           Save Progress
         </Button>
-        <Button variant="contained" color="secondary" onClick={handlePublish}>
-          <PublishIcon sx={{ mr: 1 }} />
-          Publish
-        </Button>
+        {/* Conditionally render Publish button */}
+        {canPublish && (
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={handlePublish}
+            disabled={isPublishing} // Disable while publishing
+          >
+            <PublishIcon sx={{ mr: 1 }} />
+            Publish
+          </Button>
+        )}
       </Box>
 
       <QuantSidebar
@@ -1856,14 +1954,83 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         />
       )}
 
+      {/* --- Publish Confirmation Dialog --- */}
+      <Dialog
+        open={publishDialogOpen}
+        onClose={handleClosePublishDialog}
+        maxWidth="sm"
+        fullWidth
+        disableEscapeKeyDown={isPublishing} // Prevent closing while loading
+      >
+        <DialogTitle color="primary">Publish Forecast</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            By selecting "Publish", you will finalize the forecast for the{" "}
+            <strong>{userAccess?.Division ?? "selected"}</strong> division. To
+            proceed, please provide a comment and select "Publish" below.
+            {userAccess?.Division === "Corporate"
+              ? " and mark it as consensus"
+              : ""}
+          </Typography>
+
+          <TextField
+            autoFocus
+            required
+            margin="dense"
+            id="publishComment"
+            label="Comment (Required)"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={publishComment}
+            onChange={(e) => {
+              setPublishComment(e.target.value);
+              if (e.target.value.trim()) {
+                setPublishCommentError(false);
+              }
+            }}
+            error={publishCommentError}
+            helperText={publishCommentError ? "Comment is required." : ""}
+            disabled={isPublishing}
+            multiline
+            rows={3}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: "16px 24px" }}>
+          <Button onClick={handleClosePublishDialog} disabled={isPublishing}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmPublish}
+            variant="contained"
+            color="secondary"
+            disabled={
+              isPublishing || publishCommentError || !publishComment.trim()
+            }
+            startIcon={
+              isPublishing ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                <PublishIcon />
+              )
+            }
+          >
+            {isPublishing ? "Publishing..." : "Publish"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={snackbarOpen}
-        autoHideDuration={3000}
+        autoHideDuration={4000} // Increased duration slightly
         onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }} // Center snackbar
       >
         <Alert
           onClose={() => setSnackbarOpen(false)}
           severity={snackbarSeverity}
+          variant="filled" // Use filled variant for better visibility
+          sx={{ width: "100%" }}
         >
           {snackbarMessage}
         </Alert>
@@ -1874,6 +2041,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         autoHideDuration={3000}
         onClose={() => setUndoSnackbarOpen(false)}
         message={undoMessage}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </Box>
   );

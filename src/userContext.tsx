@@ -214,13 +214,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         tokenService.setAuthHeader(token);
       }
 
-      console.log("[UserContext] Checking authentication...");
       const response = await axios.get(
         `${import.meta.env.VITE_API_URL}/users/verify-token?_=${Date.now()}`
       );
 
       if (response.data.user) {
-        console.log("[UserContext] User authenticated successfully");
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
         return true;
       }

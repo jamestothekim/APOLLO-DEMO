@@ -109,7 +109,6 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
     const value = event.target.value;
     const selectedValues = typeof value === "string" ? value.split(",") : value;
     setSelectedMarkets(selectedValues);
-    console.log("Selected Markets:", selectedValues);
   };
 
   const handleBrandChange = (event: SelectChangeEvent<string[]>) => {

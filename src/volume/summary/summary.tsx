@@ -32,8 +32,9 @@ import {
   calculateTotalGuidance,
 } from "../util/volumeUtil";
 import type { MarketData } from "../../volume/volumeForecast";
-import { useSelector, useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "../../redux/store";
+import { useAppSelector } from "../../redux/store";
 import { fetchPendingChanges } from "../../redux/slices/pendingChangesSlice";
 import type { RestoredState } from "../../redux/slices/pendingChangesSlice";
 import {
@@ -68,11 +69,11 @@ export interface SummaryVariantAggregateData {
   total: number;
   months_py_volume: { [key: string]: number };
   total_py_volume: number;
-  months_gsv_ty: { [key: string]: number };
+  months_gsv_ty?: { [key: string]: number };
   total_gsv_ty: number;
-  months_gsv_py: { [key: string]: number };
+  months_gsv_py?: { [key: string]: number };
   total_gsv_py: number;
-  [key: string]: any;
+  [guidanceKey: string]: any;
 }
 
 export interface SummaryBrandAggregateData {
@@ -273,9 +274,7 @@ export const Summary = ({
   const depletionsStatus = useSelector(selectVolumeDataStatus);
   const customerRawVolumeData = useSelector(selectCustomerRawVolumeData);
   const customerDepletionsStatus = useSelector(selectCustomerVolumeDataStatus);
-  const lastSyncTrigger = useSelector(
-    (state: RootState) => state.sync.lastSyncTrigger
-  );
+  const lastSyncTrigger = useAppSelector((state) => state.sync.lastSyncTrigger);
   const pendingChanges: RestoredState[] = useSelector(
     (state: RootState) => state.pendingChanges.data
   );
