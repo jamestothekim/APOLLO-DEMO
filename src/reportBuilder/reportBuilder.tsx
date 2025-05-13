@@ -16,6 +16,8 @@ import {
 import {
   AVAILABLE_DIMENSIONS,
   FILTERABLE_DIMENSIONS,
+  processReportData,
+  exportReportToCSV,
 } from "./reportUtil/reportUtil";
 import { Toolbox } from "../volume/components/toolbox";
 import { PublishPreviewModal } from "./publishPreviewModal";
@@ -156,15 +158,71 @@ const ReportBuilder = () => {
   };
 
   const handleExport = () => {
-    console.warn(
-      "Export functionality needs refactoring after removing direct aggregation."
+    if (!selectedCalculation) {
+      setSnackbarState({
+        open: true,
+        message: "Please select a calculation to export.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    if (!rawVolumeData || rawVolumeData.length === 0) {
+      setSnackbarState({
+        open: true,
+        message: "No data available to export.",
+        severity: "info",
+      });
+      return;
+    }
+
+    // Find dimension objects
+    const rowDim =
+      AVAILABLE_DIMENSIONS.find((d) => d.id === selectedRow) || null;
+    const colDim =
+      AVAILABLE_DIMENSIONS.find((d) => d.id === selectedColumn) || null;
+    const calcDim =
+      AVAILABLE_DIMENSIONS.find((d) => d.id === selectedCalculation) || null;
+
+    if (!calcDim) {
+      setSnackbarState({
+        open: true,
+        message: "Selected calculation is invalid.",
+        severity: "error",
+      });
+      return;
+    }
+
+    // Build filters (currently only one filter supported in UI)
+    const filterDim = selectedFilterDimensionId
+      ? AVAILABLE_DIMENSIONS.find((d) => d.id === selectedFilterDimensionId)
+      : undefined;
+    const filters = filterDim
+      ? [
+          {
+            ...filterDim,
+            filterValues: [], // If you add filter value selection, populate here
+          },
+        ]
+      : [];
+
+    // Aggregate data as the table does
+    const aggregationResult = processReportData(
+      rawVolumeData,
+      filters,
+      rowDim ? [rowDim] : [],
+      colDim ? [colDim] : [],
+      calcDim
     );
+
+    // Export to CSV using the same logic as the table
+    exportReportToCSV(aggregationResult, rowDim, colDim, calcDim);
+
     setSnackbarState({
       open: true,
-      message: "Export needs update. Functionality may be limited.",
-      severity: "warning",
+      message: "Report exported successfully.",
+      severity: "success",
     });
-    return;
   };
 
   const handlePublish = () => {
