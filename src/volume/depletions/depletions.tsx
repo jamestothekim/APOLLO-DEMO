@@ -105,12 +105,14 @@ export interface ExtendedForecastData {
   commentary?: string;
   isLoading?: boolean;
   forecast_status?: string;
+  tags?: { tag_id: number; tag_name: string }[];
   [key: string]: any; // Allow dynamic guidance values
 }
 
 export type FilterSelectionProps = {
   selectedMarkets: string[];
   selectedBrands: string[];
+  selectedTags: number[];
   marketMetadata: MarketData[];
   isCustomerView?: boolean;
   onUndo?: (handler: () => Promise<void>) => void;
@@ -138,7 +140,7 @@ const fetchLoggedForecastChanges = async () => {
   }
 };
 
-// Update the processRawData function to include customer info
+// Update the processRawData function to aggregate tags from raw data
 const processRawData = (
   data: any[],
   loggedChanges: any[] = [],
@@ -153,7 +155,7 @@ const processRawData = (
     if (!map.has(key)) {
       map.set(key, []);
     }
-    map.get(key)!.push(item); // Use non-null assertion as we just set it
+    map.get(key)!.push(item);
     return map;
   }, new Map<string, any[]>());
 
@@ -161,21 +163,24 @@ const processRawData = (
 
   // Process each group (key/items)
   rawItemsByKey.forEach((items: any[], key: string) => {
-    if (!items || items.length === 0) return; // Skip empty groups
+    if (!items || items.length === 0) return;
     const firstItem = items[0]!;
 
-    // Determine last actual month FOR THIS GROUP
-    let lastActualMonthIndex = -1;
-    let hasAnyActuals = false;
-    items.forEach((item: any) => {
-      if (item?.data_type?.includes("actual")) {
-        hasAnyActuals = true;
-        const monthIndex = (item.month || 0) - 1;
-        if (monthIndex >= 0 && monthIndex < 12) {
-          lastActualMonthIndex = Math.max(lastActualMonthIndex, monthIndex);
-        }
+    // Aggregate tags from all items in the group
+    const tagPairs: { tag_id: number; tag_name: string }[] = [];
+    items.forEach((item) => {
+      if (Array.isArray(item.tag_id) && Array.isArray(item.tag_name)) {
+        item.tag_id.forEach((id: number, idx: number) => {
+          if (id != null && item.tag_name[idx] != null) {
+            tagPairs.push({ tag_id: id, tag_name: item.tag_name[idx] });
+          }
+        });
       }
     });
+    // Deduplicate by tag_id
+    const uniqueTags = Array.from(
+      new Map(tagPairs.map((t) => [t.tag_id, t])).values()
+    );
 
     // Initialize the aggregated item for this key
     const aggregatedItem: ExtendedForecastData = {
@@ -192,18 +197,37 @@ const processRawData = (
       variant_size_pack_desc: firstItem.variant_size_pack_desc,
       forecastLogic: firstItem.forecast_method || "flat",
       forecast_status: firstItem.forecast_status || "draft",
-      months: {}, // Will be populated below
-      py_case_equivalent_volume_months: {}, // Initialize PY months object
+      months: {},
+      py_case_equivalent_volume_months: {},
       gross_sales_value: 0,
       py_gross_sales_value: 0,
       py_case_equivalent_volume: 0,
-      cy_3m_case_equivalent_volume: 0, // Placeholder
-      cy_6m_case_equivalent_volume: 0, // Placeholder
-      cy_12m_case_equivalent_volume: 0, // Placeholder
-      py_3m_case_equivalent_volume: 0, // Placeholder
-      py_6m_case_equivalent_volume: 0, // Placeholder
-      py_12m_case_equivalent_volume: 0, // Placeholder
+      cy_3m_case_equivalent_volume: 0,
+      cy_6m_case_equivalent_volume: 0,
+      cy_12m_case_equivalent_volume: 0,
+      py_3m_case_equivalent_volume: 0,
+      py_6m_case_equivalent_volume: 0,
+      py_12m_case_equivalent_volume: 0,
+      tags: uniqueTags,
     };
+    console.log(
+      "Aggregated tags for",
+      aggregatedItem.product,
+      aggregatedItem.tags
+    );
+
+    // Determine last actual month FOR THIS GROUP
+    let lastActualMonthIndex = -1;
+    let hasAnyActuals = false;
+    items.forEach((item: any) => {
+      if (item?.data_type?.includes("actual")) {
+        hasAnyActuals = true;
+        const monthIndex = (item.month || 0) - 1;
+        if (monthIndex >= 0 && monthIndex < 12) {
+          lastActualMonthIndex = Math.max(lastActualMonthIndex, monthIndex);
+        }
+      }
+    });
 
     // Initialize months structure
     MONTH_NAMES.forEach((month, index) => {
@@ -292,9 +316,8 @@ const processRawData = (
       : `forecast:${change.market_id}:${change.variant_size_pack_desc}`;
 
     if (finalAggregatedData[key]) {
-      // Overwrite forecast logic and months object entirely from Redis log
       finalAggregatedData[key].forecastLogic = change.forecastType;
-      finalAggregatedData[key].months = change.months; // Assuming change.months has the correct { value, isActual, isManuallyModified } structure
+      finalAggregatedData[key].months = change.months;
       if (change.comment) {
         finalAggregatedData[key].commentary = change.comment;
       }
@@ -303,9 +326,7 @@ const processRawData = (
 
   // Recalculate guidance AFTER all aggregation and logged changes are applied
   const resultData = Object.values(finalAggregatedData).map((item) => {
-    // Recalculate total volume based on potentially modified months
     item.case_equivalent_volume = calculateTotal(item.months);
-    // Now recalculate guidance using the final aggregated data
     return recalculateGuidance(item, selectedGuidance || []);
   });
 
@@ -351,6 +372,7 @@ interface RestoredState {
 export const Depletions: React.FC<FilterSelectionProps> = ({
   selectedMarkets,
   selectedBrands,
+  selectedTags,
   marketMetadata,
   isCustomerView,
   onUndo,
@@ -450,13 +472,25 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       const marketMatch =
         selectedMarkets.length === 0 ||
         (isCustomerView
-          ? selectedMarkets.includes(row.customer_id || "") // Use customer_id directly
+          ? selectedMarkets.includes(row.customer_id || "")
           : selectedMarkets.includes(row.market_id));
       const brandMatch =
         selectedBrands.length === 0 || selectedBrands.includes(row.brand);
-      return marketMatch && brandMatch;
+
+      // Add tag filtering
+      const tagMatch =
+        selectedTags.length === 0 ||
+        (row.tags && row.tags.some((tag) => selectedTags.includes(tag.tag_id)));
+
+      return marketMatch && brandMatch && tagMatch;
     });
-  }, [forecastData, selectedMarkets, selectedBrands, isCustomerView]);
+  }, [
+    forecastData,
+    selectedMarkets,
+    selectedBrands,
+    selectedTags,
+    isCustomerView,
+  ]);
 
   // Update useEffect to set available markets based on view type
   useEffect(() => {

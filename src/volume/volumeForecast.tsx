@@ -27,6 +27,7 @@ import {
   selectAvailableGuidance,
 } from "../redux/slices/userSettingsSlice";
 import type { Guidance } from "../redux/slices/userSettingsSlice";
+import axios from "axios";
 
 const MAX_CHIPS_VISIBLE = 3; // Define how many chips to show
 
@@ -91,6 +92,10 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
 
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<number[]>([]);
+  const [availableTags, setAvailableTags] = useState<
+    { tag_id: number; tag_name: string }[]
+  >([]);
   const [tabValue, setTabValue] = useState(0);
   const [undoHandler, setUndoHandler] = useState<(() => Promise<void>) | null>(
     null
@@ -179,6 +184,27 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   const selectedGuidanceRows: Guidance[] = useSelector(
     selectPendingGuidanceForecastRows
   );
+
+  // Add useEffect to fetch available tags
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/admin/product-tags`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+        setAvailableTags(response.data);
+        console.log("tags", response.data);
+      } catch (error) {
+        console.error("Error fetching tags:", error);
+      }
+    };
+    fetchTags();
+  }, []);
 
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
@@ -298,6 +324,41 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                 sx={{ width: "100%" }}
               />
             </Box>
+
+            <Box sx={{ flex: 1 }}>
+              <Autocomplete
+                multiple
+                limitTags={MAX_CHIPS_VISIBLE}
+                options={availableTags}
+                value={availableTags.filter((tag) =>
+                  selectedTags.includes(tag.tag_id)
+                )}
+                onChange={(_, newValue) => {
+                  setSelectedTags(newValue.map((tag) => tag.tag_id));
+                }}
+                getOptionLabel={(option) => option.tag_name}
+                renderInput={(params) => (
+                  <TextField {...params} label="Filter Tags" />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => (
+                    <Chip
+                      label={option.tag_name}
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      sx={{
+                        borderRadius: "16px",
+                        backgroundColor: "transparent",
+                        "& .MuiChip-label": { px: 1 },
+                      }}
+                      {...getTagProps({ index })}
+                    />
+                  ))
+                }
+                sx={{ width: "100%" }}
+              />
+            </Box>
           </Box>
 
           <Toolbox
@@ -328,6 +389,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
             <Depletions
               selectedMarkets={selectedMarkets}
               selectedBrands={selectedBrands}
+              selectedTags={selectedTags}
               marketMetadata={marketData}
               isCustomerView={isCustomerView}
               onUndo={(handler) => setUndoHandler(() => handler)}
