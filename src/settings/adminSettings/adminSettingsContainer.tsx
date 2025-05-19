@@ -4,6 +4,7 @@ import UserMaster, { UserMasterHandle } from "./userMaster";
 import { MarketMaster } from "./marketMaster";
 import { SKUMaster } from "./skuMaster";
 import { RateMaster } from "./rateMaster";
+import { AuditLogs } from "./auditLogs";
 import { PersonAdd as PersonAddIcon } from "@mui/icons-material";
 
 export const AdminSettingsContainer = () => {
@@ -61,6 +62,7 @@ export const AdminSettingsContainer = () => {
             <Tab label="Market" />
             <Tab label="SKU" />
             <Tab label="Rates" />
+            <Tab label="Logs" />
           </Tabs>
         </Box>
         <Box sx={{ pt: 3 }}>
@@ -68,6 +70,7 @@ export const AdminSettingsContainer = () => {
           {activeTab === 1 && <MarketMaster />}
           {activeTab === 2 && <SKUMaster />}
           {activeTab === 3 && <RateMaster />}
+          {activeTab === 4 && <AuditLogs />}
         </Box>
       </Box>
     </Paper>
