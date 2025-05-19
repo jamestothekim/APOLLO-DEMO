@@ -363,10 +363,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (state.isLoggedIn && state.user && !initialFetchPerformedRef.current) {
       initialFetchPerformedRef.current = true;
-      console.log("[UserContext] User logged in, fetching initial data");
 
       // Fetch dashboard data
-      console.log("[UserContext] Dispatching fetchDashboardConfig");
       appDispatch(fetchDashboardConfig())
         .unwrap()
         .then((dashboardData) => {

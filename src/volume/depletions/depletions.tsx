@@ -210,11 +210,6 @@ const processRawData = (
       py_12m_case_equivalent_volume: 0,
       tags: uniqueTags,
     };
-    console.log(
-      "Aggregated tags for",
-      aggregatedItem.product,
-      aggregatedItem.tags
-    );
 
     // Determine last actual month FOR THIS GROUP
     let lastActualMonthIndex = -1;

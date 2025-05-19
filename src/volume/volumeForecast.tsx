@@ -198,7 +198,6 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
           }
         );
         setAvailableTags(response.data);
-        console.log("tags", response.data);
       } catch (error) {
         console.error("Error fetching tags:", error);
       }
