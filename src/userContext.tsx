@@ -11,6 +11,12 @@ import { useDispatch } from "react-redux";
 import type { AppDispatch } from "./redux/store";
 import { fetchVolumeData } from "./redux/slices/depletionSlice";
 import { fetchDashboardConfig } from "./redux/slices/dashboardSlice";
+import {
+  initializePendingGuidance,
+  setSelectedBrands,
+  syncAllSettings,
+  setSelectedMarkets,
+} from "./redux/slices/userSettingsSlice";
 
 // Types
 export interface MarketAccess {
@@ -50,6 +56,8 @@ interface GuidanceSettingsPayload {
 interface UserSettings {
   guidance?: GuidancePreference[];
   guidance_settings?: GuidanceSettingsPayload;
+  selected_brands?: string[];
+  selected_markets?: string[];
   [key: string]: any;
 }
 
@@ -261,8 +269,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const logout = async () => {
     try {
+      // Sync all settings before logging out
+      await appDispatch(syncAllSettings()).unwrap();
+
+      // Then proceed with logout
       await axios.post(`${import.meta.env.VITE_API_URL}/users/logout`);
     } catch (error) {
+      console.error("Error during logout:", error);
     } finally {
       dispatch({ type: "LOGOUT" });
       initialFetchPerformedRef.current = false;
@@ -363,6 +376,39 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (state.isLoggedIn && state.user && !initialFetchPerformedRef.current) {
       initialFetchPerformedRef.current = true;
+
+      // Initialize guidance settings from user preferences
+      if (state.user.user_settings) {
+        const {
+          guidance_settings,
+          summary_selected_brands,
+          summary_selected_markets,
+        } = state.user.user_settings;
+        if (
+          guidance_settings ||
+          summary_selected_brands ||
+          summary_selected_markets
+        ) {
+          appDispatch(
+            initializePendingGuidance({
+              forecastCols: guidance_settings?.forecast_cols || [],
+              forecastRows: guidance_settings?.forecast_rows || [],
+              summaryCols: guidance_settings?.summary_cols || [],
+              summaryRows: guidance_settings?.summary_rows || [],
+            })
+          );
+
+          // Initialize selected brands if they exist
+          if (summary_selected_brands) {
+            appDispatch(setSelectedBrands(summary_selected_brands));
+          }
+
+          // Initialize selected markets if they exist
+          if (summary_selected_markets) {
+            appDispatch(setSelectedMarkets(summary_selected_markets));
+          }
+        }
+      }
 
       // Fetch dashboard data
       appDispatch(fetchDashboardConfig())

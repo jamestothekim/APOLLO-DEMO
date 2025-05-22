@@ -57,6 +57,8 @@ export interface GuidanceSettingsState {
   pendingForecastRows: number[];
   pendingSummaryCols: number[];
   pendingSummaryRows: number[];
+  selectedBrands: string[];
+  selectedMarkets: string[];
   isGuidanceInitialized: boolean; // Tracks if pending state is initialized from UserContext
   // Status for fetching available guidance options
   guidanceStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
@@ -70,6 +72,8 @@ const initialState: GuidanceSettingsState = {
   pendingForecastRows: [],
   pendingSummaryCols: [],
   pendingSummaryRows: [],
+  selectedBrands: [],
+  selectedMarkets: [],
   isGuidanceInitialized: false,
   guidanceStatus: 'idle',
   guidanceError: null,
@@ -132,7 +136,12 @@ const guidanceSettingsSlice = createSlice({
       state.pendingSummaryCols = [];
       state.pendingSummaryRows = [];
     },
-    // REMOVED reducers for setSelectedMarkets, setSelectedBrands, etc.
+    setSelectedBrands: (state, action: PayloadAction<string[]>) => {
+      state.selectedBrands = action.payload;
+    },
+    setSelectedMarkets: (state, action: PayloadAction<string[]>) => {
+      state.selectedMarkets = action.payload;
+    },
   },
   extraReducers: (builder) => {
     // Keep only handlers for fetchGuidance
@@ -160,6 +169,8 @@ export const {
   setPendingSummaryCols,
   setPendingSummaryRows,
   resetGuidanceInitialization,
+  setSelectedBrands,
+  setSelectedMarkets,
 } = guidanceSettingsSlice.actions;
 
 // Export selectors
@@ -170,6 +181,8 @@ export const selectPendingForecastRows = (state: { guidanceSettings: GuidanceSet
 export const selectPendingSummaryCols = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingSummaryCols;
 export const selectPendingSummaryRows = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingSummaryRows;
 export const selectIsGuidanceInitialized = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.isGuidanceInitialized;
+export const selectSelectedBrands = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.selectedBrands;
+export const selectSelectedMarkets = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.selectedMarkets;
 
 // Selectors to get derived Guidance objects from PENDING IDs
 const selectAvailableGuidanceState = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.availableGuidance;
@@ -223,5 +236,41 @@ export const selectPendingGuidanceSummaryRows = createSelector(
     }
 );
 
+// Remove the syncSelectedBrands thunk and keep just the local state update
+export const updateSelectedBrands = (brands: string[]) => ({
+  type: 'guidanceSettings/setSelectedBrands',
+  payload: brands
+});
+
+// Add a new thunk for syncing all settings during logout
+export const syncAllSettings = createAsyncThunk(
+  'guidanceSettings/syncAllSettings',
+  async (_, { getState }) => {
+    try {
+      const state = getState() as { guidanceSettings: GuidanceSettingsState };
+      const { selectedBrands, selectedMarkets } = state.guidanceSettings;
+      
+      // Sync to backend with namespaced keys
+      await axios.patch(
+        `${import.meta.env.VITE_API_URL}/users/sync-settings`,
+        {
+          summary_selected_brands: selectedBrands,
+          summary_selected_markets: selectedMarkets
+        }
+      );
+      
+      return true;
+    } catch (error) {
+      console.error('Error syncing settings during logout:', error);
+      throw error;
+    }
+  }
+);
+
+// Add action for updating selected markets
+export const updateSelectedMarkets = (markets: string[]) => ({
+  type: 'guidanceSettings/setSelectedMarkets',
+  payload: markets
+});
 
 export default guidanceSettingsSlice.reducer; 

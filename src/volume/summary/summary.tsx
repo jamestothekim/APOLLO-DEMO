@@ -39,6 +39,10 @@ import {
   selectPendingGuidanceSummaryColumns,
   selectPendingGuidanceSummaryRows,
   Guidance,
+  selectSelectedBrands,
+  selectSelectedMarkets,
+  updateSelectedBrands,
+  updateSelectedMarkets,
 } from "../../redux/slices/userSettingsSlice";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -95,16 +99,6 @@ export interface DisplayRow
   total: number;
 }
 // --- End Export these types ---
-
-const DEFAULT_SELECTED_BRANDS = [
-  "Balvenie",
-  "Glenfiddich",
-  "Leyenda Del Milagro",
-  "Hendricks",
-  "Tullamore Dew",
-  "Reyka",
-  "Monkey Shoulder",
-];
 
 interface SummaryProps {
   availableBrands: string[];
@@ -280,10 +274,31 @@ export const Summary = ({
   const [isMinimized, setIsMinimized] = useState(false);
   const [viewType, setViewType] = useState<"table" | "graph">("table");
   const theme = useTheme();
+
+  // Get selected brands and markets from Redux state
+  const persistedSelectedBrands = useSelector(selectSelectedBrands);
+  const persistedSelectedMarkets = useSelector(selectSelectedMarkets);
+
   const [selectedBrands, setSelectedBrands] = useState<string[]>(
-    DEFAULT_SELECTED_BRANDS
+    persistedSelectedBrands || []
   );
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(
+    persistedSelectedMarkets || []
+  );
+
+  // Update local state when persisted state changes
+  useEffect(() => {
+    if (persistedSelectedBrands) {
+      setSelectedBrands(persistedSelectedBrands);
+    }
+  }, [persistedSelectedBrands]);
+
+  useEffect(() => {
+    if (persistedSelectedMarkets) {
+      setSelectedMarkets(persistedSelectedMarkets);
+    }
+  }, [persistedSelectedMarkets]);
+
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
 
   const selectedGuidance: Guidance[] = useSelector(
@@ -1047,6 +1062,19 @@ export const Summary = ({
     dispatch(setPendingSummaryRows(rowIds));
   };
 
+  // Update the brands change handler to only update local state
+  const handleBrandsChange = (_: any, newValue: string[]) => {
+    setSelectedBrands(newValue);
+    dispatch(updateSelectedBrands(newValue));
+  };
+
+  // Add markets change handler
+  const handleMarketsChange = (_: any, newValue: any[]) => {
+    const marketIds = newValue.map((m) => m.market_id);
+    setSelectedMarkets(marketIds);
+    dispatch(updateSelectedMarkets(marketIds));
+  };
+
   return (
     <Paper elevation={3}>
       <Box sx={{ display: "flex", flexDirection: "column" }}>
@@ -1093,9 +1121,7 @@ export const Summary = ({
                 value={marketData.filter((m) =>
                   selectedMarkets.includes(m.market_id)
                 )}
-                onChange={(_, newValue) => {
-                  setSelectedMarkets(newValue.map((m) => m.market_id));
-                }}
+                onChange={handleMarketsChange}
                 isOptionEqualToValue={(option, value) =>
                   option.market_id === value.market_id
                 }
@@ -1131,9 +1157,7 @@ export const Summary = ({
                 limitTags={MAX_CHIPS_VISIBLE}
                 options={availableBrands}
                 value={selectedBrands}
-                onChange={(_, newValue) => {
-                  setSelectedBrands(newValue);
-                }}
+                onChange={handleBrandsChange}
                 getOptionLabel={(option) => option}
                 renderInput={(params) => (
                   <TextField {...params} label="Filter Brands" />
