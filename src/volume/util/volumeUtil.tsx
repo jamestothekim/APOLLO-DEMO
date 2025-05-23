@@ -432,14 +432,17 @@ export const hasNonZeroTotal = (row: ExtendedForecastData): boolean => {
   return total > 0.0001; // Using small epsilon to handle floating point precision
 };
 
-export const calculateTotal = (months: {
-  [key: string]: {
-    value: number;
-    isActual?: boolean;
-    isManuallyModified?: boolean;
-  };
-}): number => {
-  return Object.values(months).reduce((acc, curr) => acc + curr.value, 0);
+export const calculateTotal = (months: { [key: string]: any }) => {
+  return Object.values(months).reduce((sum, month) => {
+    // For the current month, use projected volume if available and not manually edited
+    const value =
+      month.isCurrentMonth &&
+      month.projectedValue !== undefined &&
+      !month.isManuallyModified
+        ? month.projectedValue
+        : month.value;
+    return sum + (value || 0);
+  }, 0);
 };
 
 // Add this new centralized function to recalculate guidance values

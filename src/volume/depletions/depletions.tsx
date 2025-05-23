@@ -246,13 +246,34 @@ const processRawData = (
       if (monthIndex >= 0 && monthIndex < 12) {
         const monthName = MONTH_NAMES[monthIndex];
         const isManualInputFromDB = Boolean(item.is_manual_input);
+        const isCurrentMonth = monthIndex === lastActualMonthIndex + 1;
+
+        // Use projected volume for current month if available and not manually edited
+        const volumeValue =
+          isCurrentMonth &&
+          item.projected_case_equivalent_volume !== undefined &&
+          !isManualInputFromDB
+            ? item.projected_case_equivalent_volume
+            : item.case_equivalent_volume;
 
         // Aggregate TY Volume
         aggregatedItem.months[monthName]!.value +=
-          Math.round((item.case_equivalent_volume || 0) * 100) / 100;
+          Math.round((volumeValue || 0) * 100) / 100;
         aggregatedItem.months[monthName]!.isManuallyModified =
           aggregatedItem.months[monthName]!.isManuallyModified ||
           isManualInputFromDB;
+
+        // Log projected volume for debugging
+        if (isCurrentMonth) {
+          console.log(`Processing volume for ${monthName}:`, {
+            market: firstItem.market,
+            product: firstItem.variant_size_pack_desc,
+            projected: item.projected_case_equivalent_volume,
+            regular: item.case_equivalent_volume,
+            manual: isManualInputFromDB,
+            final: volumeValue,
+          });
+        }
 
         // Aggregate PY Volume (total AND monthly)
         if (item.py_case_equivalent_volume !== undefined) {
@@ -680,6 +701,33 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       const forecastResponseData = forecastResponse.data;
       const updatedMonths = processMonthData(forecastResponseData);
+
+      // Find the last actual month index
+      let lastActualMonthIndex = -1;
+      MONTH_NAMES.forEach((m, index) => {
+        if (updatedMonths[m]?.isActual) {
+          lastActualMonthIndex = Math.max(lastActualMonthIndex, index);
+        }
+      });
+
+      // Use projected volume for the current month if available
+      const currentMonthIndex = lastActualMonthIndex + 1;
+      if (currentMonthIndex < MONTH_NAMES.length) {
+        const currentMonth = MONTH_NAMES[currentMonthIndex];
+        const currentMonthData = forecastResponseData.find(
+          (item: any) => item.month === currentMonthIndex + 1
+        );
+
+        if (currentMonthData?.projected_case_equivalent_volume !== undefined) {
+          updatedMonths[currentMonth] = {
+            ...updatedMonths[currentMonth],
+            value:
+              Math.round(
+                currentMonthData.projected_case_equivalent_volume * 100
+              ) / 100,
+          };
+        }
+      }
 
       // Create base updated row with new forecast logic and months
       let updatedRow = {
@@ -1213,6 +1261,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     // Define Phasing Columns (Months + Commentary)
     const monthAndCommentaryColumns: Column[] = [
       ...MONTH_NAMES.map((month, monthIndex) => {
+        // Determine if this is the current month (first forecast month)
+        const isCurrentMonth = monthIndex === lastActualMonthIndex + 1;
+
         return {
           key: `months.${month}`,
           header: month,
@@ -1242,13 +1293,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   }}
                 />
               </Box>
+            ) : isCurrentMonth ? (
+              "PROJ"
             ) : (
               "FCST"
             ),
           align: "right" as const,
           sortable: true,
           sortAccessor: (row: ExtendedForecastData) => row.months[month]?.value,
-          sx: { ...cellPaddingSx, minWidth: 65 }, // Apply padding, set minWidth for months
+          sx: { ...cellPaddingSx, minWidth: 65 },
           render: (_: any, row: ExtendedForecastData) => {
             if (row.isLoading) {
               return (
@@ -1275,10 +1328,17 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               isCellPreview = monthIndex === rowLastActualIndex + 1;
             }
 
+            // Log projected volume for the current month
+            if (isCellPreview) {
+              console.log(
+                `Projected Volume for ${row.market_name} - ${row.product} - ${month}:`,
+                value
+              );
+            }
+
             // Click handler remains, but internal lock check is removed
             const handleClick = (event: React.MouseEvent) => {
               event.stopPropagation();
-              // REMOVED: if (isLocked) return;
 
               const currentYear = new Date().getFullYear();
               setSelectedDetails({
