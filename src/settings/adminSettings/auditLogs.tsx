@@ -3,6 +3,12 @@ import { Box, Typography } from "@mui/material";
 import axios from "axios";
 import { DynamicTable, Column } from "../../reusableComponents/dynamicTable";
 import { LoadingProgress } from "../../reusableComponents/loadingProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import IconButton from "@mui/material/IconButton";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import CloseIcon from "@mui/icons-material/Close";
 
 // Interface for the data rows
 interface AuditLogData {
@@ -24,6 +30,8 @@ interface AuditLogData {
 export const AuditLogs = () => {
   const [data, setData] = useState<AuditLogData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [dialogDetails, setDialogDetails] = useState<any>(null);
   // const [error, setError] = useState<string | null>(null); // Optional: for error handling display
 
   useEffect(() => {
@@ -169,26 +177,21 @@ export const AuditLogs = () => {
     {
       key: "details",
       header: "Details",
-      width: 400,
-      render: (value) => {
-        if (value === null || value === undefined) return "";
-        if (typeof value === "object") {
-          try {
-            return JSON.stringify(value, null, 2); // Pretty print JSON
-          } catch (e) {
-            console.error("Error stringifying details:", e);
-            return String(value); // Fallback for objects that can't be stringified well
-          }
-        }
-        return String(value);
-      },
-      // Style for JSON readability
+      width: 100,
+      render: (_, row) => (
+        <IconButton
+          aria-label="View Details"
+          size="small"
+          onClick={() => {
+            setDialogDetails(row.details);
+            setDetailsDialogOpen(true);
+          }}
+        >
+          <VisibilityIcon fontSize="small" />
+        </IconButton>
+      ),
       sx: {
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-all",
-        fontFamily: "monospace",
-        fontSize: "0.75rem",
-        lineHeight: "1.4",
+        textAlign: "center",
       },
     },
     {
@@ -219,6 +222,48 @@ export const AuditLogs = () => {
         p: 0 /* Matches rateMaster style */,
       }}
     >
+      {/* Details Dialog */}
+      <Dialog
+        open={detailsDialogOpen}
+        onClose={() => setDetailsDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ m: 0, p: 2, pr: 5, position: "relative" }}>
+          Details
+          <IconButton
+            aria-label="close"
+            onClick={() => setDetailsDialogOpen(false)}
+            sx={{
+              position: "absolute",
+              right: 8,
+              top: 8,
+              color: (theme) => theme.palette.grey[500],
+            }}
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box
+            sx={{
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+              fontFamily: "monospace",
+              fontSize: "0.95rem",
+              lineHeight: 1.5,
+              p: 1,
+            }}
+          >
+            {dialogDetails === null || dialogDetails === undefined
+              ? "No details."
+              : typeof dialogDetails === "object"
+              ? JSON.stringify(dialogDetails, null, 2)
+              : String(dialogDetails)}
+          </Box>
+        </DialogContent>
+      </Dialog>
       {/* Optionally, add a title for the page if desired, similar to how UserMaster's sidebar has a title */}
       {/* <Typography variant="h5" sx={{ mb: 2, px: 3, pt: 2 }}>User Audit Logs</Typography> */}
       <DynamicTable
