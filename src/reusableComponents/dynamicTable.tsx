@@ -18,6 +18,7 @@ import {
   Popover,
   TextField,
   InputAdornment,
+  Tooltip,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
@@ -72,6 +73,8 @@ export interface DynamicTableProps {
   maxHeight?: string | number;
   renderExpandedRow?: (row: any, flatColumns: Column[]) => React.ReactNode;
   enableColumnFiltering?: boolean;
+  enableRowTooltip?: boolean;
+  rowTooltipContent?: (row: any) => React.ReactNode;
 }
 
 const getSectionInfo = (columns: Column[], index: number) => {
@@ -119,6 +122,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   maxHeight = "70vh",
   renderExpandedRow,
   enableColumnFiltering = false,
+  enableRowTooltip = false,
+  rowTooltipContent,
 }) => {
   const theme = useTheme();
   const [activeSection, setActiveSection] = useState(0);
@@ -569,46 +574,68 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                 {displayData.map((row) => {
                   const rowId = getRowId(row);
                   const isSelected = expandedRowIds?.has(rowId);
+                  // const tooltipTitle = `Market: ${row.market_name || 'N/A'} - Product: ${row.variant_size_pack_desc || 'N/A'} - Logic: ${row.forecastLogic || 'N/A'}`;
+
+                  const tableRow = (
+                    <TableRow
+                      hover={!!onRowClick}
+                      onClick={() => onRowClick?.(row)}
+                      selected={isSelected}
+                      sx={{
+                        cursor: onRowClick ? "pointer" : "default",
+                        backgroundColor: isSelected
+                          ? theme.palette.action.selected
+                          : undefined,
+                        "&:last-child td, &:last-child th": { border: 0 },
+                      }}
+                    >
+                      {flatColumns.map((column, index) => {
+                        const sectionInfo = getSectionInfo(columns, index);
+                        const minW = getMinWidth(column);
+                        const cellValue = row[column.key];
+                        const renderedValue = column.render
+                          ? column.render(cellValue, row)
+                          : cellValue;
+                        return (
+                          <TableCell
+                            key={column.key}
+                            align={column.align || "left"}
+                            data-section={sectionInfo.name.toLowerCase()}
+                            data-first-in-section={sectionInfo.isFirst}
+                            sx={{
+                              ...(theme.components?.MuiDynamicTable
+                                ?.styleOverrides?.dataCell || {}),
+                              width: column.width,
+                              minWidth: minW,
+                              ...column.sx,
+                            }}
+                          >
+                            {renderedValue}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+
                   return (
                     <Fragment key={rowId}>
-                      <TableRow
-                        hover={!!onRowClick}
-                        onClick={() => onRowClick?.(row)}
-                        selected={isSelected}
-                        sx={{
-                          cursor: onRowClick ? "pointer" : "default",
-                          backgroundColor: isSelected
-                            ? theme.palette.action.selected
-                            : undefined,
-                          "&:last-child td, &:last-child th": { border: 0 },
-                        }}
-                      >
-                        {flatColumns.map((column, index) => {
-                          const sectionInfo = getSectionInfo(columns, index);
-                          const minW = getMinWidth(column);
-                          const cellValue = row[column.key];
-                          const renderedValue = column.render
-                            ? column.render(cellValue, row)
-                            : cellValue;
-                          return (
-                            <TableCell
-                              key={column.key}
-                              align={column.align || "left"}
-                              data-section={sectionInfo.name.toLowerCase()}
-                              data-first-in-section={sectionInfo.isFirst}
-                              sx={{
-                                ...(theme.components?.MuiDynamicTable
-                                  ?.styleOverrides?.dataCell || {}),
-                                width: column.width,
-                                minWidth: minW,
-                                ...column.sx,
-                              }}
-                            >
-                              {renderedValue}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
+                      {enableRowTooltip && rowTooltipContent ? (
+                        <Tooltip
+                          title={rowTooltipContent(row)}
+                          followCursor
+                          enterDelay={500}
+                          enterNextDelay={300}
+                        >
+                          {/* The TableRow needs a DOM element to attach the tooltip to if it's directly wrapped.
+                              However, Tooltip can directly wrap components if they forward refs or are native HTML.
+                              For TableRow, it's safer to have it as a direct child or ensure it forwards refs properly.
+                              Given Material UI's structure, wrapping it as a direct child is common.
+                              If issues arise, a div wrapper around TableRow might be needed for the Tooltip. */}
+                          {tableRow}
+                        </Tooltip>
+                      ) : (
+                        tableRow
+                      )}
                       {renderExpandedRow &&
                         isSelected &&
                         renderExpandedRow(row, flatColumns)}

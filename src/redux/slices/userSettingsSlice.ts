@@ -248,17 +248,33 @@ export const syncAllSettings = createAsyncThunk(
   async (_, { getState }) => {
     try {
       const state = getState() as { guidanceSettings: GuidanceSettingsState };
-      const { selectedBrands, selectedMarkets } = state.guidanceSettings;
-      
+      const {
+        selectedBrands,
+        selectedMarkets,
+        pendingForecastCols,
+        pendingForecastRows,
+        pendingSummaryCols,
+        pendingSummaryRows
+      } = state.guidanceSettings;
+
+      // Prepare the complete payload for backend sync
+      const settingsToSync = {
+        summary_selected_brands: selectedBrands,
+        summary_selected_markets: selectedMarkets,
+        guidance_settings: {
+          forecast_cols: pendingForecastCols,
+          forecast_rows: pendingForecastRows,
+          summary_cols: pendingSummaryCols,
+          summary_rows: pendingSummaryRows,
+        }
+      };
+
       // Sync to backend with namespaced keys
       await axios.patch(
         `${import.meta.env.VITE_API_URL}/users/sync-settings`,
-        {
-          summary_selected_brands: selectedBrands,
-          summary_selected_markets: selectedMarkets
-        }
+        settingsToSync // Send the complete settings object
       );
-      
+
       return true;
     } catch (error) {
       console.error('Error syncing settings during logout:', error);

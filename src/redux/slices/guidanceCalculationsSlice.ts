@@ -32,10 +32,15 @@ export interface BaseData {
   months: { [key: string]: MonthlyData };
   case_equivalent_volume?: number;
   py_case_equivalent_volume?: number;
+  prev_published_case_equivalent_volume?: number; // LC Volume Total
   gross_sales_value?: number;
   py_gross_sales_value?: number;
+  lc_gross_sales_value?: number; // LC GSV Total
   gsv_rate?: number;
   py_gsv_rate?: number;
+  // Optional: Add monthly breakdown for LC
+  prev_published_case_equivalent_volume_months?: { [key: string]: MonthlyData };
+  lc_gross_sales_value_months?: { [key: string]: MonthlyData }; // Monthly LC GSV
   [key: string]: any;
 }
 
@@ -146,6 +151,14 @@ const getFieldValue = (data: BaseData, fieldName: string): number => {
     );
   }
   
+  if (fieldName === 'prev_published_case_equivalent_volume') {
+    return data.prev_published_case_equivalent_volume || 0;
+  }
+  
+  if (fieldName === 'lc_gross_sales_value') {
+    return data.lc_gross_sales_value || 0; // Should be pre-calculated now
+  }
+  
   // Default case: return the field value or 0
   return data[fieldName] || 0;
 };
@@ -254,6 +267,11 @@ const getMonthlyFieldValue = (data: BaseData, fieldName: string, month: string):
     return data[monthlyFieldName][month]?.value || 0;
   }
   
+  // Special case for prev_published_case_equivalent_volume (LC volume)
+  if (fieldName === 'prev_published_case_equivalent_volume') {
+    return data.prev_published_case_equivalent_volume_months?.[month]?.value || 0;
+  }
+
   // Special case for case_equivalent_volume (current forecast volume)
   if (fieldName === 'case_equivalent_volume') {
     return data.months[month]?.value || 0;
@@ -277,6 +295,22 @@ const getMonthlyFieldValue = (data: BaseData, fieldName: string, month: string):
       data.py_case_equivalent_volume || 0
     );
     return pyMonthVolume * pyGsvRate;
+  }
+  
+  // Special case for lc_gross_sales_value
+  if (fieldName === 'lc_gross_sales_value') {
+    // For total lc_gross_sales_value, it should be pre-calculated and directly available on data.
+    // For monthly, we check if lc_gross_sales_value_months exists first.
+    if (data.lc_gross_sales_value_months?.[month]) {
+      return data.lc_gross_sales_value_months[month].value || 0;
+    }
+    // Fallback to calculating monthly LC GSV if specific monthly data isn't present
+    const lcMonthVolume = data.prev_published_case_equivalent_volume_months?.[month]?.value || 0;
+    const gsvRate = data.gsv_rate || calculateGSVRate(
+      data.gross_sales_value || 0,
+      data.case_equivalent_volume || calculateTotal(data.months)
+    );
+    return lcMonthVolume * gsvRate;
   }
   
   // Default case: return 0

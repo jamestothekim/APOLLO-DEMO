@@ -495,6 +495,22 @@ export const recalculateGuidance = (
     updatedRow.py_gross_sales_value = 0;
   }
 
+  // Ensure gsv_rate and py_gsv_rate are calculated if not present
+  const tyGsvRate =
+    updatedRow.gsv_rate ??
+    (totalVolume > 0 ? (updatedRow.gross_sales_value || 0) / totalVolume : 0);
+
+  // Ensure lc_gross_sales_value is calculated if not present
+  // This should ideally be done before recalculateGuidance is called (e.g., in processRawData)
+  // but as a fallback:
+  if (
+    updatedRow.lc_gross_sales_value === undefined &&
+    updatedRow.prev_published_case_equivalent_volume !== undefined
+  ) {
+    updatedRow.lc_gross_sales_value =
+      (updatedRow.prev_published_case_equivalent_volume || 0) * tyGsvRate;
+  }
+
   // Now recalculate all guidance
   selectedGuidance.forEach((guidance) => {
     // Handle direct value assignment
@@ -715,56 +731,61 @@ export const calculateRowGuidanceMonthlyData = (
   const totalVolumePY = rowData.py_case_equivalent_volume || 0;
   const totalGsvTY = rowData.gross_sales_value || 0;
   const totalGsvPY = rowData.py_gross_sales_value || 0;
+  // const totalVolumeLC = rowData.prev_published_case_equivalent_volume || 0; // Get LC total volume -- REMOVED as unused in this function
+  // const totalGsvLC = rowData.lc_gross_sales_value || 0; // Get LC total GSV (should be pre-calculated) -- REMOVED as unused for lcRate in this function
 
   const tyRate = totalVolumeTY === 0 ? 0 : totalGsvTY / totalVolumeTY;
   const pyRate = totalVolumePY === 0 ? 0 : totalGsvPY / totalVolumePY;
+  // const lcRate = totalVolumeLC === 0 ? 0 : totalGsvLC / totalVolumeLC; // LC rate, if needed directly
+
   // --- Calculate Overall Rates --- END ---
 
   // Direct Value (e.g., py_case_equivalent_volume)
   if (typeof guidance.value === "string") {
     const fieldName = guidance.value;
-    const monthlyDataSource = `${fieldName}_months`;
+    const currentMonths = rowData.months;
+    const pyMonths = rowData.py_case_equivalent_volume_months;
+    const lcMonths = rowData.prev_published_case_equivalent_volume_months; // Get LC monthly data
+    const resultMonthlyData: { [month: string]: number } = {}; // Initialize correctly
 
-    if (
-      rowData[monthlyDataSource] &&
-      typeof rowData[monthlyDataSource] === "object"
-    ) {
-      // --- Path 1: Use Direct Monthly Source ---
-      const monthlyData: { [month: string]: number } = {};
-      MONTH_NAMES.forEach((month) => {
-        monthlyData[month] = rowData[monthlyDataSource][month]?.value || 0;
-      });
-      return monthlyData;
-    } else {
-      // --- Path 2: Direct Source NOT Found - Calculate or Distribute ---
-      const monthlyData: { [month: string]: number } = {};
-
-      if (fieldName === "gross_sales_value") {
-        // Calculate Monthly GSV TY = Monthly Volume TY * Overall TY Rate
-        MONTH_NAMES.forEach((month) => {
-          const monthVolumeTY = rowData.months?.[month]?.value || 0;
-          monthlyData[month] = monthVolumeTY * tyRate;
-        });
+    MONTH_NAMES.forEach((month: string) => {
+      let value: number | undefined;
+      if (fieldName === "case_equivalent_volume") {
+        value = currentMonths[month]?.value;
+      } else if (fieldName === "py_case_equivalent_volume") {
+        value = pyMonths?.[month]?.value;
+      } else if (fieldName === "prev_published_case_equivalent_volume") {
+        // Handle LC Volume
+        value = lcMonths?.[month]?.value;
+      } else if (fieldName === "gross_sales_value") {
+        const monthVolumeTY = currentMonths[month]?.value || 0;
+        value = monthVolumeTY * tyRate;
       } else if (fieldName === "py_gross_sales_value") {
-        // Calculate Monthly GSV PY = Monthly Volume PY * Overall PY Rate
-        MONTH_NAMES.forEach((month) => {
-          const monthVolumePY =
-            rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
-          monthlyData[month] = monthVolumePY * pyRate;
-        });
+        const monthVolumePY = pyMonths?.[month]?.value || 0;
+        value = monthVolumePY * pyRate;
+      } else if (fieldName === "lc_gross_sales_value") {
+        // Handle LC GSV
+        // Prioritize pre-calculated monthly LC GSV if available
+        if (rowData.lc_gross_sales_value_months?.[month]?.value !== undefined) {
+          value = rowData.lc_gross_sales_value_months[month].value;
+        } else {
+          // Fallback: Calculate using monthly LC volume and TY GsvRate
+          const monthVolumeLC = lcMonths?.[month]?.value || 0;
+          value = monthVolumeLC * tyRate; // Use TY rate for consistency
+        }
       } else {
-        // Fallback: Distribute total for other direct fields without monthly source
+        // Fallback for other direct string values: distribute total evenly
+        // This assumes rowData[fieldName] is a total number if no monthly source exists
         const totalValue = Number(rowData[fieldName]) || 0;
-        const monthlyValue = totalValue / 12;
-        MONTH_NAMES.forEach((month) => {
-          monthlyData[month] = monthlyValue;
-        });
+        value = totalValue / 12;
       }
-      return monthlyData;
-    }
+      resultMonthlyData[month] = value !== undefined ? value : 0;
+    });
+
+    return resultMonthlyData; // Return the calculated monthly data map
   }
 
-  // --- Path 3: Calculated Value (Difference or Percentage) ---
+  // --- Calculated Values (Difference/Percentage) --- START ---
   const currentMonths = rowData.months;
 
   // Helper to get monthly values, prioritizing specific monthly fields
@@ -772,12 +793,21 @@ export const calculateRowGuidanceMonthlyData = (
     // This helper is now primarily for the CALCULATED path
     // It retains the logic to find direct monthly sources or calculate GSV as fallbacks
     const monthlyDataSource = `${fieldName}_months`;
+    // Add prev_published_case_equivalent_volume_months and lc_gross_sales_value_months to the check
     if (
-      rowData[monthlyDataSource] &&
-      typeof rowData[monthlyDataSource] === "object" &&
-      rowData[monthlyDataSource][month]
+      (monthlyDataSource === "prev_published_case_equivalent_volume_months" &&
+        rowData.prev_published_case_equivalent_volume_months?.[month]) ||
+      (monthlyDataSource === "lc_gross_sales_value_months" && // Check for monthly LC GSV source
+        rowData.lc_gross_sales_value_months?.[month]) ||
+      (rowData[monthlyDataSource] &&
+        typeof rowData[monthlyDataSource] === "object" &&
+        rowData[monthlyDataSource][month])
     ) {
-      const value = rowData[monthlyDataSource][month]?.value || 0;
+      const source =
+        monthlyDataSource === "prev_published_case_equivalent_volume_months"
+          ? rowData.prev_published_case_equivalent_volume_months
+          : rowData[monthlyDataSource];
+      const value = source[month]?.value || 0;
       return value;
     } else {
       let calculatedValue = 0;
@@ -789,7 +819,26 @@ export const calculateRowGuidanceMonthlyData = (
           rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
         calculatedValue = monthVolumePY * pyRate; // Apply overall PY rate
       } else if (fieldName === "py_case_equivalent_volume") {
-        calculatedValue = currentMonths[month]?.value || 0;
+        // Corrected: Source from py_case_equivalent_volume_months for PY volume
+        calculatedValue =
+          rowData.py_case_equivalent_volume_months?.[month]?.value || 0;
+      } else if (fieldName === "prev_published_case_equivalent_volume") {
+        // Handle LC Volume in helper
+        calculatedValue =
+          rowData.prev_published_case_equivalent_volume_months?.[month]
+            ?.value || 0;
+      } else if (fieldName === "lc_gross_sales_value") {
+        // Handle LC GSV in helper
+        // Prioritize pre-calculated monthly LC GSV
+        if (rowData.lc_gross_sales_value_months?.[month]?.value !== undefined) {
+          calculatedValue = rowData.lc_gross_sales_value_months[month].value;
+        } else {
+          // Fallback: Calculate using monthly LC volume and TY GsvRate
+          const monthVolumeLC =
+            rowData.prev_published_case_equivalent_volume_months?.[month]
+              ?.value || 0;
+          calculatedValue = monthVolumeLC * tyRate; // Or lcRate if preferred
+        }
       } else if (fieldName === "case_equivalent_volume") {
         calculatedValue = currentMonths[month]?.value || 0;
       } else {
@@ -863,6 +912,11 @@ export const calculateSingleSummaryGuidance = (
     input_months_ty?: { [key: string]: number };
     input_months_py?: { [key: string]: number };
     // Removed months_gsv_ty and months_gsv_py from input
+    // Add LC fields to baseData
+    total_lc_volume: number;
+    total_lc_gsv: number;
+    input_months_lc_volume?: { [key: string]: number };
+    input_months_lc_gsv?: { [key: string]: number }; // If monthly LC GSV is pre-calculated and passed
   },
   guidance: Guidance,
   calculateMonthly: boolean = false
@@ -889,6 +943,11 @@ export const calculateSingleSummaryGuidance = (
     // Add Rate calculation if requested directly (though unlikely for total)
     if (fieldName === "gsv_rate") return tyRate;
     if (fieldName === "py_gsv_rate") return pyRate;
+    // Handle new LC fields
+    if (fieldName === "prev_published_case_equivalent_volume")
+      return baseData.total_lc_volume;
+    if (fieldName === "lc_gross_sales_value") return baseData.total_lc_gsv;
+
     console.warn(`Unknown total field requested: ${fieldName}`);
     return 0;
   };
@@ -949,6 +1008,20 @@ export const calculateSingleSummaryGuidance = (
         // Add Rate calculation if requested directly
         if (fieldName === "gsv_rate") return tyRate; // Rate is constant for all months in this model
         if (fieldName === "py_gsv_rate") return pyRate;
+        // Handle new LC monthly fields
+        if (fieldName === "prev_published_case_equivalent_volume")
+          return baseData.input_months_lc_volume?.[currentMonth] ?? 0;
+        if (fieldName === "lc_gross_sales_value") {
+          // If monthly LC GSV is pre-calculated and passed, use it
+          if (baseData.input_months_lc_gsv?.[currentMonth] !== undefined) {
+            return baseData.input_months_lc_gsv[currentMonth];
+          }
+          // Otherwise, calculate it using monthly LC volume and overall TY GsvRate (or a specific LC GsvRate if available)
+          return (
+            (baseData.input_months_lc_volume?.[currentMonth] ?? 0) * tyRate
+          );
+        }
+
         console.warn(`Unknown monthly field requested: ${fieldName}`);
         return 0;
       };
@@ -1025,6 +1098,7 @@ interface MarketLevelBucket {
   month: number; // Month number (1-12)
   case_equivalent_volume: number;
   py_case_equivalent_volume: number;
+  prev_published_case_equivalent_volume: number; // Add LC volume
   gross_sales_value: number;
   py_gross_sales_value: number;
   data_type?: string; // e.g., 'actual_complete', 'forecast'
@@ -1072,6 +1146,7 @@ export const aggregateSummaryData = (
               month: item.month,
               case_equivalent_volume: 0,
               py_case_equivalent_volume: 0,
+              prev_published_case_equivalent_volume: 0, // Initialize LC volume
               gross_sales_value: 0,
               py_gross_sales_value: 0,
               data_type: item.data_type, // Keep original data_type
@@ -1082,6 +1157,8 @@ export const aggregateSummaryData = (
             Number(item.case_equivalent_volume) || 0;
           marketLevelBuckets[key].py_case_equivalent_volume +=
             Number(item.py_case_equivalent_volume) || 0;
+          marketLevelBuckets[key].prev_published_case_equivalent_volume +=
+            Number(item.prev_published_case_equivalent_volume) || 0; // Aggregate LC volume
           marketLevelBuckets[key].gross_sales_value +=
             Number(item.gross_sales_value) || 0;
           marketLevelBuckets[key].py_gross_sales_value +=
@@ -1115,6 +1192,7 @@ export const aggregateSummaryData = (
               month: item.month,
               case_equivalent_volume: 0,
               py_case_equivalent_volume: 0,
+              prev_published_case_equivalent_volume: 0, // Initialize LC volume
               gross_sales_value: 0,
               py_gross_sales_value: 0,
               data_type: item.data_type, // Try to preserve data_type from customer level
@@ -1125,6 +1203,8 @@ export const aggregateSummaryData = (
             Number(item.case_equivalent_volume) || 0;
           marketLevelBuckets[key].py_case_equivalent_volume +=
             Number(item.py_case_equivalent_volume) || 0;
+          marketLevelBuckets[key].prev_published_case_equivalent_volume +=
+            Number(item.prev_published_case_equivalent_volume) || 0; // Aggregate LC volume
           marketLevelBuckets[key].gross_sales_value +=
             Number(item.gross_sales_value) || 0;
           marketLevelBuckets[key].py_gross_sales_value +=
@@ -1180,6 +1260,8 @@ export const aggregateSummaryData = (
         if (marketLevelBuckets[bucketKey]) {
           // Simply overwrite the volume with the value from the pending change
           marketLevelBuckets[bucketKey].case_equivalent_volume =
+            monthData.value;
+          marketLevelBuckets[bucketKey].prev_published_case_equivalent_volume =
             monthData.value;
           // Mark as manual if the change was a manual edit
           marketLevelBuckets[bucketKey].is_manual_input =
@@ -1244,9 +1326,15 @@ export const aggregateSummaryData = (
           {}
         ),
         total_py_volume: 0,
-        // monthly GSV properties are optional now, no need to initialize
         total_gsv_ty: 0,
         total_gsv_py: 0,
+        prev_published_case_equivalent_volume: 0,
+        months_lc_volume: MONTH_NAMES.reduce(
+          (acc, m) => ({ ...acc, [m]: 0 }),
+          {}
+        ),
+        lc_gross_sales_value: 0,
+        months_lc_gsv: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
       };
     }
 
@@ -1256,6 +1344,14 @@ export const aggregateSummaryData = (
     // Accumulate TOTAL GSV values (not monthly)
     variantAggregation[variantKey].total_gsv_ty += gsv_ty_from_bucket;
     variantAggregation[variantKey].total_gsv_py += gsv_py_from_bucket;
+
+    // Accumulate LC volumes and GSV
+    const lc_volume = bucket.prev_published_case_equivalent_volume || 0;
+    variantAggregation[variantKey].months_lc_volume[monthName] =
+      (variantAggregation[variantKey].months_lc_volume[monthName] || 0) +
+      lc_volume;
+    // Note: total prev_published_case_equivalent_volume will be summed up later from months_lc_volume
+    // LC GSV will also be calculated after totals are summed.
 
     // Do NOT accumulate monthly GSV from buckets
   });
@@ -1278,6 +1374,14 @@ export const aggregateSummaryData = (
       variantAggRow.total_py_volume = roundToWhole(
         variantAggRow.total_py_volume
       );
+      // Calculate and round total LC volume from its monthly breakdown
+      variantAggRow.prev_published_case_equivalent_volume = roundToWhole(
+        Object.values(variantAggRow.months_lc_volume).reduce(
+          (s: number, v: number) => s + v,
+          0
+        )
+      );
+
       // Round total GSV directly
       variantAggRow.total_gsv_ty = roundToWhole(variantAggRow.total_gsv_ty);
       variantAggRow.total_gsv_py = roundToWhole(variantAggRow.total_gsv_py);
@@ -1288,7 +1392,31 @@ export const aggregateSummaryData = (
         variantAggRow.months_py_volume[m] = roundToWhole(
           variantAggRow.months_py_volume[m]
         );
+        variantAggRow.months_lc_volume[m] = roundToWhole(
+          variantAggRow.months_lc_volume[m] || 0
+        );
         // No monthly GSV fields to round here
+      });
+
+      // Calculate gsv_rate for the variant (used for LC GSV calculation)
+      const variantGsvRate =
+        variantAggRow.total > 0
+          ? variantAggRow.total_gsv_ty / variantAggRow.total
+          : 0;
+      variantAggRow.gsv_rate = variantGsvRate; // Store it on the object if needed elsewhere
+
+      // Calculate LC GSV Total for the variant
+      variantAggRow.lc_gross_sales_value = roundToWhole(
+        variantAggRow.prev_published_case_equivalent_volume * variantGsvRate
+      );
+
+      // Optionally calculate monthly LC GSV for the variant if needed by row guidance
+      variantAggRow.months_lc_gsv = {};
+
+      MONTH_NAMES.forEach((m) => {
+        variantAggRow.months_lc_gsv![m] = roundToWhole(
+          (variantAggRow.months_lc_volume[m] || 0) * variantGsvRate
+        );
       });
 
       return variantAggRow;
@@ -1309,33 +1437,91 @@ export const aggregateSummaryData = (
           (acc, m) => ({ ...acc, [m]: 0 }),
           {}
         ),
-        // No monthly GSV fields needed for Brand aggregate either
         total_py_volume: 0,
         total_gsv_ty: 0,
         total_gsv_py: 0,
+        prev_published_case_equivalent_volume: 0,
+        months_lc_volume: MONTH_NAMES.reduce(
+          (acc, m) => ({ ...acc, [m]: 0 }),
+          {}
+        ),
+        lc_gross_sales_value: 0,
+        months_lc_gsv: MONTH_NAMES.reduce((acc, m) => ({ ...acc, [m]: 0 }), {}),
       });
     }
     const brandAgg = brandAggsMap.get(brandKey)!;
     MONTH_NAMES.forEach((m) => {
       brandAgg.months[m] += variantRow.months[m];
       brandAgg.months_py_volume[m] += variantRow.months_py_volume[m];
-      // Do not accumulate monthly GSV here
+      brandAgg.total += variantRow.total;
+      brandAgg.total_py_volume += variantRow.total_py_volume;
+      brandAgg.total_gsv_ty += variantRow.total_gsv_ty;
+      brandAgg.total_gsv_py += variantRow.total_gsv_py;
+      brandAgg.prev_published_case_equivalent_volume +=
+        variantRow.prev_published_case_equivalent_volume;
+      brandAgg.lc_gross_sales_value += variantRow.lc_gross_sales_value;
+      brandAgg.months_lc_volume[m] =
+        (brandAgg.months_lc_volume[m] || 0) +
+        (variantRow.months_lc_volume[m] || 0);
+      if (variantRow.months_lc_gsv && brandAgg.months_lc_gsv) {
+        // Ensure months_lc_gsv is defined
+        brandAgg.months_lc_gsv[m] =
+          (brandAgg.months_lc_gsv[m] || 0) + (variantRow.months_lc_gsv[m] || 0);
+      }
     });
-    brandAgg.total += variantRow.total;
-    brandAgg.total_py_volume += variantRow.total_py_volume;
-    brandAgg.total_gsv_ty += variantRow.total_gsv_ty;
-    brandAgg.total_gsv_py += variantRow.total_gsv_py;
   });
 
   // --- Round Brand Aggregates ---
-  brandAggsMap.forEach((brandAgg) => {
+  brandAggsMap.forEach((brandAgg, brandName) => {
     brandAgg.total = roundToWhole(brandAgg.total);
     brandAgg.total_py_volume = roundToWhole(brandAgg.total_py_volume);
     brandAgg.total_gsv_ty = roundToWhole(brandAgg.total_gsv_ty);
     brandAgg.total_gsv_py = roundToWhole(brandAgg.total_gsv_py);
+    brandAgg.prev_published_case_equivalent_volume = roundToWhole(
+      brandAgg.prev_published_case_equivalent_volume
+    );
+    brandAgg.lc_gross_sales_value = roundToWhole(brandAgg.lc_gross_sales_value);
+
+    // ---- START DEBUG LOGGING FOR BRANDS (FIRST 3 based on iteration order) ----
+    // Note: Map iteration order is insertion order. We need a counter.
+    // This will log for the first 3 brands encountered in the map.
+    // To make it more deterministic, convert map to array if specific ordering is needed for logging.
+    let brandLogCount = 0;
+    brandAggsMap.forEach((bAgg, bName) => {
+      if (brandLogCount < 3 && bName === brandName) {
+        // Ensure we log the current brandAgg
+        const brandGsvRate =
+          bAgg.total > 0 ? bAgg.total_gsv_ty / bAgg.total : 0;
+        // Recalculate LC GSV for logging consistency, as it might have been summed up before this point
+        const calculatedBrandLcGSV = roundToWhole(
+          bAgg.prev_published_case_equivalent_volume * brandGsvRate
+        );
+
+        console.log(`[DEBUG Summary Brand] Name: ${bName}`);
+        console.log(`  TY Vol: ${bAgg.total}, TY GSV: ${bAgg.total_gsv_ty}`);
+        console.log(`  Calculated brandGsvRate (for logging): ${brandGsvRate}`);
+        console.log(`  LC Vol: ${bAgg.prev_published_case_equivalent_volume}`);
+        console.log(`  Original LC GSV: ${bAgg.lc_gross_sales_value}`);
+        console.log(
+          `  Recalculated LC GSV (for logging): ${calculatedBrandLcGSV}`
+        );
+        brandLogCount++;
+      }
+    });
+    // ---- END DEBUG LOGGING FOR BRANDS ----
+
     MONTH_NAMES.forEach((m) => {
       brandAgg.months[m] = roundToWhole(brandAgg.months[m]);
       brandAgg.months_py_volume[m] = roundToWhole(brandAgg.months_py_volume[m]);
+      brandAgg.months_lc_volume[m] = roundToWhole(
+        brandAgg.months_lc_volume[m] || 0
+      );
+      if (brandAgg.months_lc_gsv) {
+        // Ensure months_lc_gsv is defined
+        brandAgg.months_lc_gsv[m] = roundToWhole(
+          brandAgg.months_lc_gsv[m] || 0
+        );
+      }
       // No monthly GSV fields to round
     });
   });
@@ -1383,8 +1569,11 @@ export const calculateAllSummaryGuidance = (
       // Map source fields to expected fields
       input_months_ty: variantAgg.months,
       input_months_py: variantAgg.months_py_volume,
-      input_months_gsv_ty: variantAgg.months_gsv_ty,
-      input_months_gsv_py: variantAgg.months_gsv_py,
+      // Add LC fields for variants
+      total_lc_volume: variantAgg.prev_published_case_equivalent_volume,
+      total_lc_gsv: variantAgg.lc_gross_sales_value,
+      input_months_lc_volume: variantAgg.months_lc_volume,
+      input_months_lc_gsv: variantAgg.months_lc_gsv, // Pass pre-calculated monthly LC GSV
     };
     uniqueGuidanceDefs.forEach((guidanceDef) => {
       const needsMonthly = rowGuidanceIds.has(guidanceDef.id);
@@ -1409,8 +1598,11 @@ export const calculateAllSummaryGuidance = (
       // Map source fields to expected fields (using fields added in previous step)
       input_months_ty: brandAgg.months,
       input_months_py: brandAgg.months_py_volume,
-      input_months_gsv_ty: brandAgg.months_gsv_ty,
-      input_months_gsv_py: brandAgg.months_gsv_py,
+      // Add LC fields for brands
+      total_lc_volume: brandAgg.prev_published_case_equivalent_volume,
+      total_lc_gsv: brandAgg.lc_gross_sales_value,
+      input_months_lc_volume: brandAgg.months_lc_volume,
+      input_months_lc_gsv: brandAgg.months_lc_gsv, // Pass pre-calculated monthly LC GSV
     };
     uniqueGuidanceDefs.forEach((guidanceDef) => {
       const needsMonthly = rowGuidanceIds.has(guidanceDef.id);
@@ -1497,8 +1689,39 @@ export const calculateTotalGuidance = (
     total_gsv_py,
     input_months_ty: totalMonths_ty,
     input_months_py: totalMonths_py,
-    input_months_gsv_ty: totalMonths_gsv_ty,
-    input_months_gsv_py: totalMonths_gsv_py,
+    // input_months_gsv_ty: totalMonths_gsv_ty, // These were removed from calculateSingleSummaryGuidance baseData
+    // input_months_gsv_py: totalMonths_gsv_py,
+    // Add LC fields for totals
+    total_lc_volume: Math.round(
+      Array.from(brandAggsMap.values()).reduce(
+        (sum, brand) => sum + brand.prev_published_case_equivalent_volume,
+        0
+      )
+    ),
+    total_lc_gsv: Math.round(
+      Array.from(brandAggsMap.values()).reduce(
+        (sum, brand) => sum + brand.lc_gross_sales_value,
+        0
+      )
+    ),
+    input_months_lc_volume: MONTH_NAMES.reduce((acc, month) => {
+      acc[month] = Math.round(
+        Array.from(brandAggsMap.values()).reduce(
+          (sum, brand) => sum + (brand.months_lc_volume?.[month] || 0),
+          0
+        )
+      );
+      return acc;
+    }, {} as { [key: string]: number }),
+    input_months_lc_gsv: MONTH_NAMES.reduce((acc, month) => {
+      acc[month] = Math.round(
+        Array.from(brandAggsMap.values()).reduce(
+          (sum, brand) => sum + (brand.months_lc_gsv?.[month] || 0),
+          0
+        )
+      );
+      return acc;
+    }, {} as { [key: string]: number }),
   };
 
   uniqueGuidanceDefs.forEach((guidanceDef) => {

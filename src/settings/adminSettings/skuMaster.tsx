@@ -155,7 +155,7 @@ export const SKUMaster = () => {
         tag_names: pendingTags, // Send empty array if no tags
       },
     ];
-    console.log("Saving tags with payload:", payload);
+    "Saving tags with payload:", payload;
 
     try {
       await axios.post(

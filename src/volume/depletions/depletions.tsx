@@ -78,6 +78,7 @@ export interface ExtendedForecastData {
   market_name: string;
   customer_id?: string;
   customer_name?: string;
+  market_area_name?: string; // Added new field
   product: string;
   brand: string;
   variant: string;
@@ -95,12 +96,23 @@ export interface ExtendedForecastData {
   py_3m_case_equivalent_volume?: number;
   py_6m_case_equivalent_volume?: number;
   py_12m_case_equivalent_volume?: number;
+  prev_published_case_equivalent_volume?: number; // LC Volume Total
+  lc_gross_sales_value?: number; // LC GSV Total
   months: {
     [key: string]: {
       value: number;
       isActual: boolean;
       isManuallyModified?: boolean;
     };
+  };
+  // Optional: Add monthly breakdown for LC if available and needed for row guidance
+  prev_published_case_equivalent_volume_months: {
+    // Made non-optional
+    [key: string]: { value: number; isActual?: boolean };
+  };
+  lc_gross_sales_value_months?: {
+    // Monthly LC GSV for row guidance
+    [key: string]: { value: number };
   };
   commentary?: string;
   isLoading?: boolean;
@@ -189,6 +201,7 @@ const processRawData = (
       market_name: firstItem.market,
       customer_id: firstItem.customer_id,
       customer_name: firstItem.customer,
+      market_area_name: firstItem.market_area_name, // Populate market_area_name
       product: firstItem.variant_size_pack_desc,
       brand: firstItem.brand,
       variant: firstItem.variant,
@@ -199,9 +212,23 @@ const processRawData = (
       forecast_status: firstItem.forecast_status || "draft",
       months: {},
       py_case_equivalent_volume_months: {},
+      prev_published_case_equivalent_volume_months: MONTH_NAMES.reduce(
+        (acc, month) => {
+          acc[month] = { value: 0 };
+          return acc;
+        },
+        {} as { [key: string]: { value: number; isActual?: boolean } }
+      ),
+      lc_gross_sales_value_months: MONTH_NAMES.reduce((acc, month) => {
+        // Initialize monthly LC GSV
+        acc[month] = { value: 0 };
+        return acc;
+      }, {} as { [key: string]: { value: number } }),
       gross_sales_value: 0,
       py_gross_sales_value: 0,
       py_case_equivalent_volume: 0,
+      prev_published_case_equivalent_volume: 0, // Initialize LC total
+      lc_gross_sales_value: 0, // Initialize LC GSV total
       cy_3m_case_equivalent_volume: 0,
       cy_6m_case_equivalent_volume: 0,
       cy_12m_case_equivalent_volume: 0,
@@ -235,8 +262,13 @@ const processRawData = (
       // Initialize PY months structure here as well
       aggregatedItem.py_case_equivalent_volume_months[month] = {
         value: 0,
-        isActual: true,
+        isActual: true, // PY months are typically actuals
         isManuallyModified: false,
+      };
+      // Initialize LC months structure
+      aggregatedItem.prev_published_case_equivalent_volume_months[month] = {
+        value: 0,
+        // isActual for LC is likely always false or not applicable in the same sense
       };
     });
 
@@ -248,9 +280,11 @@ const processRawData = (
         const isManualInputFromDB = Boolean(item.is_manual_input);
         const isCurrentMonth = monthIndex === lastActualMonthIndex + 1;
 
-        // Use projected volume for current month if available and not manually edited
+        // Use projected volume for current month if available and not manually edited,
+        // unless it's a 'Control' market area
         const volumeValue =
           isCurrentMonth &&
+          aggregatedItem.market_area_name !== "Control" && // Check for Control state
           item.projected_case_equivalent_volume !== undefined &&
           !isManualInputFromDB
             ? item.projected_case_equivalent_volume
@@ -262,19 +296,6 @@ const processRawData = (
         aggregatedItem.months[monthName]!.isManuallyModified =
           aggregatedItem.months[monthName]!.isManuallyModified ||
           isManualInputFromDB;
-
-        // Log projected volume for debugging
-        if (isCurrentMonth) {
-          console.log(`Processing volume for ${monthName}:`, {
-            market: firstItem.market,
-            product: firstItem.variant_size_pack_desc,
-            projected: item.projected_case_equivalent_volume,
-            regular: item.case_equivalent_volume,
-            manual: isManualInputFromDB,
-            final: volumeValue,
-          });
-        }
-
         // Aggregate PY Volume (total AND monthly)
         if (item.py_case_equivalent_volume !== undefined) {
           const pyVol = Number(item.py_case_equivalent_volume) || 0;
@@ -283,6 +304,17 @@ const processRawData = (
           // Add aggregation for the monthly PY breakdown
           aggregatedItem.py_case_equivalent_volume_months[monthName]!.value +=
             Math.round(pyVol * 100) / 100;
+        }
+
+        // Aggregate LC Volume (total AND monthly)
+        if (item.prev_published_case_equivalent_volume !== undefined) {
+          const lcVol = Number(item.prev_published_case_equivalent_volume) || 0;
+          aggregatedItem.prev_published_case_equivalent_volume =
+            (aggregatedItem.prev_published_case_equivalent_volume || 0) + lcVol;
+          // Add aggregation for the monthly LC breakdown
+          aggregatedItem.prev_published_case_equivalent_volume_months[
+            monthName
+          ]!.value += Math.round(lcVol * 100) / 100;
         }
       }
       // Aggregate total GSV
@@ -342,7 +374,53 @@ const processRawData = (
 
   // Recalculate guidance AFTER all aggregation and logged changes are applied
   const resultData = Object.values(finalAggregatedData).map((item) => {
-    item.case_equivalent_volume = calculateTotal(item.months);
+    item.case_equivalent_volume = calculateTotal(item.months); // Total TY Vol for agg row
+
+    // Calculate gsv_rate (TY rate for agg row)
+    const tyVolume = item.case_equivalent_volume || 0;
+    const tyGSV = item.gross_sales_value || 0;
+
+    if (tyVolume > 0) {
+      item.gsv_rate = tyGSV / tyVolume;
+    } else {
+      item.gsv_rate = 0; // Avoid division by zero, default rate to 0
+    }
+
+    // Calculate py_gsv_rate
+    const pyVolume = item.py_case_equivalent_volume || 0;
+    const pyGSV = item.py_gross_sales_value || 0;
+    if (pyVolume > 0) {
+      item.py_gsv_rate = pyGSV / pyVolume;
+    } else {
+      item.py_gsv_rate = 0;
+    }
+
+    // Calculate lc_gross_sales_value
+    const lcVolume = item.prev_published_case_equivalent_volume || 0;
+    const currentGsvRate = item.gsv_rate || 0; // Use the gsv_rate calculated just above
+    item.lc_gross_sales_value = lcVolume * currentGsvRate;
+
+    // Calculate lc_gross_sales_value_months
+    if (
+      item.prev_published_case_equivalent_volume_months &&
+      item.gsv_rate !== undefined
+    ) {
+      item.lc_gross_sales_value_months = {}; // Ensure it's initialized
+      MONTH_NAMES.forEach((month) => {
+        item.lc_gross_sales_value_months![month] = {
+          value:
+            (item.prev_published_case_equivalent_volume_months![month]?.value ||
+              0) * (item.gsv_rate || 0),
+        };
+      });
+    } else {
+      // Fallback if data is missing for monthly LC GSV calculation
+      item.lc_gross_sales_value_months = MONTH_NAMES.reduce((acc, month) => {
+        acc[month] = { value: 0 };
+        return acc;
+      }, {} as { [key: string]: { value: number } });
+    }
+
     return recalculateGuidance(item, selectedGuidance || []);
   });
 
@@ -1037,8 +1115,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         },
         sx: {
           ...cellPaddingSx,
-          // Set extra width specifically for the Trends column (ID 8)
-          ...(guidance.id === 8 && { minWidth: 150 }),
+          // Set extra width specifically for the Trends column (ID 14)
+          ...(guidance.id === 14 && { minWidth: 150 }),
         }, // Apply consistent padding and conditional width
         render: (_: any, row: ExtendedForecastData) => {
           // Check if the entire row is loading
@@ -1326,14 +1404,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 }
               });
               isCellPreview = monthIndex === rowLastActualIndex + 1;
-            }
-
-            // Log projected volume for the current month
-            if (isCellPreview) {
-              console.log(
-                `Projected Volume for ${row.market_name} - ${row.product} - ${month}:`,
-                value
-              );
             }
 
             // Click handler remains, but internal lock check is removed
@@ -1961,6 +2031,22 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         stickyHeader={true}
         maxHeight="calc(100vh)"
         enableColumnFiltering={true}
+        enableRowTooltip={true} // Enable the tooltip
+        rowTooltipContent={(row: ExtendedForecastData) => {
+          // Define content
+          const market = `Market: ${row.market_name || "N/A"}`;
+          const product = `Product: ${row.variant_size_pack_desc || "N/A"}`;
+          // const logic = `Logic: ${row.forecastLogic || 'N/A'}`; // Removed Logic
+          return (
+            <>
+              {market}
+              <br />
+              {product}
+              {/* <br /> {logic} */}
+              {/* Removed Logic */}
+            </>
+          );
+        }}
       />
 
       <Box

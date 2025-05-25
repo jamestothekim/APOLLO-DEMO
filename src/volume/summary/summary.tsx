@@ -74,6 +74,10 @@ export interface SummaryVariantAggregateData {
   total_gsv_ty: number;
   months_gsv_py?: { [key: string]: number };
   total_gsv_py: number;
+  prev_published_case_equivalent_volume: number;
+  months_lc_volume: { [key: string]: number };
+  lc_gross_sales_value: number;
+  months_lc_gsv?: { [key: string]: number };
   [guidanceKey: string]: any;
 }
 
@@ -85,6 +89,10 @@ export interface SummaryBrandAggregateData {
   total_py_volume: number;
   total_gsv_ty: number;
   total_gsv_py: number;
+  prev_published_case_equivalent_volume: number;
+  months_lc_volume: { [key: string]: number };
+  lc_gross_sales_value: number;
+  months_lc_gsv?: { [key: string]: number };
   [key: string]: any;
 }
 

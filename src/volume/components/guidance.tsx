@@ -24,6 +24,18 @@ import axios from "axios";
 // Import Guidance type from the Redux slice
 import type { Guidance } from "../../redux/slices/userSettingsSlice";
 
+// START ADDED IMPORTS
+import { useSelector } from "react-redux";
+import type { RootState } from "../../redux/store"; // Assuming RootState is exported from your store
+// Assuming selectors exist in userSettingsSlice.ts, e.g.:
+// import {
+//   selectSelectedForecastColIds,
+//   selectSelectedForecastRowIds,
+//   selectSelectedSummaryColIds,
+//   selectSelectedSummaryRowIds
+// } from "../../redux/slices/userSettingsSlice";
+// END ADDED IMPORTS
+
 interface GuidanceDialogProps {
   open: boolean;
   onClose: () => void;
@@ -61,6 +73,25 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
   const [isSavingDefault, setIsSavingDefault] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+
+  // START ADDED SELECTORS - Replace with your actual selectors
+  const {
+    selectedForecastColIds,
+    selectedForecastRowIds,
+    selectedSummaryColIds,
+    selectedSummaryRows,
+  } = useSelector((state: RootState) => {
+    // This is a placeholder. Replace with actual selectors from userSettingsSlice.ts
+    // Ensure these selectors return number[] or a default empty array.
+    const settings = (state as any).userSettings; // Accessing userSettings slice, adjust path if needed
+    return {
+      selectedForecastColIds: settings?.selectedForecastCols || [],
+      selectedForecastRowIds: settings?.selectedForecastRows || [],
+      selectedSummaryColIds: settings?.selectedSummaryCols || [],
+      selectedSummaryRows: settings?.selectedSummaryRows || [],
+    };
+  });
+  // END ADDED SELECTORS
 
   useEffect(() => {
     if (open) {
@@ -117,8 +148,8 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
   // Handler for the new Make Default button
   const handleMakeDefault = useCallback(async () => {
     setIsSavingDefault(true);
-    const columnIds = selectedColumnGuidance.map((c) => c.id);
-    const rowIds = selectedRowGuidance.map((r) => r.id);
+    const currentViewColumnIds = selectedColumnGuidance.map((c) => c.id);
+    const currentViewRowIds = selectedRowGuidance.map((r) => r.id);
     const token = getToken();
 
     if (!token) {
@@ -128,13 +159,24 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
       return;
     }
 
-    // Determine payload structure based on title
-    const isSummary = title.toLowerCase().includes("summary");
+    const isSummaryView = viewContext === "summary";
+
+    // Construct the complete guidance_settings object
+    const completeGuidanceSettings = {
+      summary_cols: isSummaryView
+        ? currentViewColumnIds
+        : selectedSummaryColIds,
+      summary_rows: isSummaryView ? currentViewRowIds : selectedSummaryRows,
+      forecast_cols: !isSummaryView
+        ? currentViewColumnIds
+        : selectedForecastColIds,
+      forecast_rows: !isSummaryView
+        ? currentViewRowIds
+        : selectedForecastRowIds,
+    };
+
     const payload = {
-      guidance_settings: {
-        [isSummary ? "summary_cols" : "forecast_cols"]: columnIds,
-        [isSummary ? "summary_rows" : "forecast_rows"]: rowIds,
-      },
+      guidance_settings: completeGuidanceSettings,
     };
 
     try {
@@ -152,7 +194,15 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
     } finally {
       setIsSavingDefault(false);
     }
-  }, [selectedColumnGuidance, selectedRowGuidance, title]);
+  }, [
+    selectedColumnGuidance,
+    selectedRowGuidance,
+    viewContext,
+    selectedForecastColIds,
+    selectedForecastRowIds,
+    selectedSummaryColIds,
+    selectedSummaryRows,
+  ]);
 
   const filteredGuidanceOptions = availableGuidance
     // Filter by view context first
