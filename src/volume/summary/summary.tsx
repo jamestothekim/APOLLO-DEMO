@@ -58,6 +58,7 @@ import {
   selectCustomerVolumeDataStatus,
 } from "../../redux/slices/depletionSlice";
 import { GuidanceDialog } from "../components/guidance";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -730,7 +731,40 @@ export const Summary = ({
       (month, index): Column => ({
         key: `months.${month}`,
         header: month,
-        subHeader: index <= lastActualMonthIndex ? "ACT" : "FCST",
+        subHeader:
+          index <= lastActualMonthIndex ? (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+                width: "100%",
+              }}
+            >
+              <Box
+                component="span"
+                sx={{ flexGrow: 1, textAlign: "center", fontStyle: "italic" }}
+              >
+                ACT
+              </Box>
+              <CheckCircleIcon
+                fontSize="inherit"
+                color="primary"
+                sx={{
+                  fontSize: "1.0em",
+                  position: "absolute",
+                  right: 0,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                }}
+              />
+            </Box>
+          ) : index === lastActualMonthIndex + 1 ? (
+            "PROJ"
+          ) : (
+            "FCST"
+          ),
         align: "right" as const,
         sortable: true,
         sortAccessor: (row: DisplayRow) =>
