@@ -470,8 +470,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
             (m) => m.settings?.managed_by === "Customer"
           );
 
-          // Extract Market IDs for Market View
-          marketViewMarketIds = marketManagedMarkets
+          // Extract Market IDs for Market View - Include both market and customer managed markets
+          marketViewMarketIds = [
+            ...marketManagedMarkets,
+            ...customerManagedMarkets,
+          ]
             .map((m) => m.market_id)
             .filter(Boolean);
 

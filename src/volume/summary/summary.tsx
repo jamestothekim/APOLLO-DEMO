@@ -279,12 +279,8 @@ export const Summary = ({
   const persistedSelectedBrands = useSelector(selectSelectedBrands);
   const persistedSelectedMarkets = useSelector(selectSelectedMarkets);
 
-  const [selectedBrands, setSelectedBrands] = useState<string[]>(
-    persistedSelectedBrands || []
-  );
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(
-    persistedSelectedMarkets || []
-  );
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
 
   // Update local state when persisted state changes
   useEffect(() => {
@@ -404,14 +400,12 @@ export const Summary = ({
 
     // --- If we reach here, all necessary data has succeeded ---
 
-    // --- Filter raw data based on selectedMarkets ---
+    // --- Filter raw data based on selectedMarkets - show all if none selected ---
     const filteredRawVolumeData =
       selectedMarkets.length === 0
         ? rawVolumeData // No filter applied
-        : (rawVolumeData || []).filter(
-            (
-              item // Add null check for safety
-            ) => selectedMarkets.includes(item.market_id)
+        : (rawVolumeData || []).filter((item) =>
+            selectedMarkets.includes(item.market_id)
           );
 
     // Customer data needs mapping back to market ID for filtering
@@ -419,9 +413,8 @@ export const Summary = ({
       selectedMarkets.length === 0
         ? customerRawVolumeData // No filter applied
         : (customerRawVolumeData || []).filter((item) => {
-            // Add null check for safety
             if (!item.customer_id) return false;
-            const marketId = customerToMarketMap.get(item.customer_id); // Use the map created above
+            const marketId = customerToMarketMap.get(item.customer_id);
             return marketId ? selectedMarkets.includes(marketId) : false;
           });
     // --- End Filtering raw data ---
@@ -520,11 +513,11 @@ export const Summary = ({
     let totalRowGsvTy = 0;
     let totalRowGsvPy = 0;
 
-    // Filter brands based on selectedBrands *before* sorting and processing
+    // Filter brands based on selectedBrands - show all if none selected
     const filteredBrandKeys = Array.from(brandLevelAggregates.keys())
       .filter(
-        (brand) => selectedBrands.includes(brand) // Only include explicitly selected brands
-      ) // Apply filter
+        (brand) => selectedBrands.length === 0 || selectedBrands.includes(brand)
+      )
       .sort();
 
     // Iterate over FILTERED brands to calculate row data and totals
