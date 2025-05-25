@@ -413,7 +413,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       // Fetch dashboard data
       appDispatch(fetchDashboardConfig())
         .unwrap()
-        .then((dashboardData) => {})
+        .then((_dashboardData) => {})
         .catch((error) => {
           console.error("[UserContext] Error fetching dashboard data:", error);
         });
