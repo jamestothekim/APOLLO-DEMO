@@ -2055,7 +2055,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     forecastData.some((item) => item.forecast_status === "draft");
 
   const publishButtonTooltipText = isCorporateUserWithDrafts
-    ? "Forecast must be in draft status to pubilsh to consensus"
+    ? "Forecast must be in 'Review' status to pubilsh to consensus"
     : "";
 
   return (
