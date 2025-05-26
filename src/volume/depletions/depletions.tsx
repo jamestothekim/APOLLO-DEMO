@@ -120,6 +120,7 @@ export interface ExtendedForecastData {
   tags?: { tag_id: number; tag_name: string }[];
   [key: string]: any; // Allow dynamic guidance values
   historical_gsv_rate?: number; // Added for LC GSV calculation
+  forecast_generation_month_date?: string; // Added for forecast generation date
 }
 
 export type FilterSelectionProps = {
@@ -211,6 +212,7 @@ const processRawData = (
       variant_size_pack_desc: firstItem.variant_size_pack_desc,
       forecastLogic: firstItem.forecast_method || "flat",
       forecast_status: firstItem.forecast_status || "draft",
+      forecast_generation_month_date: firstItem.forecast_generation_month_date, // Populate forecast_generation_month_date
       months: {},
       py_case_equivalent_volume_months: {},
       prev_published_case_equivalent_volume_months: MONTH_NAMES.reduce(
@@ -759,6 +761,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         customer_id: rowData.customer_id,
         customer_name: rowData.customer_name,
         forecastType: rowData.forecastLogic,
+        forecast_generation_month_date: rowData.forecast_generation_month_date, // Add forecast_generation_month_date
         months: JSON.parse(JSON.stringify(rowData.months)),
       };
 
@@ -856,6 +859,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             initialState,
             isManualEdit: false,
             comment: rowData.commentary || null,
+            forecast_generation_month_date:
+              rowData.forecast_generation_month_date, // Add forecast_generation_month_date
           },
           {
             headers: {
@@ -941,6 +946,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           ? initialSidebarState.customer_name
           : null, // Use initial state here
         forecastType: initialSidebarState.forecastLogic, // Use initial forecast logic
+        forecast_generation_month_date:
+          initialSidebarState.forecast_generation_month_date, // Add forecast_generation_month_date
         months: JSON.parse(JSON.stringify(initialSidebarState.months)), // Use initial months data
       };
 
@@ -990,6 +997,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           initialState: stateToLogForUndo, // <<< Pass the correctly captured initial state
           isManualEdit: true, // <<< Flag this as a manual edit
           comment: editedData.commentary || null, // Log current comment
+          forecast_generation_month_date:
+            editedData.forecast_generation_month_date, // Add forecast_generation_month_date
         },
         {
           headers: {
