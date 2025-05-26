@@ -119,6 +119,7 @@ export interface ExtendedForecastData {
   forecast_status?: string;
   tags?: { tag_id: number; tag_name: string }[];
   [key: string]: any; // Allow dynamic guidance values
+  historical_gsv_rate?: number; // Added for LC GSV calculation
 }
 
 export type FilterSelectionProps = {
@@ -236,6 +237,7 @@ const processRawData = (
       py_6m_case_equivalent_volume: 0,
       py_12m_case_equivalent_volume: 0,
       tags: uniqueTags,
+      historical_gsv_rate: Number(firstItem.gsv_rate) || 0, // Capture historical GSV rate from raw data
     };
 
     // Determine last actual month FOR THIS GROUP
@@ -397,20 +399,24 @@ const processRawData = (
 
     // Calculate lc_gross_sales_value
     const lcVolume = item.prev_published_case_equivalent_volume || 0;
-    const currentGsvRate = item.gsv_rate || 0; // Use the gsv_rate calculated just above
-    item.lc_gross_sales_value = lcVolume * currentGsvRate;
+    // Use historical_gsv_rate for LC, fallback to current item.gsv_rate if historical_gsv_rate is not available (e.g. 0 or undefined)
+    const rateForLc =
+      item.historical_gsv_rate && item.historical_gsv_rate > 0
+        ? item.historical_gsv_rate
+        : item.gsv_rate || 0;
+    item.lc_gross_sales_value = lcVolume * rateForLc;
 
     // Calculate lc_gross_sales_value_months
     if (
-      item.prev_published_case_equivalent_volume_months &&
-      item.gsv_rate !== undefined
+      item.prev_published_case_equivalent_volume_months
+      // No longer need to check item.gsv_rate directly here as rateForLc handles it
     ) {
       item.lc_gross_sales_value_months = {}; // Ensure it's initialized
       MONTH_NAMES.forEach((month) => {
         item.lc_gross_sales_value_months![month] = {
           value:
             (item.prev_published_case_equivalent_volume_months![month]?.value ||
-              0) * (item.gsv_rate || 0),
+              0) * rateForLc,
         };
       });
     } else {
