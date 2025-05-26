@@ -551,6 +551,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const [publishComment, setPublishComment] = useState("");
   const [publishCommentError, setPublishCommentError] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [publishConfirmationText, setPublishConfirmationText] = useState("");
+  const [publishConfirmationError, setPublishConfirmationError] =
+    useState(false);
 
   // Reset sub-row icon states when main expanded row changes
   // useEffect(() => {
@@ -1789,6 +1792,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const handlePublish = () => {
     setPublishComment(""); // Reset comment
     setPublishCommentError(false); // Reset error
+    setPublishConfirmationText(""); // Reset confirmation text
+    setPublishConfirmationError(false); // Reset confirmation error
     setIsPublishing(false); // Reset loading state
     setPublishDialogOpen(true); // Open dialog
   };
@@ -1799,11 +1804,20 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   };
 
   const handleConfirmPublish = async () => {
+    let hasError = false;
     if (!publishComment.trim()) {
       setPublishCommentError(true);
-      return;
+      hasError = true;
     }
+    if (publishConfirmationText !== "publish_forecast") {
+      setPublishConfirmationError(true);
+      hasError = true;
+    }
+
+    if (hasError) return;
+
     setPublishCommentError(false);
+    setPublishConfirmationError(false);
     setIsPublishing(true);
 
     if (!user || !userAccess || !userAccess.Division) {
@@ -1820,9 +1834,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     const userId = user.id;
 
     try {
+      // Find the first available forecast_generation_month_date from forecastData
+      const forecastGenerationMonth = forecastData.find(
+        (row) => row.forecast_generation_month_date
+      )?.forecast_generation_month_date;
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/admin/publish-forecast`, // Updated endpoint to /admin/
+        `${import.meta.env.VITE_API_URL}/admin/publish-forecast`,
         {
+          forecast_generation_month: forecastGenerationMonth,
           division_name: divisionParam,
           user_id: userId,
           publication_status: publicationStatus,
@@ -2029,6 +2048,16 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   // Check if the publish button should be visible
   const canPublish = user?.role === "Finance" && userAccess?.Admin === true;
 
+  // New logic for Corporate user with draft forecasts
+  const isCorporateUserWithDrafts =
+    canPublish && // Only consider if user is eligible to publish at all
+    userAccess?.Division === "Corporate" &&
+    forecastData.some((item) => item.forecast_status === "draft");
+
+  const publishButtonTooltipText = isCorporateUserWithDrafts
+    ? "Forecast must be in draft status to pubilsh to consensus"
+    : "";
+
   return (
     <Box>
       <DynamicTable
@@ -2077,17 +2106,32 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           Save Progress
         </Button>
         {/* Conditionally render Publish button */}
-        {canPublish && (
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={handlePublish}
-            disabled={isPublishing} // Disable while publishing
-          >
-            <PublishIcon sx={{ mr: 1 }} />
-            Publish
-          </Button>
-        )}
+        {canPublish &&
+          (publishButtonTooltipText ? (
+            <Tooltip title={publishButtonTooltipText}>
+              <span>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handlePublish} // onClick is fine, button is disabled
+                  disabled={true} // Disabled due to corporate/draft condition
+                >
+                  <PublishIcon sx={{ mr: 1 }} />
+                  Publish
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={handlePublish}
+              disabled={isPublishing} // Default disable condition
+            >
+              <PublishIcon sx={{ mr: 1 }} />
+              Publish
+            </Button>
+          ))}
       </Box>
 
       <QuantSidebar
@@ -2210,14 +2254,20 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       >
         <DialogTitle color="primary">Publish Forecast</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" gutterBottom>
-            By selecting "Publish", you will finalize the forecast for the{" "}
-            <strong>{userAccess?.Division ?? "selected"}</strong> division. To
-            proceed, please provide a comment and select "Publish" below.
-            {userAccess?.Division === "Corporate"
-              ? " and mark it as consensus"
-              : ""}
-          </Typography>
+          {userAccess?.Division === "Corporate" ? (
+            <Typography variant="body1" gutterBottom>
+              By selecting "Publish", you will finalize this period's forecast
+              for the company. Please provide a comment and provide confirmation
+              below before selecting 'Publish'.
+            </Typography>
+          ) : (
+            <Typography variant="body1" gutterBottom>
+              By selecting "Publish", you will finalize the forecast for the{" "}
+              <strong>{userAccess?.Division ?? "selected"}</strong> division.
+              Please provide a comment and provide confirmation below before
+              selecting 'Publish'.
+            </Typography>
+          )}
 
           <TextField
             autoFocus
@@ -2241,6 +2291,46 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             multiline
             rows={3}
           />
+
+          <TextField
+            required
+            margin="dense"
+            id="publishConfirmation"
+            label="To publish, please type 'publish_forecast' and then select 'Publish'"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={publishConfirmationText}
+            onChange={(e) => {
+              setPublishConfirmationText(e.target.value);
+              if (e.target.value === "publish_forecast") {
+                setPublishConfirmationError(false);
+              } else if (e.target.value.trim() !== "") {
+                // Show error only if they started typing and it's not correct
+                setPublishConfirmationError(true);
+              } else {
+                // Clear error if field is empty
+                setPublishConfirmationError(false);
+              }
+            }}
+            onBlur={() => {
+              // Validate on blur if text is present but not correct
+              if (
+                publishConfirmationText.trim() &&
+                publishConfirmationText !== "publish_forecast"
+              ) {
+                setPublishConfirmationError(true);
+              }
+            }}
+            error={publishConfirmationError}
+            helperText={
+              publishConfirmationError
+                ? "Confirmation text does not match."
+                : ""
+            }
+            disabled={isPublishing}
+            sx={{ mt: 2 }} // Add some margin top for spacing
+          />
         </DialogContent>
         <DialogActions sx={{ p: "16px 24px" }}>
           <Button onClick={handleClosePublishDialog} disabled={isPublishing}>
@@ -2251,7 +2341,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             variant="contained"
             color="secondary"
             disabled={
-              isPublishing || publishCommentError || !publishComment.trim()
+              isPublishing ||
+              publishCommentError ||
+              !publishComment.trim() ||
+              publishConfirmationText !== "publish_forecast" ||
+              publishConfirmationError // Added check for confirmation error state
             }
             startIcon={
               isPublishing ? (
