@@ -1819,7 +1819,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       setPublishCommentError(true);
       hasError = true;
     }
-    if (publishConfirmationText !== "publish_forecast") {
+    if (publishConfirmationText !== "PUBLISH") {
       setPublishConfirmationError(true);
       hasError = true;
     }
@@ -1843,11 +1843,17 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     const publicationStatus = isCorporate ? "consensus" : "review";
     const userId = user.id;
 
+    // Find the first available forecast_generation_month_date from forecastData
+    const forecastGenerationMonth = forecastData.find(
+      (row) => row.forecast_generation_month_date
+    )?.forecast_generation_month_date;
+
     try {
-      // Find the first available forecast_generation_month_date from forecastData
-      const forecastGenerationMonth = forecastData.find(
-        (row) => row.forecast_generation_month_date
-      )?.forecast_generation_month_date;
+      // Log the publish attempt
+      console.log(
+        `[PUBLISH] Attempting to publish forecast for ${divisionParam} to ${publicationStatus} status`
+      );
+
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/admin/publish-forecast`,
         {
@@ -1865,19 +1871,61 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       );
 
       if (response.data.success) {
-        showSnackbar("Forecast published successfully!", "success");
+        // After successful publish, fetch fresh data
+        dispatch(
+          fetchVolumeData({
+            markets: selectedMarkets,
+            brands: selectedBrands,
+            isCustomerView: isCustomerView ?? false,
+          })
+        );
+
+        // Show appropriate success message based on division and status
+        const successMessage = isCorporate
+          ? "Successfully promoted all divisions to consensus status"
+          : `Successfully published ${userAccess.Division} forecast to "Review" status for review`;
+
+        showSnackbar(successMessage, "success");
         setPublishDialogOpen(false);
-        // Optionally trigger data refresh or sync
-        // dispatch(triggerSync());
       } else {
         throw new Error(response.data.message || "Publishing failed");
       }
     } catch (error) {
-      console.error("Error publishing forecast:", error);
+      // Log the error to audit system
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/audit/log`,
+        {
+          action_type: "PUBLISH_FORECAST",
+          action: "Failed to publish forecast",
+          details: {
+            error: axios.isAxiosError(error)
+              ? error.response?.data?.message || error.message
+              : error instanceof Error
+              ? error.message
+              : "Unknown error occurred",
+            division: divisionParam,
+            status: publicationStatus,
+            userId,
+            forecastMonth: forecastGenerationMonth,
+            userDivision: userAccess.Division,
+          },
+          status: "FAILURE",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
       const errorMessage = axios.isAxiosError(error)
         ? error.response?.data?.message || error.message
         : "An unexpected error occurred during publishing.";
-      showSnackbar(`Publish failed: ${errorMessage}`, "error");
+
+      showSnackbar(
+        `Publish failed: ${errorMessage}. Please check audit logs for details.`,
+        "error"
+      );
     } finally {
       setIsPublishing(false);
     }
@@ -2306,14 +2354,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             required
             margin="dense"
             id="publishConfirmation"
-            label="To publish, please type 'publish_forecast' and then select 'Publish'"
+            label="To publish, please type 'PUBLISH' and then select 'Publish'"
             type="text"
             fullWidth
             variant="outlined"
             value={publishConfirmationText}
             onChange={(e) => {
               setPublishConfirmationText(e.target.value);
-              if (e.target.value === "publish_forecast") {
+              if (e.target.value === "PUBLISH") {
                 setPublishConfirmationError(false);
               } else if (e.target.value.trim() !== "") {
                 // Show error only if they started typing and it's not correct
@@ -2327,7 +2375,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               // Validate on blur if text is present but not correct
               if (
                 publishConfirmationText.trim() &&
-                publishConfirmationText !== "publish_forecast"
+                publishConfirmationText !== "PUBLISH"
               ) {
                 setPublishConfirmationError(true);
               }
@@ -2354,7 +2402,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               isPublishing ||
               publishCommentError ||
               !publishComment.trim() ||
-              publishConfirmationText !== "publish_forecast" ||
+              publishConfirmationText !== "PUBLISH" ||
               publishConfirmationError // Added check for confirmation error state
             }
             startIcon={
