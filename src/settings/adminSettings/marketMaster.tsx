@@ -96,7 +96,6 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
   // Get market codes from user access
   const userMarketCodes =
     user?.user_access?.Markets?.map((market) => market.market_code) || [];
-  console.log("User Market Codes:", userMarketCodes);
 
   // Parse user_access to check permissions
   const userAccess = useMemo(() => {
@@ -181,8 +180,6 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
         const filteredData = response.data.filter((market: any) =>
           userMarketCodes.includes(market.market_code)
         );
-
-        console.log("Filtered Market Data with Status:", filteredData);
 
         const processedData = filteredData.map((row: MarketData) => ({
           ...row,
@@ -372,10 +369,6 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
     }
 
     try {
-      console.log(
-        `[MARKET PUBLISH] Attempting to publish forecast for ${divisionParam} to ${publicationStatus} status with month ${forecastGenerationMonth}`
-      );
-
       const publishPayload = {
         forecast_generation_month: forecastGenerationMonth,
         user_id: userId,
@@ -383,8 +376,6 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
         publication_status: publicationStatus,
         comment: publishComment.trim(),
       };
-
-      console.log("[MARKET PUBLISH] Payload being sent:", publishPayload);
 
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/admin/publish-forecast`,
@@ -431,19 +422,6 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
         throw new Error(response.data.message || "Publishing failed");
       }
     } catch (error) {
-      console.error("[MARKET PUBLISH] Publish failed:", {
-        error: axios.isAxiosError(error)
-          ? error.response?.data?.message || error.message
-          : error instanceof Error
-          ? error.message
-          : "Unknown error occurred",
-        division: divisionParam,
-        status: publicationStatus,
-        userId,
-        forecastMonth: forecastGenerationMonth,
-        userDivision: userAccess.Division,
-      });
-
       const errorMessage = axios.isAxiosError(error)
         ? error.response?.data?.message || error.message
         : "An unexpected error occurred during publishing.";
@@ -487,7 +465,6 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
 
     const divisionParam =
       userAccess.Division === "Corporate" ? "corporate" : userAccess.Division;
-    const userId = user.id;
 
     // Get forecast_generation_month_date from market data
     let forecastGenerationMonth;
@@ -512,18 +489,12 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
     }
 
     try {
-      console.log(
-        `[UNPUBLISH ALL] Attempting to unpublish all forecasts for ${divisionParam} division for month ${forecastGenerationMonth}`
-      );
-
       const unpublishPayload = {
         division: divisionParam,
         forecast_period: forecastGenerationMonth,
         user: user.email,
         reason: unpublishAllComment.trim(),
       };
-
-      console.log("[UNPUBLISH ALL] Payload being sent:", unpublishPayload);
 
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/admin/unpublish-division-forecasts`,
@@ -568,18 +539,6 @@ export const MarketMaster = forwardRef<MarketMasterHandle>((_props, ref) => {
         throw new Error(response.data.message || "Unpublishing failed");
       }
     } catch (error) {
-      console.error("[UNPUBLISH ALL] Unpublish failed:", {
-        error: axios.isAxiosError(error)
-          ? error.response?.data?.message || error.message
-          : error instanceof Error
-          ? error.message
-          : "Unknown error occurred",
-        division: divisionParam,
-        userId,
-        forecastMonth: forecastGenerationMonth,
-        userDivision: userAccess.Division,
-      });
-
       const errorMessage = axios.isAxiosError(error)
         ? error.response?.data?.message || error.message
         : "An unexpected error occurred during unpublishing.";

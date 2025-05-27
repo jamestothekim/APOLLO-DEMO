@@ -346,10 +346,14 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       align: "left" as const,
       filterable: true,
       render: (value: string) => {
-        // Format YYYYMMDD to YYYY-MM-DD
-        return value
-          ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
-          : "";
+        // Format ISO timestamp to YYYY-MM-DD
+        if (!value) return "";
+        try {
+          const date = new Date(value);
+          return date.toISOString().split("T")[0];
+        } catch {
+          return value;
+        }
       },
     },
     {
