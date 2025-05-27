@@ -6,12 +6,15 @@ import {
   setVolumeForecastBrands,
   setVolumeForecastTags,
 } from "../redux/slices/userSettingsSlice";
+import { VolumeForecast as MainVolumeForecast } from "../volume/volumeForecast";
 
 const VolumeForecast = () => {
   const dispatch = useDispatch();
-  const [selectedMarkets, setSelectedMarkets] = useState([]);
-  const [selectedBrands, setSelectedBrands] = useState([]);
-  const [selectedTags, setSelectedTags] = useState([]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<number[]>([]);
+  const [availableBrands, setAvailableBrands] = useState<string[]>([]);
+  const [marketData, setMarketData] = useState<any[]>([]);
 
   useEffect(() => {
     const loadInitialSettings = async () => {
@@ -42,10 +45,39 @@ const VolumeForecast = () => {
       }
     };
 
+    const loadMarketData = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/markets`
+        );
+        setMarketData(response.data);
+      } catch (error) {
+        console.error("Error loading market data:", error);
+      }
+    };
+
+    const loadBrands = async () => {
+      try {
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/brands`
+        );
+        setAvailableBrands(response.data);
+      } catch (error) {
+        console.error("Error loading brands:", error);
+      }
+    };
+
     loadInitialSettings();
+    loadMarketData();
+    loadBrands();
   }, [dispatch]);
 
-  return null; // Add your JSX here
+  return (
+    <MainVolumeForecast
+      availableBrands={availableBrands}
+      marketData={marketData}
+    />
+  );
 };
 
 export default VolumeForecast;
