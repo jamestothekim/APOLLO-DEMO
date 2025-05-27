@@ -571,7 +571,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
                   series={series}
                   height={420}
                   margin={{
-                    left: 20,
+                    left: 35,
                     right: 0,
                     top: 20,
                     bottom: 60,

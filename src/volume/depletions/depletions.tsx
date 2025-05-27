@@ -2135,19 +2135,25 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         enableColumnFiltering={true}
         enableRowTooltip={true} // Enable the tooltip
         rowTooltipContent={(row: ExtendedForecastData) => {
-          // Define content
-          const market = `Market: ${row.market_name || "N/A"}`;
-          const product = `Product: ${row.variant_size_pack_desc || "N/A"}`;
-          // const logic = `Logic: ${row.forecastLogic || 'N/A'}`; // Removed Logic
-          return (
-            <>
-              {market}
-              <br />
-              {product}
-              {/* <br /> {logic} */}
-              {/* Removed Logic */}
-            </>
+          // Get the current column from the row's data
+          const currentColumn = Object.keys(row).find(
+            (key) => key.startsWith("guidance_") || key.startsWith("months.")
           );
+
+          // Only show tooltip for guidance and phasing sections
+          if (currentColumn) {
+            // Define content
+            const market = `Market: ${row.market_name || "N/A"}`;
+            const product = `Product: ${row.variant_size_pack_desc || "N/A"}`;
+            return (
+              <>
+                {market}
+                <br />
+                {product}
+              </>
+            );
+          }
+          return null; // No tooltip for control section
         }}
       />
 

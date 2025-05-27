@@ -59,6 +59,9 @@ export interface GuidanceSettingsState {
   pendingSummaryRows: number[];
   selectedBrands: string[];
   selectedMarkets: string[];
+  volumeForecastMarkets: string[];
+  volumeForecastBrands: string[];
+  volumeForecastTags: number[];
   isGuidanceInitialized: boolean; // Tracks if pending state is initialized from UserContext
   // Status for fetching available guidance options
   guidanceStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
@@ -74,6 +77,9 @@ const initialState: GuidanceSettingsState = {
   pendingSummaryRows: [],
   selectedBrands: [],
   selectedMarkets: [],
+  volumeForecastMarkets: [],
+  volumeForecastBrands: [],
+  volumeForecastTags: [],
   isGuidanceInitialized: false,
   guidanceStatus: 'idle',
   guidanceError: null,
@@ -142,6 +148,15 @@ const guidanceSettingsSlice = createSlice({
     setSelectedMarkets: (state, action: PayloadAction<string[]>) => {
       state.selectedMarkets = action.payload;
     },
+    setVolumeForecastMarkets: (state, action: PayloadAction<string[]>) => {
+      state.volumeForecastMarkets = action.payload;
+    },
+    setVolumeForecastBrands: (state, action: PayloadAction<string[]>) => {
+      state.volumeForecastBrands = action.payload;
+    },
+    setVolumeForecastTags: (state, action: PayloadAction<number[]>) => {
+      state.volumeForecastTags = action.payload;
+    },
   },
   extraReducers: (builder) => {
     // Keep only handlers for fetchGuidance
@@ -171,6 +186,9 @@ export const {
   resetGuidanceInitialization,
   setSelectedBrands,
   setSelectedMarkets,
+  setVolumeForecastMarkets,
+  setVolumeForecastBrands,
+  setVolumeForecastTags,
 } = guidanceSettingsSlice.actions;
 
 // Export selectors
@@ -183,6 +201,9 @@ export const selectPendingSummaryRows = (state: { guidanceSettings: GuidanceSett
 export const selectIsGuidanceInitialized = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.isGuidanceInitialized;
 export const selectSelectedBrands = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.selectedBrands;
 export const selectSelectedMarkets = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.selectedMarkets;
+export const selectVolumeForecastMarkets = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.volumeForecastMarkets;
+export const selectVolumeForecastBrands = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.volumeForecastBrands;
+export const selectVolumeForecastTags = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.volumeForecastTags;
 
 // Selectors to get derived Guidance objects from PENDING IDs
 const selectAvailableGuidanceState = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.availableGuidance;

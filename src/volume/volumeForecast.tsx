@@ -25,6 +25,12 @@ import {
   selectPendingGuidanceForecastColumns,
   selectPendingGuidanceForecastRows,
   selectAvailableGuidance,
+  selectVolumeForecastMarkets,
+  selectVolumeForecastBrands,
+  selectVolumeForecastTags,
+  setVolumeForecastMarkets,
+  setVolumeForecastBrands,
+  setVolumeForecastTags,
 } from "../redux/slices/userSettingsSlice";
 import type { Guidance } from "../redux/slices/userSettingsSlice";
 import axios from "axios";
@@ -89,10 +95,17 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
 }) => {
   const dispatch: AppDispatch = useDispatch();
   const availableGuidance = useSelector(selectAvailableGuidance);
+  const volumeForecastMarkets = useSelector(selectVolumeForecastMarkets);
+  const volumeForecastBrands = useSelector(selectVolumeForecastBrands);
+  const volumeForecastTags = useSelector(selectVolumeForecastTags);
 
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<number[]>([]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(
+    volumeForecastMarkets
+  );
+  const [selectedBrands, setSelectedBrands] =
+    useState<string[]>(volumeForecastBrands);
+  const [selectedTags, setSelectedTags] =
+    useState<number[]>(volumeForecastTags);
   const [availableTags, setAvailableTags] = useState<
     { tag_id: number; tag_name: string }[]
   >([]);
@@ -104,6 +117,25 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
+
+  // Sync with Redux state
+  useEffect(() => {
+    if (volumeForecastMarkets.length > 0) {
+      setSelectedMarkets(volumeForecastMarkets);
+    }
+  }, [volumeForecastMarkets]);
+
+  useEffect(() => {
+    if (volumeForecastBrands.length > 0) {
+      setSelectedBrands(volumeForecastBrands);
+    }
+  }, [volumeForecastBrands]);
+
+  useEffect(() => {
+    if (volumeForecastTags.length > 0) {
+      setSelectedTags(volumeForecastTags);
+    }
+  }, [volumeForecastTags]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -127,8 +159,9 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
     return parts.length > 1 ? parts[1] : customerData;
   };
 
+  // Log filtered data for debugging
   const filteredData: (MarketData | CustomerData)[] = useMemo(() => {
-    return isCustomerView
+    const data = isCustomerView
       ? marketData
           .filter((market) => market.settings?.managed_by === "Customer")
           .flatMap((market) =>
@@ -143,38 +176,24 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
             }))
           )
       : marketData.filter((market) => market.settings?.managed_by === "Market");
+
+    console.log("[VolumeForecast] filteredData:", data);
+    return data;
   }, [isCustomerView, marketData]);
-
-  useEffect(() => {
-    setSelectedMarkets([]);
-    setSelectedBrands([]);
-  }, [isCustomerView, marketData]);
-
-  const isCustomerData = (
-    item: MarketData | CustomerData
-  ): item is CustomerData => {
-    return "code" in item && "display" in item;
-  };
-
-  const handleColumns = () => {
-    setColumnsDialogOpen(true);
-  };
-
-  const handleApplyColumns = async (columns: Guidance[]) => {
-    setColumnsDialogOpen(false);
-    const columnIds = columns.map((col) => col.id);
-    dispatch(setPendingForecastCols(columnIds));
-  };
-
-  const handleApplyRows = async (rows: Guidance[]) => {
-    const rowIds = rows.map((row) => row.id);
-    dispatch(setPendingForecastRows(rowIds));
-  };
 
   const handleViewToggle = () => {
-    setIsCustomerView(!isCustomerView);
-    setSelectedMarkets([]);
-    setSelectedBrands([]);
+    const newIsCustomerView = !isCustomerView;
+    setIsCustomerView(newIsCustomerView);
+    // Only clear selections if we're switching views
+    if (newIsCustomerView !== isCustomerView) {
+      setSelectedMarkets([]);
+      setSelectedBrands([]);
+      setSelectedTags([]);
+      // Clear Redux state when switching views
+      dispatch(setVolumeForecastMarkets([]));
+      dispatch(setVolumeForecastBrands([]));
+      dispatch(setVolumeForecastTags([]));
+    }
   };
 
   // Get selected Guidance objects directly from Redux using the reselect selectors
@@ -204,6 +223,50 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
     };
     fetchTags();
   }, []);
+
+  const handleMarketsChange = (
+    _: any,
+    newValue: (MarketData | CustomerData)[]
+  ) => {
+    const newMarkets = newValue.map((item) =>
+      isCustomerView
+        ? (item as CustomerData).customer_coding || (item as CustomerData).code
+        : (item as MarketData).market_id
+    );
+    setSelectedMarkets(newMarkets);
+    dispatch(setVolumeForecastMarkets(newMarkets));
+  };
+
+  const handleBrandsChange = (_: any, newValue: string[]) => {
+    setSelectedBrands(newValue);
+    dispatch(setVolumeForecastBrands(newValue));
+  };
+
+  const handleTagsChange = (_: any, newValue: number[]) => {
+    setSelectedTags(newValue);
+    dispatch(setVolumeForecastTags(newValue));
+  };
+
+  const handleColumns = () => {
+    setColumnsDialogOpen(true);
+  };
+
+  const handleApplyColumns = async (columns: Guidance[]) => {
+    setColumnsDialogOpen(false);
+    const columnIds = columns.map((col) => col.id);
+    dispatch(setPendingForecastCols(columnIds));
+  };
+
+  const handleApplyRows = async (rows: Guidance[]) => {
+    const rowIds = rows.map((row) => row.id);
+    dispatch(setPendingForecastRows(rowIds));
+  };
+
+  const isCustomerData = (
+    item: MarketData | CustomerData
+  ): item is CustomerData => {
+    return "code" in item && "display" in item;
+  };
 
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
@@ -240,16 +303,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                       : (item as MarketData).market_id
                   )
                 )}
-                onChange={(_, newValue) => {
-                  setSelectedMarkets(
-                    newValue.map((item) =>
-                      isCustomerView
-                        ? (item as CustomerData).customer_coding ||
-                          (item as CustomerData).code
-                        : (item as MarketData).market_id
-                    )
-                  );
-                }}
+                onChange={handleMarketsChange}
                 isOptionEqualToValue={(option, value) =>
                   isCustomerView
                     ? (option as CustomerData).code ===
@@ -298,7 +352,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                 options={availableBrands}
                 value={selectedBrands}
                 onChange={(_, newValue) => {
-                  setSelectedBrands(newValue);
+                  handleBrandsChange(_, newValue);
                 }}
                 getOptionLabel={(option) => option}
                 renderInput={(params) => (
@@ -333,7 +387,10 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                   selectedTags.includes(tag.tag_id)
                 )}
                 onChange={(_, newValue) => {
-                  setSelectedTags(newValue.map((tag) => tag.tag_id));
+                  handleTagsChange(
+                    _,
+                    newValue.map((tag) => tag.tag_id)
+                  );
                 }}
                 getOptionLabel={(option) => option.tag_name}
                 renderInput={(params) => (
