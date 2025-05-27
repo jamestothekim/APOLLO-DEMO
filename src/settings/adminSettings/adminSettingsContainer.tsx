@@ -47,7 +47,7 @@ export const AdminSettingsContainer = () => {
             onClick={handleAddUserClick}
             sx={{
               textTransform: "none",
-              borderRadius: "8px",
+              borderRadius: "3px",
             }}
           >
             Add User

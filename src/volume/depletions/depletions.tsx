@@ -650,6 +650,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 ...item,
                 forecastLogic: restored.forecastType,
                 months: restored.months,
+                commentary: restored.comment, // Restore the comment from the previous state
               };
 
               // Recalculate total volume
@@ -767,6 +768,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         forecastType: rowData.forecastLogic,
         forecast_generation_month_date: rowData.forecast_generation_month_date, // Add forecast_generation_month_date
         months: JSON.parse(JSON.stringify(rowData.months)),
+        comment: rowData.commentary || null, // Add initial comment for undo
       };
 
       const requestBody = {
@@ -953,6 +955,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         forecast_generation_month_date:
           initialSidebarState.forecast_generation_month_date, // Add forecast_generation_month_date
         months: JSON.parse(JSON.stringify(initialSidebarState.months)), // Use initial months data
+        comment: initialSidebarState.commentary || null, // Add initial comment for undo
       };
 
       // First update the forecast (still uses editedData for the actual change)

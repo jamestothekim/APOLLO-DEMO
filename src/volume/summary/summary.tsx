@@ -293,13 +293,13 @@ export const Summary = ({
 
   // Update local state when persisted state changes
   useEffect(() => {
-    if (persistedSelectedBrands) {
+    if (persistedSelectedBrands !== undefined) {
       setSelectedBrands(persistedSelectedBrands);
     }
   }, [persistedSelectedBrands]);
 
   useEffect(() => {
-    if (persistedSelectedMarkets) {
+    if (persistedSelectedMarkets !== undefined) {
       setSelectedMarkets(persistedSelectedMarkets);
     }
   }, [persistedSelectedMarkets]);

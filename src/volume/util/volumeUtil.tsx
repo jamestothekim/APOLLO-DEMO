@@ -1256,16 +1256,20 @@ export const aggregateSummaryData = (
       });
     }
     const brandAgg = brandAggsMap.get(brandKey)!;
+
+    // Add totals once per variant (outside the monthly loop)
+    brandAgg.total += variantRow.total;
+    brandAgg.total_py_volume += variantRow.total_py_volume;
+    brandAgg.total_gsv_ty += variantRow.total_gsv_ty;
+    brandAgg.total_gsv_py += variantRow.total_gsv_py;
+    brandAgg.prev_published_case_equivalent_volume +=
+      variantRow.prev_published_case_equivalent_volume;
+    brandAgg.lc_gross_sales_value += variantRow.lc_gross_sales_value;
+
+    // Add monthly values (inside the monthly loop)
     MONTH_NAMES.forEach((m) => {
       brandAgg.months[m] += variantRow.months[m];
       brandAgg.months_py_volume[m] += variantRow.months_py_volume[m];
-      brandAgg.total += variantRow.total;
-      brandAgg.total_py_volume += variantRow.total_py_volume;
-      brandAgg.total_gsv_ty += variantRow.total_gsv_ty;
-      brandAgg.total_gsv_py += variantRow.total_gsv_py;
-      brandAgg.prev_published_case_equivalent_volume +=
-        variantRow.prev_published_case_equivalent_volume;
-      brandAgg.lc_gross_sales_value += variantRow.lc_gross_sales_value;
       brandAgg.months_lc_volume[m] =
         (brandAgg.months_lc_volume[m] || 0) +
         (variantRow.months_lc_volume[m] || 0);
