@@ -38,6 +38,7 @@ import {
   selectVolumeDataStatus, // Added import
   selectCustomerRawVolumeData,
   selectCustomerVolumeDataStatus,
+  fetchVolumeData,
 } from "../../redux/slices/depletionSlice";
 // ---------------------
 
@@ -1782,6 +1783,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         throw new Error("Failed to save changes");
       }
 
+      // After successful save, fetch fresh data
+      dispatch(
+        fetchVolumeData({
+          markets: selectedMarkets,
+          brands: selectedBrands,
+          isCustomerView: isCustomerView ?? false,
+        })
+      );
+
       showSnackbar("Changes saved successfully", "success");
     } catch (error) {
       console.error("Error saving changes:", error);
@@ -2055,7 +2065,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     forecastData.some((item) => item.forecast_status === "draft");
 
   const publishButtonTooltipText = isCorporateUserWithDrafts
-    ? "Forecast must be in 'Review' status to pubilsh to consensus"
+    ? "Forecast must be in 'Review' status to publish to consensus"
     : "";
 
   return (
