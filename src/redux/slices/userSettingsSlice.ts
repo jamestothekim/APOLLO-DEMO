@@ -272,6 +272,9 @@ export const syncAllSettings = createAsyncThunk(
       const {
         selectedBrands,
         selectedMarkets,
+        volumeForecastMarkets,
+        volumeForecastBrands,
+        volumeForecastTags,
         pendingForecastCols,
         pendingForecastRows,
         pendingSummaryCols,
@@ -282,6 +285,9 @@ export const syncAllSettings = createAsyncThunk(
       const settingsToSync = {
         summary_selected_brands: selectedBrands,
         summary_selected_markets: selectedMarkets,
+        forecast_selected_markets: volumeForecastMarkets,
+        forecast_selected_brands: volumeForecastBrands,
+        forecast_selected_tags: volumeForecastTags,
         guidance_settings: {
           forecast_cols: pendingForecastCols,
           forecast_rows: pendingForecastRows,

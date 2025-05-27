@@ -177,7 +177,6 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
           )
       : marketData.filter((market) => market.settings?.managed_by === "Market");
 
-    console.log("[VolumeForecast] filteredData:", data);
     return data;
   }, [isCustomerView, marketData]);
 

@@ -20,21 +20,28 @@ import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import ViewColumnOutlinedIcon from "@mui/icons-material/ViewColumnOutlined";
 import ViewHeadlineOutlinedIcon from "@mui/icons-material/ViewHeadlineOutlined";
 import axios from "axios";
+import { createSelector } from "@reduxjs/toolkit";
 
 // Import Guidance type from the Redux slice
 import type { Guidance } from "../../redux/slices/userSettingsSlice";
 
 // START ADDED IMPORTS
 import { useSelector } from "react-redux";
-import type { RootState } from "../../redux/store"; // Assuming RootState is exported from your store
-// Assuming selectors exist in userSettingsSlice.ts, e.g.:
-// import {
-//   selectSelectedForecastColIds,
-//   selectSelectedForecastRowIds,
-//   selectSelectedSummaryColIds,
-//   selectSelectedSummaryRowIds
-// } from "../../redux/slices/userSettingsSlice";
+import type { RootState } from "../../redux/store";
 // END ADDED IMPORTS
+
+// Create memoized selectors
+const selectGuidanceSettings = (state: RootState) => state.guidanceSettings;
+
+const selectGuidanceSettingsData = createSelector(
+  [selectGuidanceSettings],
+  (settings) => ({
+    selectedForecastColIds: settings.pendingForecastCols || [],
+    selectedForecastRowIds: settings.pendingForecastRows || [],
+    selectedSummaryColIds: settings.pendingSummaryCols || [],
+    selectedSummaryRows: settings.pendingSummaryRows || [],
+  })
+);
 
 interface GuidanceDialogProps {
   open: boolean;
@@ -74,24 +81,13 @@ export const GuidanceDialog: React.FC<GuidanceDialogProps> = ({
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
 
-  // START ADDED SELECTORS - Replace with your actual selectors
+  // Use the memoized selector
   const {
     selectedForecastColIds,
     selectedForecastRowIds,
     selectedSummaryColIds,
     selectedSummaryRows,
-  } = useSelector((state: RootState) => {
-    // This is a placeholder. Replace with actual selectors from userSettingsSlice.ts
-    // Ensure these selectors return number[] or a default empty array.
-    const settings = (state as any).userSettings; // Accessing userSettings slice, adjust path if needed
-    return {
-      selectedForecastColIds: settings?.selectedForecastCols || [],
-      selectedForecastRowIds: settings?.selectedForecastRows || [],
-      selectedSummaryColIds: settings?.selectedSummaryCols || [],
-      selectedSummaryRows: settings?.selectedSummaryRows || [],
-    };
-  });
-  // END ADDED SELECTORS
+  } = useSelector(selectGuidanceSettingsData);
 
   useEffect(() => {
     if (open) {
