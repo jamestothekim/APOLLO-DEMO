@@ -482,6 +482,7 @@ export const Summary = ({
     selectedRowGuidance,
     dispatch,
     selectedMarkets,
+    selectedBrands,
     customerToMarketMap,
   ]);
 
