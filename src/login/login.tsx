@@ -9,17 +9,20 @@ import {
   IconButton,
   Snackbar,
   Alert,
+  Link,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { useUser } from "../userContext";
 import { useNavigate } from "react-router-dom";
+import { ForgotPassword } from "./forgotPassword";
 
 export const Login: React.FC = () => {
   const theme = useTheme();
   const { login, isLoggedIn } = useUser();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -38,6 +41,11 @@ export const Login: React.FC = () => {
       localStorage.setItem("isAuthenticated", "true");
     }
   }, [isLoggedIn]);
+
+  // Show forgot password component if requested
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -218,7 +226,7 @@ export const Login: React.FC = () => {
                 ),
               }}
               sx={{
-                mb: 2,
+                mb: 1,
                 "& .MuiOutlinedInput-root": {
                   "& fieldset": {
                     borderColor: theme.palette.primary.main,
@@ -237,6 +245,28 @@ export const Login: React.FC = () => {
                 },
               }}
             />
+
+            <Box sx={{ textAlign: "right", mb: 1 }}>
+              <Link
+                component="button"
+                type="button"
+                variant="body2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowForgotPassword(true);
+                }}
+                sx={{
+                  color: theme.palette.primary.main,
+                  textDecoration: "none",
+                  fontSize: "0.8em",
+                  "&:hover": {
+                    textDecoration: "underline",
+                  },
+                }}
+              >
+                Forgot Password?
+              </Link>
+            </Box>
 
             <Button
               type="submit"

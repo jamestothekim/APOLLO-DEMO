@@ -17,6 +17,7 @@ import theme from "./theme";
 import ReportBuilder from "./reportBuilder/reportBuilder";
 import { SettingsContainer } from "./settings/settingsContainer";
 import { Login } from "./login/login";
+import { ResetPassword } from "./login/resetPassword";
 import { UserProvider, useUser } from "./userContext";
 import { LoadingApollo } from "./reusableComponents/loadingApollo";
 
@@ -32,11 +33,15 @@ const AppLayout = () => {
   };
 
   // If we're on the login page, only render the login component
-  if (location.pathname === "/login") {
+  if (
+    location.pathname === "/login" ||
+    location.pathname === "/reset-password"
+  ) {
     return (
       <Box sx={{ p: 2 }}>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </Box>
     );
@@ -88,6 +93,7 @@ const AppContent = () => {
       <UserProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/*"
             element={
