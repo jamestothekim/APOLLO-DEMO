@@ -36,6 +36,14 @@ const fadeInHold = keyframes`
   100% { opacity: 1; transform: translateY(0); }
 `;
 
+// Define a wave animation for the dots
+const dotWave = keyframes`
+  0% { transform: scale(1); }
+  33% { transform: scale(1.5); }
+  66% { transform: scale(1); }
+  100% { transform: scale(1); }
+`;
+
 // Styled components for the loading animation
 const LoadingContainer = styled(Box)(({ theme }) => ({
   display: "flex",
@@ -206,8 +214,8 @@ export const LoadingApollo: React.FC<LoadingApolloProps> = ({
               height: 8,
               borderRadius: "50%",
               backgroundColor: "primary.main",
-              animation: `${pulse} 1.5s ease-in-out infinite`,
-              animationDelay: `${index * 0.3}s`,
+              animation: `${dotWave} 1.5s ease-in-out infinite`,
+              animationDelay: `${index * 0.5}s`,
             }}
           />
         ))}
