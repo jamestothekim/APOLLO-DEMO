@@ -1851,6 +1851,20 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       (row) => row.forecast_generation_month_date
     )?.forecast_generation_month_date;
 
+    // Convert the datetime to YYYY-MM-DD format if it exists
+    const formattedForecastMonth = forecastGenerationMonth
+      ? new Date(forecastGenerationMonth).toISOString().split("T")[0]
+      : undefined;
+
+    if (!formattedForecastMonth) {
+      showSnackbar(
+        "Could not determine forecast generation month. Please try again.",
+        "error"
+      );
+      setIsPublishing(false);
+      return;
+    }
+
     try {
       // Log the publish attempt
       console.log(
@@ -1860,7 +1874,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/admin/publish-forecast`,
         {
-          forecast_generation_month: forecastGenerationMonth,
+          forecast_generation_month: formattedForecastMonth,
           division_name: divisionParam,
           user_id: userId,
           publication_status: publicationStatus,
@@ -1909,7 +1923,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             division: divisionParam,
             status: publicationStatus,
             userId,
-            forecastMonth: forecastGenerationMonth,
+            forecastMonth: formattedForecastMonth,
             userDivision: userAccess.Division,
           },
           status: "FAILURE",
