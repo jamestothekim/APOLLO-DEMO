@@ -81,14 +81,6 @@ export const AuditLogs = () => {
 
   const columns: Column[] = [
     {
-      key: "audit_id",
-      header: "ID",
-      width: 80,
-      render: (value) =>
-        value !== null && value !== undefined ? String(value) : "",
-      sortable: true,
-    },
-    {
       key: "user_name", // Custom key for derived value; actual data comes from row object
       header: "User",
       width: 200,
