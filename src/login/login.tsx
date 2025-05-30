@@ -13,13 +13,12 @@ import {
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { useUser } from "../userContext";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 export const Login: React.FC = () => {
   const theme = useTheme();
   const { login, isLoggedIn } = useUser();
   const navigate = useNavigate();
-  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -61,9 +60,8 @@ export const Login: React.FC = () => {
           severity: "success",
         });
 
-        // Get the intended destination or default to "/"
-        const from = (location.state as any)?.from?.pathname || "/";
-        navigate(from, { replace: true });
+        // Always redirect to dashboard on successful login
+        navigate("/", { replace: true });
       } else {
         // This case might not be reachable if the backend always throws an error on failure
         console.warn(

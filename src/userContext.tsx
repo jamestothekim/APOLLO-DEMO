@@ -83,12 +83,14 @@ interface AuthState {
   user: User | null;
   isLoggedIn: boolean;
   isCheckingAuth: boolean;
+  isInitialDataLoading: boolean;
 }
 
 type AuthAction =
   | { type: "LOGIN"; payload: { user: User; token: string } }
   | { type: "LOGOUT" }
   | { type: "SET_CHECKING"; payload: boolean }
+  | { type: "SET_INITIAL_DATA_LOADING"; payload: boolean }
   | { type: "UPDATE_USER"; payload: User }
   | { type: "UPDATE_USER_SETTINGS"; payload: UserSettings };
 
@@ -140,6 +142,7 @@ interface UserContextType {
   user: User | null;
   isLoggedIn: boolean;
   isCheckingAuth: boolean;
+  isInitialDataLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<boolean>;
@@ -152,6 +155,7 @@ const initialState: AuthState = {
   user: null,
   isLoggedIn: false,
   isCheckingAuth: true,
+  isInitialDataLoading: false,
 };
 
 const authReducer = (state: AuthState, action: AuthAction): AuthState => {
@@ -163,6 +167,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         user: action.payload.user,
         isLoggedIn: true,
         isCheckingAuth: false,
+        isInitialDataLoading: true,
       };
     case "LOGOUT":
       tokenService.removeToken();
@@ -171,11 +176,17 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         user: null,
         isLoggedIn: false,
         isCheckingAuth: false,
+        isInitialDataLoading: false,
       };
     case "SET_CHECKING":
       return {
         ...state,
         isCheckingAuth: action.payload,
+      };
+    case "SET_INITIAL_DATA_LOADING":
+      return {
+        ...state,
+        isInitialDataLoading: action.payload,
       };
     case "UPDATE_USER":
       return {
@@ -228,6 +239,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (response.data.user) {
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
+        if (!initialFetchPerformedRef.current) {
+          dispatch({ type: "SET_INITIAL_DATA_LOADING", payload: true });
+        }
         return true;
       }
       dispatch({ type: "LOGOUT" });
@@ -374,8 +388,28 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          if (!tokenService.verifyTokenPresence()) {
+            dispatch({ type: "LOGOUT" });
+            navigate("/login");
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => axios.interceptors.response.eject(interceptor);
+  }, [navigate]);
+
+  useEffect(() => {
     if (state.isLoggedIn && state.user && !initialFetchPerformedRef.current) {
       initialFetchPerformedRef.current = true;
+
+      // Set loading state to true when starting initial data fetch
+      dispatch({ type: "SET_INITIAL_DATA_LOADING", payload: true });
 
       // Initialize guidance settings from user preferences
       if (state.user.user_settings) {
@@ -410,146 +444,136 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
-      // Fetch dashboard data
-      appDispatch(fetchDashboardConfig())
-        .unwrap()
-        .then((_dashboardData) => {})
-        .catch((error) => {
-          console.error("[UserContext] Error fetching dashboard data:", error);
-        });
+      const fetchAllInitialData = async () => {
+        try {
+          // Fetch dashboard data
+          await appDispatch(fetchDashboardConfig()).unwrap();
 
-      const fetchMarketDetailsAndVolumeData = async () => {
-        let marketViewMarketIds: string[] = [];
-        let customerViewCustomerIds: string[] = [];
-        let detailedMarkets: MarketAccess[] = [];
+          const fetchMarketDetailsAndVolumeData = async () => {
+            let marketViewMarketIds: string[] = [];
+            let customerViewCustomerIds: string[] = [];
+            let detailedMarkets: MarketAccess[] = [];
 
-        // 1. Fetch FULL details for ALL markets user has access to
-        if (state.user?.user_access?.Markets?.length) {
-          const userMarketIds = state.user.user_access.Markets.map((m) => m.id);
+            // 1. Fetch FULL details for ALL markets user has access to
+            if (state.user?.user_access?.Markets?.length) {
+              const userMarketIds = state.user.user_access.Markets.map(
+                (m) => m.id
+              );
 
-          if (userMarketIds.length > 0) {
-            try {
-              // Fetch details for ALL market IDs
-              const response = await axios.get<MarketAccess[]>(
-                `${
-                  import.meta.env.VITE_API_URL
-                }/volume/get-markets?ids=${userMarketIds.join(",")}`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${tokenService.getToken()}`,
-                  },
+              if (userMarketIds.length > 0) {
+                try {
+                  // Fetch details for ALL market IDs
+                  const response = await axios.get<MarketAccess[]>(
+                    `${
+                      import.meta.env.VITE_API_URL
+                    }/volume/get-markets?ids=${userMarketIds.join(",")}`,
+                    {
+                      headers: {
+                        Authorization: `Bearer ${tokenService.getToken()}`,
+                      },
+                    }
+                  );
+
+                  if (response.data && response.data.length > 0) {
+                    detailedMarkets = response.data;
+                  } else {
+                  }
+                } catch (error) {
+                  console.error(
+                    "[UserProvider] Error fetching full market details:",
+                    error
+                  );
                 }
-              );
-
-              if (response.data && response.data.length > 0) {
-                detailedMarkets = response.data;
-              } else {
               }
-            } catch (error) {
-              console.error(
-                "[UserProvider] Error fetching full market details:",
-                error
+            } else {
+              return;
+            }
+
+            // 2. Now, use detailedMarkets to filter and extract IDs
+            if (detailedMarkets.length > 0) {
+              const marketManagedMarkets = detailedMarkets.filter(
+                (m) => m.settings?.managed_by !== "Customer"
               );
-            }
-          }
-        } else {
-          return;
-        }
-
-        // 2. Now, use detailedMarkets to filter and extract IDs
-        if (detailedMarkets.length > 0) {
-          const marketManagedMarkets = detailedMarkets.filter(
-            (m) => m.settings?.managed_by !== "Customer"
-          );
-          const customerManagedMarkets = detailedMarkets.filter(
-            (m) => m.settings?.managed_by === "Customer"
-          );
-
-          // Extract Market IDs for Market View - Include both market and customer managed markets
-          marketViewMarketIds = [
-            ...marketManagedMarkets,
-            ...customerManagedMarkets,
-          ]
-            .map((m) => m.market_id)
-            .filter(Boolean);
-
-          // Extract Customer IDs for Customer View
-          if (customerManagedMarkets.length > 0) {
-            const rawCustomerIds = customerManagedMarkets
-              .flatMap(
-                (market) =>
-                  market.customers?.map((cust) => cust.customer_id) || []
-              )
-              .filter((id): id is string => !!id);
-
-            customerViewCustomerIds = [...new Set(rawCustomerIds)];
-          }
-        } else {
-        }
-
-        // 3. Dispatch fetchVolumeData for Market View (if applicable)
-        if (marketViewMarketIds.length > 0) {
-          appDispatch(
-            fetchVolumeData({
-              markets: marketViewMarketIds,
-              brands: null,
-              isCustomerView: false,
-            })
-          ).then((action) => {
-            if (fetchVolumeData.fulfilled.match(action)) {
-            } else if (fetchVolumeData.rejected.match(action)) {
-            }
-          });
-        } else {
-        }
-
-        // 4. Dispatch fetchVolumeData for Customer View (if applicable)
-
-        if (customerViewCustomerIds.length > 0) {
-          appDispatch(
-            fetchVolumeData({
-              markets: customerViewCustomerIds,
-              brands: null,
-              isCustomerView: true,
-            })
-          ).then((action) => {
-            if (fetchVolumeData.fulfilled.match(action)) {
-            } else if (fetchVolumeData.rejected.match(action)) {
-              console.error(
-                "[UserProvider] CUSTOMER fetchVolumeData rejected:",
-                action.payload
+              const customerManagedMarkets = detailedMarkets.filter(
+                (m) => m.settings?.managed_by === "Customer"
               );
+
+              // Extract Market IDs for Market View - Include both market and customer managed markets
+              marketViewMarketIds = [
+                ...marketManagedMarkets,
+                ...customerManagedMarkets,
+              ]
+                .map((m) => m.market_id)
+                .filter(Boolean);
+
+              // Extract Customer IDs for Customer View
+              if (customerManagedMarkets.length > 0) {
+                const rawCustomerIds = customerManagedMarkets
+                  .flatMap(
+                    (market) =>
+                      market.customers?.map((cust) => cust.customer_id) || []
+                  )
+                  .filter((id): id is string => !!id);
+
+                customerViewCustomerIds = [...new Set(rawCustomerIds)];
+              }
+            } else {
             }
-          });
-        } else {
+
+            // Create promises for volume data fetching
+            const fetchPromises = [];
+
+            // 3. Dispatch fetchVolumeData for Market View (if applicable)
+            if (marketViewMarketIds.length > 0) {
+              const marketViewPromise = appDispatch(
+                fetchVolumeData({
+                  markets: marketViewMarketIds,
+                  brands: null,
+                  isCustomerView: false,
+                })
+              ).unwrap();
+              fetchPromises.push(marketViewPromise);
+            }
+
+            // 4. Dispatch fetchVolumeData for Customer View (if applicable)
+            if (customerViewCustomerIds.length > 0) {
+              const customerViewPromise = appDispatch(
+                fetchVolumeData({
+                  markets: customerViewCustomerIds,
+                  brands: null,
+                  isCustomerView: true,
+                })
+              ).unwrap();
+              fetchPromises.push(customerViewPromise);
+            }
+
+            // Wait for all volume data to load
+            if (fetchPromises.length > 0) {
+              await Promise.all(fetchPromises);
+            }
+          };
+
+          await fetchMarketDetailsAndVolumeData();
+        } catch (error) {
+          console.error(
+            "[UserContext] Error during initial data fetch:",
+            error
+          );
+        } finally {
+          // Set loading to false when all data is loaded (or failed)
+          dispatch({ type: "SET_INITIAL_DATA_LOADING", payload: false });
         }
       };
 
-      fetchMarketDetailsAndVolumeData();
+      fetchAllInitialData();
     }
   }, [state.isLoggedIn, state.user, appDispatch]);
-
-  useEffect(() => {
-    const interceptor = axios.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          if (!tokenService.verifyTokenPresence()) {
-            dispatch({ type: "LOGOUT" });
-            navigate("/login");
-          }
-        }
-        return Promise.reject(error);
-      }
-    );
-
-    return () => axios.interceptors.response.eject(interceptor);
-  }, [navigate]);
 
   const value = {
     user: state.user,
     isLoggedIn: state.isLoggedIn,
     isCheckingAuth: state.isCheckingAuth,
+    isInitialDataLoading: state.isInitialDataLoading,
     login,
     logout,
     checkAuth,

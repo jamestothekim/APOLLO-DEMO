@@ -18,6 +18,7 @@ import ReportBuilder from "./reportBuilder/reportBuilder";
 import { SettingsContainer } from "./settings/settingsContainer";
 import { Login } from "./login/login";
 import { UserProvider, useUser } from "./userContext";
+import { LoadingApollo } from "./reusableComponents/loadingApollo";
 
 const drawerWidth = 240;
 
@@ -103,16 +104,25 @@ const AppContent = () => {
 
 // Simple auth check component
 const RequireAuth = ({ children }: { children: React.ReactNode }) => {
-  const { isLoggedIn, isCheckingAuth } = useUser();
+  const { isLoggedIn, isCheckingAuth, isInitialDataLoading } = useUser();
   const location = useLocation();
 
   if (isCheckingAuth) {
-    return null; // Or a loading spinner
+    return (
+      <LoadingApollo
+        message="Verifying Authentication"
+        subMessage="Please wait while we verify your credentials..."
+      />
+    );
+  }
+
+  if (isLoggedIn && isInitialDataLoading) {
+    return <LoadingApollo showProgressMessages={true} />;
   }
 
   if (!isLoggedIn) {
-    // Redirect to login and save the attempted location
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Redirect to login - don't save attempted location
+    return <Navigate to="/login" replace />;
   }
 
   // If logged in and trying to access login page, redirect to home
