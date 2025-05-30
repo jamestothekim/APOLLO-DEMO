@@ -710,7 +710,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                 }}
               />
             </Popover>
-          )}  
+          )}
 
           {showPagination && (
             <TablePagination

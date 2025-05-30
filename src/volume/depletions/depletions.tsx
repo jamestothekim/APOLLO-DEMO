@@ -179,7 +179,16 @@ const processRawData = (
   // Process each group (key/items)
   rawItemsByKey.forEach((items: any[], key: string) => {
     if (!items || items.length === 0) return;
-    const firstItem = items[0]!;
+
+    // Instead of using the first item, prioritize saved versions for metadata
+    // Sort items to prioritize: saved versions (current_version = 1) first, then draft versions
+    const sortedItems = items.sort((a, b) => {
+      const aVersion = Number(a.current_version || 0);
+      const bVersion = Number(b.current_version || 0);
+      return bVersion - aVersion; // Higher version (saved) comes first
+    });
+
+    const prioritizedItem = sortedItems[0]!;
 
     // Aggregate tags from all items in the group
     const tagPairs: { tag_id: number; tag_name: string }[] = [];
@@ -197,23 +206,25 @@ const processRawData = (
       new Map(tagPairs.map((t) => [t.tag_id, t])).values()
     );
 
-    // Initialize the aggregated item for this key
+    // Initialize the aggregated item for this key using the prioritized item
     const aggregatedItem: ExtendedForecastData = {
       id: key,
-      market_id: firstItem.market_id,
-      market_name: firstItem.market,
-      customer_id: firstItem.customer_id,
-      customer_name: firstItem.customer,
-      market_area_name: firstItem.market_area_name, // Populate market_area_name
-      product: firstItem.variant_size_pack_desc,
-      brand: firstItem.brand,
-      variant: firstItem.variant,
-      variant_id: firstItem.variant_id,
-      variant_size_pack_id: firstItem.variant_size_pack_id,
-      variant_size_pack_desc: firstItem.variant_size_pack_desc,
-      forecastLogic: firstItem.forecast_method || "flat",
-      forecast_status: firstItem.forecast_status || "draft",
-      forecast_generation_month_date: firstItem.forecast_generation_month_date, // Populate forecast_generation_month_date
+      market_id: prioritizedItem.market_id,
+      market_name: prioritizedItem.market,
+      customer_id: prioritizedItem.customer_id,
+      customer_name: prioritizedItem.customer,
+      market_area_name: prioritizedItem.market_area_name, // Populate market_area_name
+      product: prioritizedItem.variant_size_pack_desc,
+      brand: prioritizedItem.brand,
+      variant: prioritizedItem.variant,
+      variant_id: prioritizedItem.variant_id,
+      variant_size_pack_id: prioritizedItem.variant_size_pack_id,
+      variant_size_pack_desc: prioritizedItem.variant_size_pack_desc,
+      forecastLogic: prioritizedItem.forecast_method || "flat",
+      forecast_status: prioritizedItem.forecast_status || "draft",
+      forecast_generation_month_date:
+        prioritizedItem.forecast_generation_month_date, // Populate forecast_generation_month_date
+      commentary: prioritizedItem.comment || undefined, // Use comment from prioritized item
       months: {},
       py_case_equivalent_volume_months: {},
       prev_published_case_equivalent_volume_months: MONTH_NAMES.reduce(
@@ -240,7 +251,7 @@ const processRawData = (
       py_6m_case_equivalent_volume: 0,
       py_12m_case_equivalent_volume: 0,
       tags: uniqueTags,
-      historical_gsv_rate: Number(firstItem.gsv_rate) || 0, // Capture historical GSV rate from raw data
+      historical_gsv_rate: Number(prioritizedItem.gsv_rate) || 0, // Capture historical GSV rate from raw data
     };
 
     // Determine last actual month FOR THIS GROUP
@@ -717,7 +728,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Handler for clicking the row itself (Sidebar selection)
   const handleSidebarSelect = (row: ExtendedForecastData) => {
-    if (row.forecast_status !== "draft") return;
+    if (row.forecast_status === "review" || row.forecast_status === "consensus")
+      return;
 
     setSelectedRowForSidebar(row.id);
     const selectedData = filteredData.find((r) => r.id === row.id);
@@ -1235,7 +1247,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           // Add getValue to extract the string for filtering
           getValue: (row: ExtendedForecastData) => row.market_name,
           render: (_: any, row: ExtendedForecastData) => {
-            const isLocked = row.forecast_status !== "draft";
+            const isLocked =
+              row.forecast_status === "review" ||
+              row.forecast_status === "consensus";
             const marketName = row.market_name;
             return (
               <Box
@@ -1307,7 +1321,10 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               <Box
                 sx={{
                   cursor:
-                    row.forecast_status !== "draft" ? "default" : "pointer",
+                    row.forecast_status === "review" ||
+                    row.forecast_status === "consensus"
+                      ? "default"
+                      : "pointer",
                 }}
               >
                 {productName}
@@ -1326,7 +1343,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             minWidth: 130,
           }, // Apply padding, increase minWidth
           render: (value: string, row: ExtendedForecastData) => {
-            const isLocked = row.forecast_status !== "draft";
+            const isLocked =
+              row.forecast_status === "review" ||
+              row.forecast_status === "consensus";
             return (
               <Select
                 value={value}
@@ -1414,7 +1433,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             const data = row.months[month];
             const value = data.value ?? 0;
             const isRowActual = data.isActual;
-            const isLocked = row.forecast_status !== "draft";
+            const isLocked =
+              row.forecast_status === "review" ||
+              row.forecast_status === "consensus";
 
             // Determine if this specific cell should be treated as preview
             let isCellPreview = false;

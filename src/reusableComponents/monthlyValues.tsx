@@ -153,9 +153,7 @@ export const MonthlyValues: React.FC<MonthlyValuesProps> = ({
                         ) : null,
                         sx: {
                           "& .MuiInputBase-input": {
-                            color: monthData.isManuallyModified
-                              ? (theme) => theme.palette.secondary.main
-                              : monthData.isActual
+                            color: monthData.isActual
                               ? (theme) => theme.palette.primary.main
                               : "inherit",
                           },
