@@ -117,7 +117,7 @@ interface LoadingApolloProps {
 }
 
 export const LoadingApollo: React.FC<LoadingApolloProps> = ({
-  message = "Loading Apollo",
+  message = "Loading APOLLO",
   subMessage = "Preparing your data...",
   showProgressMessages = false,
 }) => {

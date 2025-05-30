@@ -239,9 +239,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (response.data.user) {
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
-        if (!initialFetchPerformedRef.current) {
-          dispatch({ type: "SET_INITIAL_DATA_LOADING", payload: true });
-        }
+        // Don't set initial data loading during auth check - only during actual login
         return true;
       }
       dispatch({ type: "LOGOUT" });
