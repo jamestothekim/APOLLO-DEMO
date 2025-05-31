@@ -55,13 +55,16 @@ const LoadingContainer = styled(Box)(({ theme }) => ({
   position: "relative",
 }));
 
-const SpinningLogo = styled("img")({
+const SpinningLogo = styled("img", {
+  shouldForwardProp: (prop) => prop !== "animationDuration",
+})<{ animationDuration?: number }>(({ animationDuration = 4 }) => ({
   width: "120px",
   height: "120px",
-  animation: `${spin} 4s linear infinite`,
+  animation: `${spin} ${animationDuration}s linear infinite`,
   filter: "drop-shadow(0 4px 20px rgba(0, 0, 0, 0.15))",
   transformStyle: "preserve-3d",
-});
+  transition: "animation-duration 0.5s ease-in-out", // Smooth transition for speed changes
+}));
 
 const LogoContainer = styled(Box)({
   perspective: "1000px",
@@ -122,6 +125,7 @@ export const LoadingApollo: React.FC<LoadingApolloProps> = ({
   showProgressMessages = false,
 }) => {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [animationDuration, setAnimationDuration] = useState(4); // Start with 4 seconds
 
   const progressMessages = [
     "Preparing your data...",
@@ -145,6 +149,19 @@ export const LoadingApollo: React.FC<LoadingApolloProps> = ({
 
     return () => clearInterval(interval);
   }, [showProgressMessages, progressMessages.length]);
+
+  // Speed up rotation based on message index
+  useEffect(() => {
+    if (!showProgressMessages) return;
+
+    if (currentMessageIndex === 3) {
+      // "All systems are GO..." - speed up by 50% (4s -> 2s)
+      setAnimationDuration(2);
+    } else if (currentMessageIndex === 4) {
+      // "APOLLO is GO for launch..." - speed up by another 50% (2s -> 1s)
+      setAnimationDuration(1);
+    }
+  }, [currentMessageIndex, showProgressMessages]);
 
   const displayMessage = showProgressMessages ? "Loading Apollo" : message;
   const displaySubMessage = showProgressMessages
@@ -180,6 +197,7 @@ export const LoadingApollo: React.FC<LoadingApolloProps> = ({
         <SpinningLogo
           src="https://apollo-s3-media.s3.amazonaws.com/logo/APOLLO_LOGO.png"
           alt="Apollo Logo"
+          animationDuration={animationDuration}
           onError={(e) => {
             // Fallback in case the image fails to load
             const target = e.target as HTMLImageElement;
