@@ -2,8 +2,9 @@ import type { Guidance } from "../../redux/slices/userSettingsSlice";
 import {
   MONTH_NAMES,
   calculateTotal,
-  recalculateGuidance,
-} from "./volumeUtil";
+} from "../util/volumeUtil";
+// Import guidance calculations from the shared location
+import { recalculateGuidance } from "../calculations/guidanceCalculations";
 
 export interface ExtendedForecastData {
   id: string;

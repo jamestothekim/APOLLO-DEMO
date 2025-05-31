@@ -1,52 +1,12 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RawDepletionForecastItem } from './depletionSlice';
-import { MONTH_NAMES } from '../../volume/util/volumeUtil';
-
-// Types
-export interface GuidanceCalculation {
-  type: 'direct' | 'percentage' | 'difference';
-  format?: 'number' | 'percent';
-}
-
-export interface GuidanceValue {
-  numerator?: string;
-  denominator?: string;
-  expression?: string;
-}
-
-export interface Guidance {
-  id: number;
-  label: string;
-  sublabel?: string;
-  value: string | GuidanceValue;
-  calculation: GuidanceCalculation;
-}
-
-export interface MonthlyData {
-  value: number;
-  isActual?: boolean;
-  isManuallyModified?: boolean;
-}
-
-export interface BaseData {
-  months: { [key: string]: MonthlyData };
-  case_equivalent_volume?: number;
-  py_case_equivalent_volume?: number;
-  prev_published_case_equivalent_volume?: number; // LC Volume Total
-  gross_sales_value?: number;
-  py_gross_sales_value?: number;
-  lc_gross_sales_value?: number; // LC GSV Total
-  gsv_rate?: number;
-  py_gsv_rate?: number;
-  // Optional: Add monthly breakdown for LC
-  prev_published_case_equivalent_volume_months?: { [key: string]: MonthlyData };
-  lc_gross_sales_value_months?: { [key: string]: MonthlyData }; // Monthly LC GSV
-  [key: string]: any;
-}
-
-export interface GuidanceCalculationResult {
-  [key: string]: number;
-}
+import { 
+  calculateGuidanceForItem,
+  type MonthlyData,
+  type BaseData,
+  type GuidanceCalculationResult
+} from '../../volume/calculations/guidanceCalculations';
+import type { Guidance } from '../../redux/slices/userSettingsSlice';
 
 // --- Define structure for calculated summary values --- START
 export interface CalculatedGuidanceValue {
@@ -89,234 +49,6 @@ const initialState: GuidanceCalculationsState = {
   error: null,
 };
 
-// Helper functions
-export const calculateTotal = (months: { [key: string]: MonthlyData }): number => {
-  return Object.values(months).reduce((acc, curr) => acc + (curr.value || 0), 0);
-};
-
-export const calculateGSVRate = (gsv: number, volume: number): number => {
-  return volume > 0 ? gsv / volume : 0;
-};
-
-export const calculateGuidanceValue = (
-  data: BaseData,
-  guidance: Guidance
-): number => {
-  // For direct values (like py_case_equivalent_volume)
-  if (typeof guidance.value === 'string') {
-    const fieldName = guidance.value;
-    return data[fieldName] || 0;
-  }
-
-  // For calculated values
-  const value = guidance.value as GuidanceValue;
-  const calcType = guidance.calculation.type;
-
-  if (calcType === 'difference' && value.expression) {
-    const parts = value.expression.split(' - ');
-    const value1 = getFieldValue(data, parts[0]?.trim());
-    const value2 = getFieldValue(data, parts[1]?.trim());
-    return value1 - value2;
-  } else if (calcType === 'percentage' && value.numerator && value.denominator) {
-    const numParts = value.numerator.split(' - ');
-    const numerator = getFieldValue(data, numParts[0]?.trim()) - getFieldValue(data, numParts[1]?.trim());
-    const denominator = getFieldValue(data, value.denominator.trim());
-    return denominator === 0 ? 0 : numerator / denominator;
-  }
-
-  return 0;
-};
-
-// Helper to get field value, handling special cases
-const getFieldValue = (data: BaseData, fieldName: string): number => {
-  if (!fieldName) return 0;
-  
-  // Handle special case for case_equivalent_volume (total volume)
-  if (fieldName === 'case_equivalent_volume') {
-    return data.case_equivalent_volume || calculateTotal(data.months);
-  }
-  
-  // Handle GSV rate calculations
-  if (fieldName === 'gsv_rate') {
-    return data.gsv_rate || calculateGSVRate(
-      data.gross_sales_value || 0,
-      data.case_equivalent_volume || calculateTotal(data.months)
-    );
-  }
-  
-  if (fieldName === 'py_gsv_rate') {
-    return data.py_gsv_rate || calculateGSVRate(
-      data.py_gross_sales_value || 0,
-      data.py_case_equivalent_volume || 0
-    );
-  }
-  
-  if (fieldName === 'prev_published_case_equivalent_volume') {
-    return data.prev_published_case_equivalent_volume || 0;
-  }
-  
-  if (fieldName === 'lc_gross_sales_value') {
-    return data.lc_gross_sales_value || 0; // Should be pre-calculated now
-  }
-  
-  // Default case: return the field value or 0
-  return data[fieldName] || 0;
-};
-
-// Calculate guidance values for a specific data item
-export const calculateGuidanceForItem = (
-  item: BaseData,
-  selectedGuidance: Guidance[]
-): GuidanceCalculationResult => {
-  const result: GuidanceCalculationResult = {};
-  
-  // Calculate total volume if not already set
-  if (item.case_equivalent_volume === undefined) {
-    item.case_equivalent_volume = calculateTotal(item.months);
-  }
-  
-  // Calculate GSV rates if not already set
-  if (item.gsv_rate === undefined && item.gross_sales_value !== undefined) {
-    item.gsv_rate = calculateGSVRate(item.gross_sales_value, item.case_equivalent_volume);
-  }
-  
-  if (item.py_gsv_rate === undefined && item.py_gross_sales_value !== undefined && item.py_case_equivalent_volume !== undefined) {
-    item.py_gsv_rate = calculateGSVRate(item.py_gross_sales_value, item.py_case_equivalent_volume);
-  }
-  
-  // Calculate each guidance value
-  selectedGuidance.forEach(guidance => {
-    const key = `guidance_${guidance.id}`;
-    result[key] = calculateGuidanceValue(item, guidance);
-  });
-  
-  return result;
-};
-
-// Calculate monthly guidance values
-export const calculateMonthlyGuidanceForItem = (
-  item: BaseData,
-  guidance: Guidance
-): { [month: string]: number } | null => {
-  const result: { [month: string]: number } = {};
-  
-  // For direct values
-  if (typeof guidance.value === 'string') {
-    const fieldName = guidance.value;
-    
-    // Check if we have monthly data for this field
-    const monthlyFieldName = `${fieldName}_months`;
-    if (item[monthlyFieldName] && typeof item[monthlyFieldName] === 'object') {
-      MONTH_NAMES.forEach((month: string) => {
-        result[month] = item[monthlyFieldName][month]?.value || 0;
-      });
-      return result;
-    }
-    
-    // If no monthly data, distribute the total value evenly
-    const totalValue = item[fieldName] || 0;
-    const monthlyValue = totalValue / 12;
-    MONTH_NAMES.forEach((month: string) => {
-      result[month] = monthlyValue;
-    });
-    return result;
-  }
-  
-  // For calculated values
-  const value = guidance.value as GuidanceValue;
-  const calcType = guidance.calculation.type;
-  
-  if (calcType === 'difference' && value.expression) {
-    const parts = value.expression.split(' - ');
-    const field1 = parts[0]?.trim();
-    const field2 = parts[1]?.trim();
-    
-    MONTH_NAMES.forEach((month: string) => {
-      const value1 = getMonthlyFieldValue(item, field1, month);
-      const value2 = getMonthlyFieldValue(item, field2, month);
-      result[month] = value1 - value2;
-    });
-    return result;
-  } else if (calcType === 'percentage' && value.numerator && value.denominator) {
-    const numParts = value.numerator.split(' - ');
-    const numerField1 = numParts[0]?.trim();
-    const numerField2 = numParts[1]?.trim();
-    const denomField = value.denominator.trim();
-    
-    MONTH_NAMES.forEach((month: string) => {
-      const numerValue1 = getMonthlyFieldValue(item, numerField1, month);
-      const numerValue2 = getMonthlyFieldValue(item, numerField2, month);
-      const denomValue = getMonthlyFieldValue(item, denomField, month);
-      
-      const numerator = numerValue1 - numerValue2;
-      result[month] = denomValue === 0 ? 0 : numerator / denomValue;
-    });
-    return result;
-  }
-  
-  return null;
-};
-
-// Helper to get monthly field value
-const getMonthlyFieldValue = (data: BaseData, fieldName: string, month: string): number => {
-  if (!fieldName) return 0;
-  
-  // Check if we have monthly data for this field
-  const monthlyFieldName = `${fieldName}_months`;
-  if (data[monthlyFieldName] && typeof data[monthlyFieldName] === 'object') {
-    return data[monthlyFieldName][month]?.value || 0;
-  }
-  
-  // Special case for prev_published_case_equivalent_volume (LC volume)
-  if (fieldName === 'prev_published_case_equivalent_volume') {
-    return data.prev_published_case_equivalent_volume_months?.[month]?.value || 0;
-  }
-
-  // Special case for case_equivalent_volume (current forecast volume)
-  if (fieldName === 'case_equivalent_volume') {
-    return data.months[month]?.value || 0;
-  }
-  
-  // Special case for gsv_rate
-  if (fieldName === 'gsv_rate') {
-    const monthVolume = data.months[month]?.value || 0;
-    const gsvRate = data.gsv_rate || calculateGSVRate(
-      data.gross_sales_value || 0,
-      data.case_equivalent_volume || calculateTotal(data.months)
-    );
-    return monthVolume * gsvRate;
-  }
-  
-  // Special case for py_gsv_rate
-  if (fieldName === 'py_gsv_rate') {
-    const pyMonthVolume = data.py_case_equivalent_volume_months?.[month]?.value || 0;
-    const pyGsvRate = data.py_gsv_rate || calculateGSVRate(
-      data.py_gross_sales_value || 0,
-      data.py_case_equivalent_volume || 0
-    );
-    return pyMonthVolume * pyGsvRate;
-  }
-  
-  // Special case for lc_gross_sales_value
-  if (fieldName === 'lc_gross_sales_value') {
-    // For total lc_gross_sales_value, it should be pre-calculated and directly available on data.
-    // For monthly, we check if lc_gross_sales_value_months exists first.
-    if (data.lc_gross_sales_value_months?.[month]) {
-      return data.lc_gross_sales_value_months[month].value || 0;
-    }
-    // Fallback to calculating monthly LC GSV if specific monthly data isn't present
-    const lcMonthVolume = data.prev_published_case_equivalent_volume_months?.[month]?.value || 0;
-    const gsvRate = data.gsv_rate || calculateGSVRate(
-      data.gross_sales_value || 0,
-      data.case_equivalent_volume || calculateTotal(data.months)
-    );
-    return lcMonthVolume * gsvRate;
-  }
-  
-  // Default case: return 0
-  return 0;
-};
-
 // --- Thunk for calculating summary guidance --- START
 export const calculateSummaryGuidance = createAsyncThunk<
     SummaryCalculationsState, // Return type
@@ -348,19 +80,33 @@ export const calculateSummaryGuidance = createAsyncThunk<
 // Existing thunk for granular calculations
 export const calculateGuidanceForItems = createAsyncThunk<
     { [key: string]: { [guidanceId: number]: number } },
-    { itemsToCalculate: any[]; guidanceDefinitions: Guidance[] },
+    { itemsToCalculate: BaseData[]; guidanceDefinitions: Guidance[] },
     { rejectValue: string }
 >(
     'guidanceCalculations/calculateForItems',
-    async (_params, { rejectWithValue: _rejectWithValue }) => {
-        // --- Use parameters to satisfy linter --- START
-        // --- Use parameters to satisfy linter --- END
-
-        // Assume the result processing correctly returns: { itemKey: { guidanceId: calculatedValue } }
-        const results: { [key: string]: { [guidanceId: number]: number } } = {};
-        // ... placeholder for actual calculation logic ...
-        // Replace this with the actual calculation logic that produces the 'results' object
-        return results; // Return the calculated values
+    async ({ itemsToCalculate, guidanceDefinitions }, { rejectWithValue }) => {
+        try {
+            const results: { [key: string]: { [guidanceId: number]: number } } = {};
+            
+            itemsToCalculate.forEach((item, index) => {
+                const itemKey = `item_${index}`; // You may want to use a better key
+                const calculationResult = calculateGuidanceForItem(item, guidanceDefinitions);
+                
+                // Convert to the expected format
+                const guidanceValues: { [guidanceId: number]: number } = {};
+                Object.entries(calculationResult).forEach(([key, value]) => {
+                    const guidanceId = parseInt(key.replace('guidance_', ''), 10);
+                    guidanceValues[guidanceId] = value;
+                });
+                
+                results[itemKey] = guidanceValues;
+            });
+            
+            return results;
+        } catch (error: any) {
+            console.error("Error calculating guidance for items:", error);
+            return rejectWithValue(error.message || 'Failed to calculate guidance');
+        }
     }
 );
 
@@ -452,10 +198,5 @@ export const selectSummaryCalculation = (
     return state.guidanceCalculations.summaryCalculations[aggregateKey]?.[guidanceId];
 };
 
-// --- Selector for ALL Summary Calculations --- START
-// export const selectSummaryCalculations = (state: { guidanceCalculations: GuidanceCalculationsState }) => state.guidanceCalculations.summaryCalculations;
-// --- Selector for ALL Summary Calculations --- END
-
-// Selector to get a specific summary calculation result by aggregate key and guidance ID
-// ... existing code ...
-// ... existing code ... 
+// Export types for use in other files
+export type { MonthlyData, BaseData, GuidanceCalculationResult }; 

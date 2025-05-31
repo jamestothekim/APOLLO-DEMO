@@ -17,16 +17,8 @@ import {
   DynamicTable,
   type Column,
 } from "../../reusableComponents/dynamicTable";
-import {
-  exportToCSV,
-  MONTH_NAMES,
-  formatGuidanceValue,
-  ExportableData,
-  type CalculatedGuidanceValue,
-  aggregateSummaryData,
-  calculateAllSummaryGuidance,
-  calculateTotalGuidance,
-} from "../util/volumeUtil";
+import { exportToCSV, MONTH_NAMES, ExportableData } from "../util/volumeUtil";
+import { aggregateSummaryData } from "../calculations/summaryCalculations";
 import type { MarketData } from "../../volume/volumeForecast";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "../../redux/store";
@@ -59,6 +51,13 @@ import {
 } from "../../redux/slices/depletionSlice";
 import { GuidanceDialog } from "../components/guidance";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+// Import guidance calculations from shared location
+import type { CalculatedGuidanceValue } from "../calculations/guidanceCalculations";
+import {
+  calculateAllSummaryGuidance,
+  calculateTotalGuidance,
+  formatGuidanceValue,
+} from "../calculations/guidanceCalculations";
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -152,9 +151,7 @@ const GuidanceCellRenderer: React.FC<GuidanceCellRendererProps> = ({
 
   return <>-</>; // Placeholder
 };
-// --- End Helper Component ---
 
-// --- Helper Component for Rendering Monthly Guidance Cells --- START
 interface MonthlyGuidanceCellRendererProps {
   aggregateKey: string;
   guidance: Guidance;
