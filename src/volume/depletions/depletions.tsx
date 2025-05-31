@@ -289,7 +289,35 @@ const processRawData = (
     });
 
     // Aggregate monthly volumes, GSV, etc. from all items in the group
+    // FAILSAFE: Group items by month and take only the latest current_version for each month
+    const itemsByMonth = new Map<number, any[]>();
     items.forEach((item: any) => {
+      const monthIndex = (item.month || 0) - 1;
+      if (monthIndex >= 0 && monthIndex < 12) {
+        if (!itemsByMonth.has(monthIndex)) {
+          itemsByMonth.set(monthIndex, []);
+        }
+        itemsByMonth.get(monthIndex)!.push(item);
+      }
+    });
+
+    // For each month, use only the item with the highest current_version
+    const latestItemsPerMonth: any[] = [];
+    itemsByMonth.forEach((monthItems) => {
+      if (monthItems.length === 1) {
+        latestItemsPerMonth.push(monthItems[0]);
+      } else {
+        // Multiple items for same month - take the one with highest current_version
+        const latestItem = monthItems.reduce((latest, current) => {
+          const latestVersion = Number(latest.current_version || 0);
+          const currentVersion = Number(current.current_version || 0);
+          return currentVersion > latestVersion ? current : latest;
+        });
+        latestItemsPerMonth.push(latestItem);
+      }
+    });
+
+    latestItemsPerMonth.forEach((item: any) => {
       const monthIndex = (item.month || 0) - 1;
       if (monthIndex >= 0 && monthIndex < 12) {
         const monthName = MONTH_NAMES[monthIndex];
@@ -306,33 +334,31 @@ const processRawData = (
             ? item.projected_case_equivalent_volume
             : item.case_equivalent_volume;
 
-        // Aggregate TY Volume
-        aggregatedItem.months[monthName]!.value +=
+        // Set TY Volume (not aggregate since we're using latest per month)
+        aggregatedItem.months[monthName]!.value =
           Math.round((volumeValue || 0) * 100) / 100;
         aggregatedItem.months[monthName]!.isManuallyModified =
-          aggregatedItem.months[monthName]!.isManuallyModified ||
           isManualInputFromDB;
-        // Aggregate PY Volume (total AND monthly)
+
+        // Set PY Volume (not aggregate since we're using latest per month)
         if (item.py_case_equivalent_volume !== undefined) {
           const pyVol = Number(item.py_case_equivalent_volume) || 0;
-          aggregatedItem.py_case_equivalent_volume =
-            (aggregatedItem.py_case_equivalent_volume || 0) + pyVol;
-          // Add aggregation for the monthly PY breakdown
-          aggregatedItem.py_case_equivalent_volume_months[monthName]!.value +=
+          aggregatedItem.py_case_equivalent_volume_months[monthName]!.value =
             Math.round(pyVol * 100) / 100;
         }
 
-        // Aggregate LC Volume (total AND monthly)
+        // Set LC Volume (not aggregate since we're using latest per month)
         if (item.prev_published_case_equivalent_volume !== undefined) {
           const lcVol = Number(item.prev_published_case_equivalent_volume) || 0;
-          aggregatedItem.prev_published_case_equivalent_volume =
-            (aggregatedItem.prev_published_case_equivalent_volume || 0) + lcVol;
-          // Add aggregation for the monthly LC breakdown
           aggregatedItem.prev_published_case_equivalent_volume_months[
             monthName
-          ]!.value += Math.round(lcVol * 100) / 100;
+          ]!.value = Math.round(lcVol * 100) / 100;
         }
       }
+    });
+
+    // Now aggregate totals from the monthly breakdowns we just set
+    items.forEach((item: any) => {
       // Aggregate total GSV
       if (item.gross_sales_value !== undefined) {
         aggregatedItem.gross_sales_value =
@@ -345,6 +371,35 @@ const processRawData = (
           (Number(item.py_gross_sales_value) || 0);
       }
     });
+
+    // Calculate total volumes from monthly breakdowns
+    aggregatedItem.py_case_equivalent_volume = 0;
+    aggregatedItem.prev_published_case_equivalent_volume = 0;
+    MONTH_NAMES.forEach((month) => {
+      aggregatedItem.py_case_equivalent_volume +=
+        aggregatedItem.py_case_equivalent_volume_months[month]?.value || 0;
+      if (aggregatedItem.prev_published_case_equivalent_volume !== undefined) {
+        aggregatedItem.prev_published_case_equivalent_volume +=
+          aggregatedItem.prev_published_case_equivalent_volume_months[month]
+            ?.value || 0;
+      }
+    });
+
+    // Check if any of the latest items have comments and use the most recent comment
+    const latestItemsWithComments = latestItemsPerMonth.filter(
+      (item) => item.comment
+    );
+    if (latestItemsWithComments.length > 0) {
+      // Use the comment from the item with highest current_version
+      const latestCommentItem = latestItemsWithComments.reduce(
+        (latest, current) => {
+          const latestVersion = Number(latest.current_version || 0);
+          const currentVersion = Number(current.current_version || 0);
+          return currentVersion > latestVersion ? current : latest;
+        }
+      );
+      aggregatedItem.commentary = latestCommentItem.comment;
+    }
 
     // Find the specific raw item for trend data (last actual or month 1)
     const trendMonthTarget =
