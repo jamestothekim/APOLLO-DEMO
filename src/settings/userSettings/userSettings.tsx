@@ -3,7 +3,10 @@ import { Typography } from "@mui/material";
 import { useUser } from "../../userContext";
 import { useState, useMemo, useEffect } from "react";
 import QualSidebar from "../../reusableComponents/qualSidebar";
-import { DynamicForm, FieldConfig } from "../../reusableComponents/dynamicForm";
+import {
+  DynamicForm,
+  FieldConfig as DynamicFormFieldConfig,
+} from "../../reusableComponents/dynamicForm";
 import { Stack } from "@mui/material";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -13,6 +16,10 @@ import Button from "@mui/material/Button";
 import axios from "axios";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import LockIcon from "@mui/icons-material/Lock";
+import SecurityIcon from "@mui/icons-material/Security";
+import ShieldIcon from "@mui/icons-material/Shield";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 // Define the shape of user data
 interface UserDataType {
@@ -28,7 +35,14 @@ interface UserDataType {
   division: string | undefined;
   markets: string[]; // Original market list
   displayMarkets: string[]; // Markets formatted for display
-  [key: string]: string | string[] | undefined; // Index signature for dynamic access
+  phone_number: string | null; // Add phone number field
+  two_fa_enabled: boolean; // Add 2FA status
+  phone_verified: boolean; // Add phone verification status
+  [key: string]: string | string[] | boolean | undefined | null; // Update index signature
+}
+
+interface FieldConfig extends DynamicFormFieldConfig {
+  endAdornment?: React.ReactNode;
 }
 
 export const UserSettings = () => {
@@ -41,8 +55,13 @@ export const UserSettings = () => {
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success" as "success" | "error",
+    severity: "success" as "success" | "error" | "info",
   });
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [twoFaEnabled, setTwoFaEnabled] = useState(false);
+  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
 
   const userData = useMemo<UserDataType>(() => {
     if (!user) return {} as UserDataType;
@@ -78,15 +97,47 @@ export const UserSettings = () => {
       division: user.user_access.Division || "", // Default to empty string
       markets: allMarkets, // Keep the original list
       displayMarkets: displayMarkets, // Use this for the DynamicForm
+      phone_number: user.phone_number || null,
+      two_fa_enabled: user.two_fa_enabled || false,
+      phone_verified: user.phone_verified || false,
     };
   }, [user]);
 
+  // Add effect to populate phone number when user data changes
+  useEffect(() => {
+    if (userData.phone_number) {
+      setPhoneNumber(userData.phone_number);
+    }
+  }, [userData.phone_number]);
+
+  // Add effect to update phoneVerified when userData changes
+  useEffect(() => {
+    setPhoneVerified(userData.phone_verified);
+  }, [userData.phone_verified]);
+
   const [editedValue, setEditedValue] = useState<UserDataType>(userData);
+  const [hasPhoneOr2FAChanges, setHasPhoneOr2FAChanges] = useState(false);
 
   // Update editedValue when userData changes
   useEffect(() => {
     setEditedValue(userData);
+    setTwoFaEnabled(userData.two_fa_enabled);
+    setHasPhoneOr2FAChanges(false); // Reset changes when userData updates
   }, [userData]);
+
+  // Track phone number changes
+  useEffect(() => {
+    if (phoneNumber !== userData.phone_number) {
+      setHasPhoneOr2FAChanges(true);
+    }
+  }, [phoneNumber, userData.phone_number]);
+
+  // Track 2FA changes
+  useEffect(() => {
+    if (twoFaEnabled !== userData.two_fa_enabled) {
+      setHasPhoneOr2FAChanges(true);
+    }
+  }, [twoFaEnabled, userData.two_fa_enabled]);
 
   if (!user) {
     return <Typography>Loading...</Typography>;
@@ -111,6 +162,20 @@ export const UserSettings = () => {
       fieldType: "text",
       value: "********",
       editable: true,
+    },
+    {
+      name: "phone_number",
+      label: "Phone Number",
+      fieldType: "text",
+      editable: true,
+      value: userData.phone_number || "",
+      onClick: () => {
+        setPhoneNumber(userData.phone_number || "");
+        setIsEditing(true);
+      },
+      endAdornment: phoneVerified ? (
+        <CheckCircleIcon color="primary" sx={{ ml: 1 }} />
+      ) : null,
     },
     {
       name: "fullAddress",
@@ -183,6 +248,123 @@ export const UserSettings = () => {
     }
   };
 
+  const handlePhoneNumberChange = async () => {
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/2fa/send-phone-verification`,
+        { phoneNumber }
+      );
+
+      if (response.data.success) {
+        setVerificationDialogOpen(true);
+        showSnackbar("Verification code sent successfully", "success");
+      }
+    } catch (error) {
+      showSnackbar("Failed to send verification code", "error");
+    }
+  };
+
+  const handleVerificationButtonClick = async () => {
+    try {
+      // Verify phone number
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/2fa/verify-phone`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            phoneNumber: phoneNumber,
+            code: verificationCode,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Failed to verify phone number");
+      }
+
+      setVerificationDialogOpen(false);
+      setVerificationCode("");
+      showSnackbar("Phone number verified successfully", "success");
+      setPhoneVerified(true); // Set verified in local state
+      // Refresh user data to get updated verification status
+      await checkAuth();
+    } catch (error: unknown) {
+      console.error(
+        "Error during verification:",
+        error instanceof Error ? error.message : error
+      );
+      showSnackbar(
+        error instanceof Error
+          ? error.message
+          : "Verification failed. Please try again.",
+        "error"
+      );
+    }
+  };
+
+  const handleTwoFactorToggle = async () => {
+    try {
+      if (twoFaEnabled) {
+        // When disabling 2FA, do it directly without any verification
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/2fa/disable`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || "Failed to disable 2FA");
+        }
+
+        setTwoFaEnabled(false);
+        showSnackbar("2FA has been disabled successfully", "success");
+      } else {
+        // When enabling 2FA, check if phone is verified first
+        if (!phoneVerified) {
+          showSnackbar(
+            "Please verify your phone number before enabling 2FA",
+            "error"
+          );
+          return;
+        }
+
+        // Enable 2FA directly since phone is already verified
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/2fa/enable`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || "Failed to enable 2FA");
+        }
+
+        setTwoFaEnabled(true);
+        showSnackbar("2FA has been enabled successfully", "success");
+      }
+    } catch (error: unknown) {
+      console.error("Error toggling 2FA:", error);
+      showSnackbar("Failed to toggle 2FA. Please try again.", "error");
+    }
+  };
+
   const handlePasswordChange = async () => {
     try {
       setPasswordError({ current: "", new: "" });
@@ -199,12 +381,12 @@ export const UserSettings = () => {
       setCurrentPassword("");
       setNewPassword("");
       showSnackbar("Password updated successfully", "success");
-    } catch (error: any) {
+    } catch (error: unknown) {
       let errorMessage = "Failed to update password";
       let errorField = ""; // Track which field caused the error
 
       // Check for Axios error with response data
-      if (error.response && error.response.data) {
+      if (axios.isAxiosError(error) && error.response?.data) {
         errorMessage = error.response.data.message || errorMessage;
         const errorCode = error.response.data.code;
 
@@ -223,7 +405,10 @@ export const UserSettings = () => {
         }
       } else {
         // Log unexpected errors
-        console.error("Password change error:", error);
+        console.error(
+          "Password change error:",
+          error instanceof Error ? error.message : error
+        );
       }
 
       // Update the passwordError state for the specific field
@@ -239,7 +424,10 @@ export const UserSettings = () => {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
-  const showSnackbar = (message: string, severity: "success" | "error") => {
+  const showSnackbar = (
+    message: string,
+    severity: "success" | "error" | "info"
+  ) => {
     setSnackbar({
       open: true,
       message,
@@ -253,6 +441,9 @@ export const UserSettings = () => {
       onClick: () => {
         setIsEditing(false);
         setEditedValue({ ...userData });
+        setPhoneNumber(userData.phone_number || "");
+        setTwoFaEnabled(userData.two_fa_enabled);
+        setHasPhoneOr2FAChanges(false);
       },
       variant: "outlined" as const,
     },
@@ -260,9 +451,55 @@ export const UserSettings = () => {
       label: "Save Changes",
       onClick: handleSave,
       variant: "contained" as const,
-      disabled: JSON.stringify(editedValue) === JSON.stringify(userData),
+      disabled:
+        JSON.stringify(editedValue) === JSON.stringify(userData) &&
+        !hasPhoneOr2FAChanges,
     },
   ];
+
+  // Move this above the return statement
+  const VerificationDialog = (
+    <Dialog
+      open={verificationDialogOpen}
+      onClose={() => {
+        setVerificationDialogOpen(false);
+        setVerificationCode("");
+      }}
+    >
+      <DialogTitle>Verify Phone Number</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Enter the verification code sent to your phone number.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Verification Code"
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value)}
+            inputProps={{ maxLength: 6 }}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={() => {
+            setVerificationDialogOpen(false);
+            setVerificationCode("");
+          }}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleVerificationButtonClick}
+          disabled={!verificationCode}
+        >
+          Verify
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 
   return (
     <Box>
@@ -394,20 +631,117 @@ export const UserSettings = () => {
                     }))
                   }
                 />
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <TextField
-                    fullWidth
-                    label="Password"
-                    value="********"
-                    disabled
-                  />
-                  <Button
-                    variant="outlined"
-                    onClick={() => setPasswordDialogOpen(true)}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    Change Password
-                  </Button>
+              </Stack>
+            </Box>
+
+            <Box>
+              <Typography
+                variant="subtitle2"
+                color="primary"
+                sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+              >
+                <SecurityIcon fontSize="small" />
+                Security
+              </Typography>
+              <Stack spacing={3}>
+                <Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <TextField
+                      fullWidth
+                      label="Password"
+                      value="********"
+                      disabled
+                      InputProps={{
+                        startAdornment: (
+                          <LockIcon sx={{ color: "text.secondary", mr: 1 }} />
+                        ),
+                      }}
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={() => setPasswordDialogOpen(true)}
+                      sx={{ flexShrink: 0 }}
+                    >
+                      Change Password
+                    </Button>
+                  </Box>
+                </Box>
+
+                <Box
+                  sx={{
+                    p: 2,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    bgcolor: "background.paper",
+                  }}
+                >
+                  <Stack spacing={2}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <TextField
+                        fullWidth
+                        label="Phone Number"
+                        value={phoneNumber}
+                        onChange={(e) => {
+                          setPhoneNumber(e.target.value);
+                          setPhoneVerified(false); // Reset verification status on change
+                        }}
+                        placeholder="Enter phone number"
+                        InputProps={{
+                          startAdornment: (
+                            <ShieldIcon
+                              sx={{ color: "text.secondary", mr: 1 }}
+                            />
+                          ),
+                          endAdornment: phoneVerified && (
+                            <CheckCircleIcon color="primary" sx={{ ml: 1 }} />
+                          ),
+                        }}
+                      />
+                      {!phoneVerified && phoneNumber && (
+                        <Button
+                          variant="outlined"
+                          onClick={handlePhoneNumberChange}
+                          disabled={!phoneNumber}
+                          sx={{ flexShrink: 0 }}
+                        >
+                          Verify
+                        </Button>
+                      )}
+                    </Box>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        p: 1,
+                        bgcolor: twoFaEnabled
+                          ? "secondary.light"
+                          : "action.hover",
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <SecurityIcon
+                          fontSize="small"
+                          color={twoFaEnabled ? "secondary" : "action"}
+                        />
+                        Two-Factor Authentication
+                      </Typography>
+                      <Button
+                        variant={twoFaEnabled ? "contained" : "outlined"}
+                        color={twoFaEnabled ? "error" : "secondary"}
+                        onClick={handleTwoFactorToggle}
+                        disabled={!phoneVerified}
+                        size="small"
+                      >
+                        {twoFaEnabled ? "Disable" : "Enable"}
+                      </Button>
+                    </Box>
+                  </Stack>
                 </Box>
               </Stack>
             </Box>
@@ -466,6 +800,8 @@ export const UserSettings = () => {
           </Stack>
         </Box>
       </QualSidebar>
+
+      {VerificationDialog}
     </Box>
   );
 };

@@ -71,6 +71,9 @@ interface User {
   state_code: string;
   zip: string;
   role: string;
+  phone_number?: string;
+  phone_verified?: boolean;
+  two_fa_enabled?: boolean;
   user_access: {
     Markets?: MarketAccess[];
     Division?: string;
@@ -259,7 +262,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_API_URL}/users/login`,
-        { email, password }
+        { email, password, skip2FA: true } // Add skip2FA flag since we've already verified
       );
 
       if (response.data.user && response.data.token) {
@@ -275,6 +278,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
       return false;
     } catch (error) {
+      console.error("Login error:", error);
       return false;
     }
   };

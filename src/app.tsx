@@ -87,6 +87,34 @@ const AppLayout = () => {
   );
 };
 
+// Auth check component
+const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+  const { isLoggedIn, isCheckingAuth, isInitialDataLoading } = useUser();
+  const location = useLocation();
+
+  // If checking auth, show nothing
+  if (isCheckingAuth) {
+    return null;
+  }
+
+  // If not logged in, redirect to login
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // If logged in and trying to access login page, redirect to home
+  if (location.pathname === "/login") {
+    return <Navigate to="/" replace />;
+  }
+
+  // Show loading screen only after successful login while loading initial data
+  if (isInitialDataLoading) {
+    return <LoadingApollo showProgressMessages={true} />;
+  }
+
+  return <>{children}</>;
+};
+
 const AppContent = () => {
   return (
     <BrowserRouter>
@@ -106,37 +134,6 @@ const AppContent = () => {
       </UserProvider>
     </BrowserRouter>
   );
-};
-
-// Simple auth check component
-const RequireAuth = ({ children }: { children: React.ReactNode }) => {
-  const { isLoggedIn, isCheckingAuth, isInitialDataLoading } = useUser();
-  const location = useLocation();
-
-  if (isCheckingAuth) {
-    return (
-      <LoadingApollo
-        message="Verifying Authentication"
-        subMessage="Please wait while we verify your credentials..."
-      />
-    );
-  }
-
-  if (isLoggedIn && isInitialDataLoading) {
-    return <LoadingApollo showProgressMessages={true} />;
-  }
-
-  if (!isLoggedIn) {
-    // Redirect to login - don't save attempted location
-    return <Navigate to="/login" replace />;
-  }
-
-  // If logged in and trying to access login page, redirect to home
-  if (location.pathname === "/login") {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
 };
 
 export const App = () => {

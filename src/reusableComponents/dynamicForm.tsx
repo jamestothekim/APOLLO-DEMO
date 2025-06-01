@@ -6,15 +6,17 @@ import { styled } from "@mui/material/styles";
 export interface FieldConfig {
   name: string;
   label: string;
-  fieldType: string;
+  fieldType: "text" | "email" | "chip";
+  editable: boolean;
   value?: string;
-  editable?: boolean;
+  onClick?: () => void;
   chipProps?: {
     size?: "small" | "medium";
     variant?: "outlined" | "filled";
     color?: "primary" | "secondary" | "default";
     sx?: any;
   };
+  endAdornment?: React.ReactNode;
 }
 
 interface DynamicFormProps {
@@ -102,7 +104,14 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             >
               {field.label}
             </Typography>
-            <Box sx={{ flex: 1 }}>{renderField(field)}</Box>
+            <Box sx={{ flex: 1, display: "flex", alignItems: "center" }}>
+              {renderField(field)}
+              {field.endAdornment && (
+                <Box sx={{ ml: 1, display: "flex", alignItems: "center" }}>
+                  {field.endAdornment}
+                </Box>
+              )}
+            </Box>
           </Box>
         ))}
       </StyledBox>

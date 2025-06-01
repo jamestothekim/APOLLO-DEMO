@@ -10,34 +10,37 @@ import {
   Snackbar,
   Alert,
   Link,
+  Typography,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { useUser } from "../userContext";
 import { useNavigate } from "react-router-dom";
 import { ForgotPassword } from "./forgotPassword";
+import axios from "axios";
 
 export const Login: React.FC = () => {
   const theme = useTheme();
-  const { login, isLoggedIn } = useUser();
+  const { isLoggedIn, login } = useUser();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    twoFactorCode: "",
   });
   const [notification, setNotification] = useState({
     open: false,
     message: "",
-    severity: "success" as "success" | "error",
+    severity: "success" as "success" | "error" | "info",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
 
   // If already logged in, this component shouldn't be shown
   useEffect(() => {
     if (isLoggedIn) {
-      // Store login state in localStorage for persistence across page refreshes
       localStorage.setItem("isAuthenticated", "true");
     }
   }, [isLoggedIn]);
@@ -60,52 +63,119 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const success = await login(formData.email, formData.password);
-      if (success) {
-        setNotification({
-          open: true,
-          message: "Login successful!",
-          severity: "success",
-        });
+      if (requiresTwoFactor) {
+        try {
+          // Step 2: Verify 2FA code
+          const verifyResponse = await axios.post(
+            `${import.meta.env.VITE_API_URL}/2fa/verify-login-code`,
+            {
+              email: formData.email,
+              code: formData.twoFactorCode,
+            }
+          );
 
-        // Always redirect to dashboard on successful login
-        navigate("/", { replace: true });
+          if (verifyResponse.data.success) {
+            // If verification was successful, use the login function from useUser
+            const success = await login(formData.email, formData.password);
+
+            if (success) {
+              setNotification({
+                open: true,
+                message: "Login successful!",
+                severity: "success",
+              });
+              navigate("/", { replace: true });
+              return;
+            } else {
+              setNotification({
+                open: true,
+                message: "Login failed after verification. Please try again.",
+                severity: "error",
+              });
+            }
+          } else {
+            setNotification({
+              open: true,
+              message: "Invalid verification code. Please try again.",
+              severity: "error",
+            });
+          }
+        } catch (verifyError: any) {
+          // Check if this is the Twilio 20404 error (which actually means success)
+          if (verifyError.response?.data?.code === "20404") {
+            // If verification was successful, use the login function from useUser
+            const success = await login(formData.email, formData.password);
+
+            if (success) {
+              setNotification({
+                open: true,
+                message: "Login successful!",
+                severity: "success",
+              });
+              navigate("/", { replace: true });
+              return;
+            } else {
+              setNotification({
+                open: true,
+                message: "Login failed after verification. Please try again.",
+                severity: "error",
+              });
+            }
+          } else {
+            throw verifyError; // Re-throw if it's a different error
+          }
+        }
       } else {
-        // This case might not be reachable if the backend always throws an error on failure
-        console.warn(
-          "Login failed - Server indicated failure but didn't throw an error."
+        // Initial login attempt
+        const response = await axios.post(
+          `${import.meta.env.VITE_API_URL}/users/login`,
+          {
+            email: formData.email,
+            password: formData.password,
+          }
         );
-        setNotification({
-          open: true,
-          message: "Invalid email or password", // Generic message if no error thrown
-          severity: "error",
-        });
+
+        if (response.data.requiresTwoFactor) {
+          // Send 2FA code and show verification screen
+          await axios.post(
+            `${import.meta.env.VITE_API_URL}/2fa/send-login-code`,
+            {
+              email: formData.email,
+            }
+          );
+
+          setRequiresTwoFactor(true);
+          setNotification({
+            open: true,
+            message: "Please enter the verification code sent to your phone",
+            severity: "info",
+          });
+        } else if (response.data.user && response.data.token) {
+          const success = await login(formData.email, formData.password);
+
+          if (success) {
+            setNotification({
+              open: true,
+              message: "Login successful!",
+              severity: "success",
+            });
+            navigate("/", { replace: true });
+          } else {
+            setNotification({
+              open: true,
+              message: "Login failed. Please try again.",
+              severity: "error",
+            });
+          }
+        }
       }
     } catch (error: any) {
-      console.error("Login error details:", error);
+      console.error("Login error:", error);
+
       let message = "An error occurred during login";
-      // Check if the error has a response from the server (axios error)
-      if (error.response && error.response.data) {
-        // const errorCode = error.response.data.code; // Removed unused variable
-        const serverMessage = error.response.data.message;
 
-        // Use the server's message directly, which includes attempt warnings and lockout info
-        message = serverMessage || "Invalid email or password";
-
-        // You could potentially use the code for more specific UI changes if needed
-        // switch (errorCode) {
-        //   case 'ACCOUNT_LOCKED':
-        //     // Maybe disable the form temporarily
-        //     break;
-        //   case 'INVALID_CREDENTIALS_WARNING':
-        //     // Highlight remaining attempts
-        //     break;
-        //   default:
-        //     // Generic invalid credentials
-        //     break;
-        // }
-      } else if (error instanceof Error) {
-        message = error.message;
+      if (error.response?.data) {
+        message = error.response.data.message || "Invalid credentials";
       }
 
       setNotification({
@@ -159,114 +229,145 @@ export const Login: React.FC = () => {
             src="https://apollo-s3-media.s3.amazonaws.com/logo/APOLLO.png"
             alt="APOLLO Logo"
             style={{
-              height: "100px", // Adjust height as needed
-              width: "auto", // Maintain aspect ratio
+              height: "100px",
+              width: "auto",
               marginBottom: theme.spacing(2),
             }}
           />
 
           <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="email"
-              label="Email"
-              name="email"
-              autoComplete="email"
-              autoFocus
-              value={formData.email}
-              onChange={handleChange}
-              sx={{
-                mb: 1.5,
-                "& .MuiOutlinedInput-root": {
-                  "& fieldset": {
-                    borderColor: theme.palette.primary.main,
-                  },
-                  "&:hover fieldset": {
-                    borderColor: theme.palette.primary.main,
-                  },
-                  "&.Mui-focused fieldset": {
-                    borderColor: theme.palette.primary.main,
-                  },
-                  "& input:-webkit-autofill": {
-                    WebkitBoxShadow: `0 0 0 100px ${theme.palette.background.paper} inset`,
-                    WebkitTextFillColor: theme.palette.text.primary,
-                    borderColor: theme.palette.primary.main,
-                  },
-                },
-              }}
-              size="small"
-            />
+            {!requiresTwoFactor ? (
+              <>
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  id="email"
+                  label="Email"
+                  name="email"
+                  autoComplete="email"
+                  autoFocus
+                  value={formData.email}
+                  onChange={handleChange}
+                  sx={{
+                    mb: 1.5,
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "& input:-webkit-autofill": {
+                        WebkitBoxShadow: `0 0 0 100px ${theme.palette.background.paper} inset`,
+                        WebkitTextFillColor: theme.palette.text.primary,
+                        borderColor: theme.palette.primary.main,
+                      },
+                    },
+                  }}
+                  size="small"
+                />
 
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Password"
-              type={showPassword ? "text" : "password"}
-              id="password"
-              autoComplete="current-password"
-              value={formData.password}
-              onChange={handleChange}
-              size="small"
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="toggle password visibility"
-                      onClick={handleClickShowPassword}
-                      edge="end"
-                      size="small"
-                    >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                mb: 1,
-                "& .MuiOutlinedInput-root": {
-                  "& fieldset": {
-                    borderColor: theme.palette.primary.main,
-                  },
-                  "&:hover fieldset": {
-                    borderColor: theme.palette.primary.main,
-                  },
-                  "&.Mui-focused fieldset": {
-                    borderColor: theme.palette.primary.main,
-                  },
-                  "& input:-webkit-autofill": {
-                    WebkitBoxShadow: `0 0 0 100px ${theme.palette.background.paper} inset`,
-                    WebkitTextFillColor: theme.palette.text.primary,
-                    borderColor: theme.palette.primary.main,
-                  },
-                },
-              }}
-            />
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  name="password"
+                  label="Password"
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  autoComplete="current-password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  size="small"
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label="toggle password visibility"
+                          onClick={handleClickShowPassword}
+                          edge="end"
+                          size="small"
+                        >
+                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{
+                    mb: 1,
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "& input:-webkit-autofill": {
+                        WebkitBoxShadow: `0 0 0 100px ${theme.palette.background.paper} inset`,
+                        WebkitTextFillColor: theme.palette.text.primary,
+                        borderColor: theme.palette.primary.main,
+                      },
+                    },
+                  }}
+                />
 
-            <Box sx={{ textAlign: "right", mb: 1 }}>
-              <Link
-                component="button"
-                type="button"
-                variant="body2"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setShowForgotPassword(true);
-                }}
-                sx={{
-                  color: theme.palette.primary.main,
-                  textDecoration: "none",
-                  fontSize: "0.8em",
-                  "&:hover": {
-                    textDecoration: "underline",
-                  },
-                }}
-              >
-                Forgot Password?
-              </Link>
-            </Box>
+                <Box sx={{ textAlign: "right", mb: 1 }}>
+                  <Link
+                    component="button"
+                    type="button"
+                    variant="body2"
+                    onClick={() => setShowForgotPassword(true)}
+                    sx={{
+                      color: theme.palette.primary.main,
+                      textDecoration: "none",
+                      fontSize: "0.8em",
+                      "&:hover": {
+                        textDecoration: "underline",
+                      },
+                    }}
+                  >
+                    Forgot Password?
+                  </Link>
+                </Box>
+              </>
+            ) : (
+              <>
+                <Typography variant="body2" sx={{ mb: 2, textAlign: "center" }}>
+                  Enter the verification code sent to your phone
+                </Typography>
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  name="twoFactorCode"
+                  label="Verification Code"
+                  value={formData.twoFactorCode}
+                  onChange={handleChange}
+                  size="small"
+                  sx={{
+                    mb: 1,
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main,
+                      },
+                    },
+                  }}
+                />
+              </>
+            )}
 
             <Button
               type="submit"
@@ -286,8 +387,24 @@ export const Login: React.FC = () => {
                 fontSize: ".85em",
               }}
             >
-              {isLoading ? "Signing In..." : "Sign In"}
+              {isLoading
+                ? "Verifying..."
+                : requiresTwoFactor
+                ? "Verify Code"
+                : "Sign In"}
             </Button>
+
+            {requiresTwoFactor && (
+              <Button
+                fullWidth
+                variant="text"
+                size="small"
+                onClick={() => setRequiresTwoFactor(false)}
+                sx={{ mt: 1 }}
+              >
+                Back to Login
+              </Button>
+            )}
           </Box>
         </Paper>
       </Container>
