@@ -22,14 +22,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  InputAdornment,
-  IconButton,
 } from "@mui/material";
 import {
   CheckCircle as CheckCircleIcon,
   Cancel as XIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
 } from "@mui/icons-material";
 import axios from "axios";
 import { useUser } from "../../userContext";
@@ -42,7 +38,6 @@ interface User {
   last_name: string;
   email: string;
   role: string;
-  password?: string;
   address?: string;
   city?: string;
   state_code?: string;
@@ -51,6 +46,7 @@ interface User {
     Division?: string;
     Markets?: MarketOption[];
     Admin?: boolean;
+    Status?: "pending" | "active";
   };
 }
 
@@ -99,8 +95,6 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
   const [availableRoles] = useState<string[]>(FIXED_ROLES);
   const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [passwordError, setPasswordError] = useState<string>("");
-  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Define available divisions including the "Corporate" option for Finance role
   const divisionsForAutocomplete = useMemo(() => {
@@ -265,16 +259,24 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
           Division: editingUser.user_access?.Division || null,
           Markets: finalMarkets,
           Admin: editingUser.user_access?.Admin || false,
+          Status: isNewUser
+            ? "pending"
+            : editingUser.user_access?.Status || "active",
         },
-        ...(isNewUser && editingUser.password
-          ? { password: editingUser.password }
-          : {}),
       };
 
       if (isNewUser) {
-        await axios.post(url, userData);
+        const response = await axios.post(url, userData);
+        // Send activation email
+        if (response.data.success) {
+          showSnackbar(
+            `User created successfully. An activation email has been sent to ${editingUser.email}`,
+            "success"
+          );
+        }
       } else {
         await axios.put(url, userData);
+        showSnackbar("User updated successfully", "success");
       }
 
       await fetchUsers();
@@ -283,10 +285,6 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         await checkAuth();
       }
 
-      showSnackbar(
-        `User ${isNewUser ? "created" : "updated"} successfully`,
-        "success"
-      );
       setSidebarOpen(false);
     } catch (error) {
       console.error("Error saving user:", error);
@@ -301,8 +299,6 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
   const handleCloseSidebar = () => {
     setSidebarOpen(false);
     setEditingUser(null);
-    setPasswordError("");
-    setShowPassword(false);
   };
 
   const showSnackbar = (message: string, severity: "success" | "error") => {
@@ -319,14 +315,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
 
     let updatedUser = { ...editingUser };
 
-    if (field === "password" && editingUser.id === 0) {
-      const validationError = validatePassword(value);
-      setPasswordError(validationError);
-      updatedUser = {
-        ...updatedUser,
-        [field]: value,
-      };
-    } else if (field === "markets") {
+    if (field === "markets") {
       const selectedMarkets = value as MarketOption[];
       updatedUser = {
         ...updatedUser,
@@ -346,11 +335,8 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
           marketsToSet = getMarketOptionsForDivision(newDivision);
         }
       } else if (updatedUser.role === MARKET_MANAGER_ROLE) {
-        // For Distributor Manager, changing division clears selected markets.
-        // They must re-select markets valid for the new division.
         marketsToSet = []; // Clear markets, user must re-select
       } else {
-        // Handle other roles or default case if needed
         marketsToSet = updatedUser.user_access?.Markets || [];
       }
 
@@ -358,7 +344,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         ...updatedUser,
         user_access: {
           ...updatedUser.user_access,
-          Division: newDivision ?? "", // Store null as empty string or keep as null based on backend
+          Division: newDivision ?? "",
           Markets: marketsToSet,
         },
       };
@@ -379,11 +365,9 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         marketsToSet = allMarkets;
         divisionToSet = CORPORATE_DIVISION_LABEL;
       } else if (newRole === FINANCE_ROLE) {
-        // When switching TO Finance, default to "Corporate" division
         divisionToSet = CORPORATE_DIVISION_LABEL;
         marketsToSet = allMarkets;
       } else if (newRole === MARKET_MANAGER_ROLE) {
-        // When switching TO Distributor Manager, clear markets if division is invalid/empty
         const currentDivision = divisionToSet;
         if (currentDivision && marketsByDivision?.[currentDivision]) {
           const divisionMarkets = getMarketOptionsForDivision(currentDivision);
@@ -393,16 +377,11 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
           marketsToSet = marketsToSet.filter((m) =>
             validMarketCodes.has(m.market_code)
           );
-          // If no valid markets remain for the current division, clear them
           if (marketsToSet.length === 0) marketsToSet = [];
         } else {
-          // If division is not set or invalid, clear division and markets
           divisionToSet = "";
           marketsToSet = [];
         }
-      } else {
-        // Handle other potential roles or reset logic
-        // For now, keep existing division/markets if role doesn't match above
       }
 
       updatedUser = {
@@ -422,37 +401,6 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     }
 
     setEditingUser(updatedUser);
-
-    if (field !== "password") {
-      setPasswordError("");
-    }
-  };
-
-  const generatePassword = () => {
-    const length = 12;
-    const charset =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?";
-    let password = "";
-    for (let i = 0; i < length; i++) {
-      password += charset.charAt(Math.floor(Math.random() * charset.length));
-    }
-    return password;
-  };
-
-  const validatePassword = (password: string): string => {
-    if (!password) {
-      return "Password is required.";
-    }
-    if (password.length < 8) {
-      return "Password must be at least 8 characters long.";
-    }
-    if (!/[A-Z]/.test(password)) {
-      return "Password must contain at least one uppercase letter.";
-    }
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password)) {
-      return "Password must contain at least one special character.";
-    }
-    return "";
   };
 
   const handleDelete = async () => {
@@ -713,6 +661,36 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       sx: { width: 250 },
     },
     {
+      header: "Status",
+      key: "status",
+      render: (_: any, row: User) => {
+        const status =
+          row.user_access?.Status === "pending" ? "Pending" : "Active";
+        return (
+          <Chip
+            label={status}
+            size="small"
+            color={status === "Active" ? "primary" : "primary"}
+            variant={status === "Active" ? "filled" : "outlined"}
+            sx={{
+              borderRadius: "16px",
+              backgroundColor:
+                status === "Active" ? "primary.main" : "transparent",
+              border: status === "Active" ? "none" : "1px solid",
+              borderColor: "primary.main",
+              color: status === "Active" ? "white" : "primary.main",
+              fontFamily: "theme.typography.fontFamily",
+              "& .MuiChip-label": { px: 1 },
+            }}
+          />
+        );
+      },
+      sortable: true,
+      sortAccessor: (row: User) =>
+        row.user_access?.Status === "pending" ? 0 : 1,
+      sx: { width: 120 },
+    },
+    {
       header: "Admin",
       key: "admin",
       align: "center" as const,
@@ -721,7 +699,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
           {row.user_access?.Admin === true ? (
             <CheckCircleIcon color="primary" />
           ) : (
-            <XIcon color="error" />
+            <XIcon color="secondary" />
           )}
         </Box>
       ),
@@ -765,9 +743,6 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
             label: editingUser?.id === 0 ? "Create User" : "Save Changes",
             onClick: handleSave,
             variant: "contained" as const,
-            disabled:
-              editingUser?.id === 0 &&
-              (!editingUser?.password || !!passwordError),
           },
         ]}
       >
@@ -803,57 +778,6 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                   onChange={(e) => handleEditChange("email", e.target.value)}
                   fullWidth
                 />
-                {editingUser?.id === 0 && (
-                  <Box
-                    sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}
-                  >
-                    <TextField
-                      label="Password"
-                      type={showPassword ? "text" : "password"}
-                      size="small"
-                      value={editingUser?.password || ""}
-                      onChange={(e) =>
-                        handleEditChange("password", e.target.value)
-                      }
-                      error={!!passwordError}
-                      helperText={
-                        passwordError || "Min 8 chars, 1 uppercase, 1 special."
-                      }
-                      fullWidth
-                      InputProps={{
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton
-                              aria-label="toggle password visibility"
-                              onClick={() => setShowPassword(!showPassword)}
-                              onMouseDown={(e) => e.preventDefault()}
-                              edge="end"
-                            >
-                              {showPassword ? (
-                                <VisibilityOffIcon />
-                              ) : (
-                                <VisibilityIcon />
-                              )}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => {
-                        const newPassword = generatePassword();
-                        handleEditChange("password", newPassword);
-                        setPasswordError("");
-                        setShowPassword(true);
-                      }}
-                      sx={{ whiteSpace: "nowrap", height: "40px" }}
-                    >
-                      Generate
-                    </Button>
-                  </Box>
-                )}
                 <Autocomplete
                   options={availableRoles}
                   value={editingUser?.role || ""}

@@ -20,6 +20,7 @@ import { Login } from "./login/login";
 import { ResetPassword } from "./login/resetPassword";
 import { UserProvider, useUser } from "./userContext";
 import { LoadingApollo } from "./reusableComponents/loadingApollo";
+import { ActivateAccount } from "./accountActivation/activateAccount";
 
 const drawerWidth = 240;
 
@@ -122,6 +123,7 @@ const AppContent = () => {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/activate-account" element={<ActivateAccount />} />
           <Route
             path="/*"
             element={

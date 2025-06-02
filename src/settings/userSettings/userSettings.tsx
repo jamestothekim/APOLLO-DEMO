@@ -20,6 +20,8 @@ import LockIcon from "@mui/icons-material/Lock";
 import SecurityIcon from "@mui/icons-material/Security";
 import ShieldIcon from "@mui/icons-material/Shield";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import PersonIcon from "@mui/icons-material/Person";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
 
 // Define the shape of user data
 interface UserDataType {
@@ -604,7 +606,12 @@ export const UserSettings = () => {
         <Box sx={{ p: 3 }}>
           <Stack spacing={4}>
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>
+              <Typography
+                variant="subtitle2"
+                color="primary"
+                sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+              >
+                <PersonIcon fontSize="small" />
                 Personal Information
               </Typography>
               <Stack spacing={2}>
@@ -747,7 +754,12 @@ export const UserSettings = () => {
             </Box>
 
             <Box>
-              <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>
+              <Typography
+                variant="subtitle2"
+                color="primary"
+                sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+              >
+                <LocationOnIcon fontSize="small" />
                 Address
               </Typography>
               <Stack spacing={2}>
