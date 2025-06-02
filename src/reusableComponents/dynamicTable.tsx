@@ -538,16 +538,43 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                               sx={{
                                 padding: "2px",
                                 ml: 0.5,
-                                color: theme.palette.primary.main,
+                                color: isFiltered
+                                  ? theme.palette.primary.main
+                                  : theme.palette.action.active,
                                 opacity: isFiltered ? 1 : 0.6,
+                                position: "relative",
+                                transition: "all 0.2s ease-in-out",
                                 "&:hover": {
                                   backgroundColor: theme.palette.action.hover,
                                   opacity: 1,
+                                  transform: "scale(1.1)",
+                                },
+                                "@keyframes pulse": {
+                                  "0%": {
+                                    transform: "scale(1)",
+                                    opacity: 1,
+                                  },
+                                  "50%": {
+                                    transform: "scale(1.2)",
+                                    opacity: 0.7,
+                                  },
+                                  "100%": {
+                                    transform: "scale(1)",
+                                    opacity: 1,
+                                  },
                                 },
                               }}
                               aria-label={`Filter ${column.header}`}
                             >
-                              <SearchIcon sx={{ fontSize: "1.0rem" }} />
+                              <SearchIcon
+                                sx={{
+                                  fontSize: "1.0rem",
+                                  animation: isFiltered
+                                    ? "pulse 2s infinite"
+                                    : "none",
+                                  transition: "transform 0.2s ease-in-out",
+                                }}
+                              />
                             </IconButton>
                           )}
                         </Box>
