@@ -1,4 +1,4 @@
-import React, { useState, useMemo, Fragment } from "react";
+import React, { useState, useMemo, Fragment, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -75,6 +75,7 @@ export interface DynamicTableProps {
   enableColumnFiltering?: boolean;
   enableRowTooltip?: boolean;
   rowTooltipContent?: (row: any) => React.ReactNode;
+  filterChangeCount?: number;
 }
 
 const getSectionInfo = (columns: Column[], index: number) => {
@@ -124,6 +125,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   enableColumnFiltering = false,
   enableRowTooltip = false,
   rowTooltipContent,
+  filterChangeCount = 0,
 }) => {
   const theme = useTheme();
   const [activeSection, setActiveSection] = useState(0);
@@ -137,6 +139,18 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   const [currentFilterColumn, setCurrentFilterColumn] = useState<string | null>(
     null
   );
+  const [prevFilterCount, setPrevFilterCount] = useState(filterChangeCount);
+
+  useEffect(() => {
+    if (filterChangeCount !== prevFilterCount) {
+      if (controlledPageChange) {
+        controlledPageChange(null, 0);
+      } else {
+        setInternalPage(0);
+      }
+      setPrevFilterCount(filterChangeCount);
+    }
+  }, [filterChangeCount, prevFilterCount, controlledPageChange]);
 
   const page = controlledPage ?? internalPage;
   const rowsPerPage = controlledRowsPerPage ?? internalRowsPerPage;

@@ -287,6 +287,11 @@ export const Summary = ({
 
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
+  const [filterChangeCount, setFilterChangeCount] = useState(0);
+  const [prevFilters, setPrevFilters] = useState({
+    markets: selectedMarkets,
+    brands: selectedBrands,
+  });
 
   // Update local state when persisted state changes
   useEffect(() => {
@@ -300,6 +305,21 @@ export const Summary = ({
       setSelectedMarkets(persistedSelectedMarkets);
     }
   }, [persistedSelectedMarkets]);
+
+  // Only increment filterChangeCount when filters actually change
+  useEffect(() => {
+    const hasFilterChanged =
+      JSON.stringify(prevFilters.markets) !== JSON.stringify(selectedMarkets) ||
+      JSON.stringify(prevFilters.brands) !== JSON.stringify(selectedBrands);
+
+    if (hasFilterChanged) {
+      setFilterChangeCount((prev) => prev + 1);
+      setPrevFilters({
+        markets: selectedMarkets,
+        brands: selectedBrands,
+      });
+    }
+  }, [selectedMarkets, selectedBrands]);
 
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
 
@@ -1254,6 +1274,7 @@ export const Summary = ({
                 getRowId={(row: DisplayRow) => row.id}
                 expandedRowIds={expandedGuidanceRowIds}
                 renderExpandedRow={renderExpandedRowContent}
+                filterChangeCount={filterChangeCount}
               />
             ) : (
               <Box

@@ -250,7 +250,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const [initialSidebarState, setInitialSidebarState] =
     useState<ExtendedForecastData | null>(null);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(15);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [selectedComment, setSelectedComment] = useState<string | undefined>();
@@ -279,6 +279,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const [publishConfirmationText, setPublishConfirmationText] = useState("");
   const [publishConfirmationError, setPublishConfirmationError] =
     useState(false);
+  const [filterChangeCount, setFilterChangeCount] = useState(0);
+  const [prevFilters, setPrevFilters] = useState({
+    markets: selectedMarkets,
+    brands: selectedBrands,
+    tags: selectedTags,
+  });
 
   const showSnackbar = (message: string, severity: "success" | "error") => {
     setSnackbarMessage(message);
@@ -1862,6 +1868,23 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     ? "Forecast must be in 'Review' status to publish to consensus"
     : "";
 
+  // Only increment filterChangeCount when filters actually change
+  useEffect(() => {
+    const hasFilterChanged =
+      JSON.stringify(prevFilters.markets) !== JSON.stringify(selectedMarkets) ||
+      JSON.stringify(prevFilters.brands) !== JSON.stringify(selectedBrands) ||
+      JSON.stringify(prevFilters.tags) !== JSON.stringify(selectedTags);
+
+    if (hasFilterChanged) {
+      setFilterChangeCount((prev) => prev + 1);
+      setPrevFilters({
+        markets: selectedMarkets,
+        brands: selectedBrands,
+        tags: selectedTags,
+      });
+    }
+  }, [selectedMarkets, selectedBrands, selectedTags]);
+
   return (
     <Box>
       <DynamicTable
@@ -1901,6 +1924,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           }
           return null; // No tooltip for control section
         }}
+        filterChangeCount={filterChangeCount}
       />
 
       <Box
