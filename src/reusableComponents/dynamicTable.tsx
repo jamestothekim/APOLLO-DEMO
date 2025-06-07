@@ -76,6 +76,7 @@ export interface DynamicTableProps {
   enableRowTooltip?: boolean;
   rowTooltipContent?: (row: any) => React.ReactNode;
   filterChangeCount?: number;
+  isNested?: boolean;
 }
 
 const getSectionInfo = (columns: Column[], index: number) => {
@@ -126,6 +127,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   enableRowTooltip = false,
   rowTooltipContent,
   filterChangeCount = 0,
+  isNested = false,
 }) => {
   const theme = useTheme();
   const [activeSection, setActiveSection] = useState(0);
@@ -248,6 +250,101 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     }, []);
   }, [columns]);
 
+  const sortNestedData = (data: any[], sortConfig: SortConfig | null) => {
+    if (!sortConfig || !isNested) return data;
+
+    const totalRow = data.find((row) => row.id === "total-row");
+    const dataWithoutTotal = data.filter((row) => row.id !== "total-row");
+
+    const parentGroups = new Map<string, any[]>();
+    dataWithoutTotal.forEach((row) => {
+      if (row.isBrandRow) {
+        parentGroups.set(row.id, [row]);
+      } else if (row.parentId) {
+        const parentGroup = parentGroups.get(row.parentId);
+        if (parentGroup) {
+          parentGroup.push(row);
+        }
+      }
+    });
+
+    const sortedGroups = Array.from(parentGroups.entries()).map(
+      ([parentId, group]) => {
+        const parent = group[0];
+        const children = group.slice(1);
+
+        const sortedChildren = [...children].sort((a, b) => {
+          const column = flatColumns.find((col) => col.key === sortConfig.key);
+          let aValue: number | string | null | undefined;
+          let bValue: number | string | null | undefined;
+
+          if (typeof column?.sortAccessor === "function") {
+            aValue = column.sortAccessor(a);
+            bValue = column.sortAccessor(b);
+          } else if (typeof column?.sortAccessor === "string") {
+            aValue = a[column.sortAccessor];
+            bValue = b[column.sortAccessor];
+          } else {
+            aValue = a[sortConfig.key];
+            bValue = b[sortConfig.key];
+          }
+
+          const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
+
+          if (aValue == null && bValue == null) return 0;
+          if (aValue == null) return 1 * directionMultiplier;
+          if (bValue == null) return -1 * directionMultiplier;
+
+          if (typeof aValue === "number" && typeof bValue === "number") {
+            return (aValue - bValue) * directionMultiplier;
+          }
+
+          const aStr = String(aValue);
+          const bStr = String(bValue);
+
+          return aStr.localeCompare(bStr) * directionMultiplier;
+        });
+
+        return [parent, ...sortedChildren];
+      }
+    );
+
+    const sortedParentGroups = sortedGroups.sort(([parentA], [parentB]) => {
+      const column = flatColumns.find((col) => col.key === sortConfig.key);
+      let aValue: number | string | null | undefined;
+      let bValue: number | string | null | undefined;
+
+      if (typeof column?.sortAccessor === "function") {
+        aValue = column.sortAccessor(parentA);
+        bValue = column.sortAccessor(parentB);
+      } else if (typeof column?.sortAccessor === "string") {
+        aValue = parentA[column.sortAccessor];
+        bValue = parentB[column.sortAccessor];
+      } else {
+        aValue = parentA[sortConfig.key];
+        bValue = parentB[sortConfig.key];
+      }
+
+      const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
+
+      if (aValue == null && bValue == null) return 0;
+      if (aValue == null) return 1 * directionMultiplier;
+      if (bValue == null) return -1 * directionMultiplier;
+
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        return (aValue - bValue) * directionMultiplier;
+      }
+
+      const aStr = String(aValue);
+      const bStr = String(bValue);
+
+      return aStr.localeCompare(bStr) * directionMultiplier;
+    });
+
+    const sortedData = sortedParentGroups.flat();
+    return totalRow ? [...sortedData, totalRow] : sortedData;
+  };
+
   const displayData = useMemo(() => {
     let processedData = [...data];
 
@@ -282,37 +379,41 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     }
 
     if (sortConfig) {
-      const column = flatColumns.find((col) => col.key === sortConfig.key);
-      processedData.sort((a, b) => {
-        let aValue: number | string | null | undefined;
-        let bValue: number | string | null | undefined;
+      if (isNested) {
+        processedData = sortNestedData(processedData, sortConfig);
+      } else {
+        const column = flatColumns.find((col) => col.key === sortConfig.key);
+        processedData.sort((a, b) => {
+          let aValue: number | string | null | undefined;
+          let bValue: number | string | null | undefined;
 
-        if (typeof column?.sortAccessor === "function") {
-          aValue = column.sortAccessor(a);
-          bValue = column.sortAccessor(b);
-        } else if (typeof column?.sortAccessor === "string") {
-          aValue = a[column.sortAccessor];
-          bValue = b[column.sortAccessor];
-        } else {
-          aValue = a[sortConfig.key];
-          bValue = b[sortConfig.key];
-        }
+          if (typeof column?.sortAccessor === "function") {
+            aValue = column.sortAccessor(a);
+            bValue = column.sortAccessor(b);
+          } else if (typeof column?.sortAccessor === "string") {
+            aValue = a[column.sortAccessor];
+            bValue = b[column.sortAccessor];
+          } else {
+            aValue = a[sortConfig.key];
+            bValue = b[sortConfig.key];
+          }
 
-        const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
+          const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
 
-        if (aValue == null && bValue == null) return 0;
-        if (aValue == null) return 1 * directionMultiplier;
-        if (bValue == null) return -1 * directionMultiplier;
+          if (aValue == null && bValue == null) return 0;
+          if (aValue == null) return 1 * directionMultiplier;
+          if (bValue == null) return -1 * directionMultiplier;
 
-        if (typeof aValue === "number" && typeof bValue === "number") {
-          return (aValue - bValue) * directionMultiplier;
-        }
+          if (typeof aValue === "number" && typeof bValue === "number") {
+            return (aValue - bValue) * directionMultiplier;
+          }
 
-        const aStr = String(aValue);
-        const bStr = String(bValue);
+          const aStr = String(aValue);
+          const bStr = String(bValue);
 
-        return aStr.localeCompare(bStr) * directionMultiplier;
-      });
+          return aStr.localeCompare(bStr) * directionMultiplier;
+        });
+      }
     }
 
     if (!showPagination || rowsPerPage === -1) {
@@ -330,6 +431,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     sortConfig,
     flatColumns,
     filterValues,
+    isNested,
   ]);
 
   const getMinWidth = (column: Column): number | undefined => {

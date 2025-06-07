@@ -105,6 +105,8 @@ export interface DisplayRow
   variant?: string;
   months: { [key: string]: number };
   total: number;
+  isParent: boolean;
+  parentId?: string;
 }
 // --- End Export these types ---
 
@@ -566,6 +568,7 @@ export const Summary = ({
           ...brandGuidanceForRow,
           isBrandRow: true,
           level: 0,
+          isParent: true, // Add isParent flag for nested sorting
         };
         let brandHasVisibleChildren = false;
 
@@ -606,6 +609,8 @@ export const Summary = ({
                 ...variantGuidanceForRow,
                 isBrandRow: false,
                 level: 1,
+                parentId: brand, // Add parentId for nested sorting
+                isParent: false, // Add isParent flag for nested sorting
               });
               brandHasVisibleChildren = true;
             }
@@ -661,6 +666,7 @@ export const Summary = ({
         total_gsv_py: totalRowGsvPy,
         isBrandRow: true,
         level: 0,
+        isParent: false, // Add isParent flag for nested sorting
         ...totalRowGuidanceForRow,
       };
 
@@ -1275,6 +1281,7 @@ export const Summary = ({
                 expandedRowIds={expandedGuidanceRowIds}
                 renderExpandedRow={renderExpandedRowContent}
                 filterChangeCount={filterChangeCount}
+                isNested={true}
               />
             ) : (
               <Box
