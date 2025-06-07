@@ -268,46 +268,44 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
       }
     });
 
-    const sortedGroups = Array.from(parentGroups.entries()).map(
-      ([parentId, group]) => {
-        const parent = group[0];
-        const children = group.slice(1);
+    const sortedGroups = Array.from(parentGroups.entries()).map(([, group]) => {
+      const parent = group[0];
+      const children = group.slice(1);
 
-        const sortedChildren = [...children].sort((a, b) => {
-          const column = flatColumns.find((col) => col.key === sortConfig.key);
-          let aValue: number | string | null | undefined;
-          let bValue: number | string | null | undefined;
+      const sortedChildren = [...children].sort((a, b) => {
+        const column = flatColumns.find((col) => col.key === sortConfig.key);
+        let aValue: number | string | null | undefined;
+        let bValue: number | string | null | undefined;
 
-          if (typeof column?.sortAccessor === "function") {
-            aValue = column.sortAccessor(a);
-            bValue = column.sortAccessor(b);
-          } else if (typeof column?.sortAccessor === "string") {
-            aValue = a[column.sortAccessor];
-            bValue = b[column.sortAccessor];
-          } else {
-            aValue = a[sortConfig.key];
-            bValue = b[sortConfig.key];
-          }
+        if (typeof column?.sortAccessor === "function") {
+          aValue = column.sortAccessor(a);
+          bValue = column.sortAccessor(b);
+        } else if (typeof column?.sortAccessor === "string") {
+          aValue = a[column.sortAccessor];
+          bValue = b[column.sortAccessor];
+        } else {
+          aValue = a[sortConfig.key];
+          bValue = b[sortConfig.key];
+        }
 
-          const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
+        const directionMultiplier = sortConfig.direction === "asc" ? 1 : -1;
 
-          if (aValue == null && bValue == null) return 0;
-          if (aValue == null) return 1 * directionMultiplier;
-          if (bValue == null) return -1 * directionMultiplier;
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return 1 * directionMultiplier;
+        if (bValue == null) return -1 * directionMultiplier;
 
-          if (typeof aValue === "number" && typeof bValue === "number") {
-            return (aValue - bValue) * directionMultiplier;
-          }
+        if (typeof aValue === "number" && typeof bValue === "number") {
+          return (aValue - bValue) * directionMultiplier;
+        }
 
-          const aStr = String(aValue);
-          const bStr = String(bValue);
+        const aStr = String(aValue);
+        const bStr = String(bValue);
 
-          return aStr.localeCompare(bStr) * directionMultiplier;
-        });
+        return aStr.localeCompare(bStr) * directionMultiplier;
+      });
 
-        return [parent, ...sortedChildren];
-      }
-    );
+      return [parent, ...sortedChildren];
+    });
 
     const sortedParentGroups = sortedGroups.sort(([parentA], [parentB]) => {
       const column = flatColumns.find((col) => col.key === sortConfig.key);
