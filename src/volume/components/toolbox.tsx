@@ -6,12 +6,9 @@ import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
-import DeleteIcon from "@mui/icons-material/Delete";
 import PublishIcon from "@mui/icons-material/Publish";
 import PieChartIcon from "@mui/icons-material/PieChart";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
-import { useUser } from "../../userContext";
-import axios from "axios";
 
 export type ToolType =
   | "undo"
@@ -19,7 +16,6 @@ export type ToolType =
   | "export"
   | "viewToggle"
   | "customerToggle"
-  | "clearRedis"
   | "publish"
   | "pieChart"
   | "lineChart";
@@ -53,7 +49,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   canUndo,
   viewType = "table",
   isCustomerView = false,
-  isDepletionsView = false,
   canPublish = false,
   onPublish,
   canPieChart = false,
@@ -61,8 +56,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   canLineChart = false,
   onLineChart,
 }) => {
-  const { user } = useUser();
-
   const handleUndo = async () => {
     if (onUndo) {
       try {
@@ -102,34 +95,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({
       onLineChart();
     }
   };
-
-  const handleClearRedis = async () => {
-    try {
-      console.log("Attempting to clear Redis...");
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/redi/clear`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-      console.log("Redis clear response:", response.data);
-    } catch (error) {
-      console.error("Failed to clear Redis:", error);
-      if (axios.isAxiosError(error)) {
-        console.error("Error details:", {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        });
-      }
-    }
-  };
-
-  const showClearRedis =
-    user?.email === "james@illysium.ai" && isDepletionsView;
 
   return (
     <Box sx={{ display: "flex", gap: 1, justifyContent: "space-between" }}>
@@ -224,21 +189,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({
             }}
           >
             Guidance
-          </Button>
-        )}
-
-        {showClearRedis && (
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<DeleteIcon />}
-            onClick={handleClearRedis}
-            sx={{
-              textTransform: "none",
-              borderRadius: "8px",
-            }}
-          >
-            Clear Redis
           </Button>
         )}
       </Box>

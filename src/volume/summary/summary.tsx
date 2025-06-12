@@ -542,17 +542,18 @@ export const Summary = ({
     let totalRowGsvTy = 0;
     let totalRowGsvPy = 0;
 
-    // Filter brands based on selectedBrands - show all if none selected
-    const filteredBrandKeys = Array.from(brandLevelAggregates.keys())
-      .filter(
-        (brand) => selectedBrands.length === 0 || selectedBrands.includes(brand)
-      )
-      .sort();
+    // Get all brand keys and sort them
+    const allBrandKeys = Array.from(brandLevelAggregates.keys()).sort();
 
-    // Iterate over FILTERED brands to calculate row data and totals
-    filteredBrandKeys.forEach((brand) => {
+    // Iterate over all brands to calculate row data and totals
+    allBrandKeys.forEach((brand) => {
       const brandAgg = brandLevelAggregates.get(brand);
       if (brandAgg) {
+        // Skip this brand if filters are applied and this brand is not selected
+        if (selectedBrands.length > 0 && !selectedBrands.includes(brand)) {
+          return;
+        }
+
         const brandAggregateKey = `brand:${brandAgg.id}`;
         const brandGuidanceForRow: { [key: string]: number | undefined } = {};
         if (guidanceResults[brandAggregateKey]) {
@@ -629,14 +630,11 @@ export const Summary = ({
 
     // Add total row at the end if there are any rows
     if (totalRowTotal > 0) {
-      // Calculate guidance for total row using the new utility function
-      // Calculate total guidance based on the *filtered* brand aggregates
-      // We need to pass the filtered map to calculateTotalGuidance or recalculate totals here
       const filteredBrandAggregates = new Map<
         string,
         SummaryBrandAggregateData
       >();
-      filteredBrandKeys.forEach((key) => {
+      allBrandKeys.forEach((key: string) => {
         const agg = brandLevelAggregates.get(key);
         if (agg) filteredBrandAggregates.set(key, agg);
       });
