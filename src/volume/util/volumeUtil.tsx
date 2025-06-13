@@ -18,9 +18,17 @@ export const FORECAST_OPTIONS: ForecastOption[] = [
 export const SIDEBAR_GUIDANCE_OPTIONS = [
   {
     id: 1,
-    label: "Last Year (LY)",
+    label: "VOL 9L",
+    sublabel: "LY",
     value: "py_case_equivalent_volume",
     color: "#c7b8ea",
+  },
+  {
+    id: 2,
+    label: "VOL 9L",
+    sublabel: "LC",
+    value: "prev_published_case_equivalent_volume",
+    color: "#9bb7f0",
   },
 ];
 

@@ -12,10 +12,17 @@ import {
 } from "@mui/material";
 
 import CloseIcon from "@mui/icons-material/Close";
-import { useState, useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import { InteractiveGraph } from "./interactiveGraph";
 import { MonthlyValues } from "./monthlyValues";
 import { formatGuidanceValue } from "../volume/calculations/guidanceCalculations";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  setMonths,
+  updateMonthValue,
+  setSelectedTrendLines,
+} from "../redux/slices/sidebarSlice";
+import type { RootState } from "../redux/store";
 
 interface MonthData {
   value: number;
@@ -41,6 +48,7 @@ export interface GuidanceForecastOption {
     numerator?: string;
     denominator?: string;
   };
+  sublabel?: string;
 }
 
 interface QuantSidebarProps {
@@ -110,7 +118,7 @@ export const QuantSidebar = ({
   graphData = [],
   guidanceForecasts = [],
   availableGuidanceData = {},
-  months,
+  months: initialMonths,
   onMonthValueChange,
   gsvRate,
   pyTotalVolume,
@@ -118,28 +126,45 @@ export const QuantSidebar = ({
   onCommentaryChange,
   footerButtons = [],
 }: QuantSidebarProps) => {
-  const [selectedTrendLines, setSelectedTrendLines] = useState<string[]>([]);
+  const dispatch = useDispatch();
+  const { months, total, selectedTrendLines } = useSelector(
+    (state: RootState) => state.sidebar
+  );
 
-  // Calculate Total TY Forecast
-  const totalTYForecast = useMemo(() => {
-    return Object.values(months).reduce(
-      (acc, curr: MonthData) => acc + (curr.value || 0),
-      0
-    );
-  }, [months]);
+  // Store the original months as a stable ref for edit icon comparison
+  const originalMonthsRef = useRef<{ [key: string]: MonthData } | null>(null);
+  useEffect(() => {
+    if (open) {
+      // Only set on open, and only if not already set
+      if (!originalMonthsRef.current) {
+        originalMonthsRef.current = JSON.parse(JSON.stringify(initialMonths));
+      }
+    } else {
+      // Reset when sidebar closes
+      originalMonthsRef.current = null;
+    }
+  }, [open, initialMonths]);
+  const originalMonths = originalMonthsRef.current || {};
+
+  // Initialize Redux state when component mounts or initialMonths changes
+  useEffect(() => {
+    if (initialMonths) {
+      dispatch(setMonths(initialMonths));
+    }
+  }, [initialMonths, dispatch]);
 
   // Calculate derived yearly guidance metrics
   const yearlyGuidance = useMemo(() => {
     if (typeof pyTotalVolume !== "number" || pyTotalVolume <= 0) {
       return null;
     }
-    const delta = totalTYForecast - pyTotalVolume;
+    const delta = total - pyTotalVolume;
     const percentChange = delta / pyTotalVolume;
     return {
       delta,
       percentChange,
     };
-  }, [totalTYForecast, pyTotalVolume]);
+  }, [total, pyTotalVolume]);
 
   // Generate trend lines from guidance options
   const trendLines = useMemo(() => {
@@ -150,6 +175,9 @@ export const QuantSidebar = ({
     const tyValues = baseData.map((item) => item.value || 0);
 
     return guidanceForecasts.map((guidanceOption) => {
+      const combinedLabel = guidanceOption.sublabel
+        ? `${guidanceOption.label} (${guidanceOption.sublabel})`
+        : guidanceOption.label;
       // For direct value guidance (like py_case_equivalent_volume, gross_sales_value)
       if (!guidanceOption.calculation) {
         // Get the guidance data values from availableGuidanceData
@@ -164,7 +192,7 @@ export const QuantSidebar = ({
 
         return {
           id: guidanceOption.value,
-          label: guidanceOption.label,
+          label: combinedLabel,
           data,
           color: guidanceOption.color,
         };
@@ -240,7 +268,7 @@ export const QuantSidebar = ({
 
         return {
           id: guidanceOption.value,
-          label: guidanceOption.label,
+          label: combinedLabel,
           data,
           color: guidanceOption.color,
         };
@@ -255,28 +283,23 @@ export const QuantSidebar = ({
     );
   }, [guidanceForecasts, selectedTrendLines]);
 
-  // Combine base graph data with selected trend lines
-  const combinedGraphData = useMemo(() => {
-    if (!graphData.length) return [];
-
-    const selectedTrendLineData = trendLines
-      .filter((tl) => selectedTrendLines.includes(tl.id))
-      .map((tl) => ({
-        id: tl.id,
-        label: tl.label,
-        data: tl.data,
-        color: tl.color,
-      }));
-
-    return [...graphData, ...selectedTrendLineData];
-  }, [graphData, trendLines, selectedTrendLines]);
-
   const handleTrendLineAdd = (trendLineId: string) => {
-    setSelectedTrendLines((prev) => [...prev, trendLineId]);
+    dispatch(setSelectedTrendLines([...selectedTrendLines, trendLineId]));
   };
 
   const handleTrendLineRemove = (trendLineId: string) => {
-    setSelectedTrendLines((prev) => prev.filter((id) => id !== trendLineId));
+    const newSelectedTrendLines = selectedTrendLines.filter(
+      (id: string) => id !== trendLineId
+    );
+    dispatch(setSelectedTrendLines(newSelectedTrendLines));
+  };
+
+  const handleMonthValueChange = (month: string, value: string) => {
+    const numValue = value === "" ? 0 : Number(value);
+    if (isNaN(numValue)) return;
+
+    dispatch(updateMonthValue({ month, value: numValue }));
+    onMonthValueChange(month, value);
   };
 
   return (
@@ -284,12 +307,11 @@ export const QuantSidebar = ({
       anchor="right"
       open={open}
       onClose={onClose}
-      sx={{
-        "& .MuiDrawer-paper": {
-          width,
+      PaperProps={{
+        sx: {
+          width: width,
+          boxShadow: 3,
           backgroundColor: "background.paper",
-          display: "flex",
-          flexDirection: "column",
         },
       }}
     >
@@ -350,7 +372,7 @@ export const QuantSidebar = ({
                     TY Forecast
                   </Typography>
                   <Typography variant="body1" sx={{ fontWeight: "bold" }}>
-                    {formatGuidanceValue(totalTYForecast)}
+                    {formatGuidanceValue(total)}
                   </Typography>
                 </Box>
               </Grid>
@@ -445,12 +467,27 @@ export const QuantSidebar = ({
           {/* Graph Grid */}
           <Grid item xs={12}>
             <InteractiveGraph
-              datasets={combinedGraphData}
-              availableTrendLines={trendLines}
-              onTrendLineAdd={handleTrendLineAdd}
-              onTrendLineRemove={handleTrendLineRemove}
-              primaryLabel="Current Forecast"
+              months={months}
+              total={total}
+              holdTotal={false}
+              mode="forecast"
+              onDistributionChange={(distribution) => {
+                Object.entries(distribution).forEach(([month, value]) => {
+                  handleMonthValueChange(month, value.toString());
+                });
+              }}
+              onTotalChange={(_newTotal) => {
+                // No-op: do not redistribute values when hold total is off
+              }}
+              onMonthValueChange={(month, value) => {
+                handleMonthValueChange(month, value.toString());
+              }}
+              guidanceLines={trendLines}
+              selectedGuidanceIds={selectedTrendLines}
+              onGuidanceSelect={handleTrendLineAdd}
+              onGuidanceDeselect={handleTrendLineRemove}
               label="FORECAST TREND"
+              yAxisFormat="number"
             />
           </Grid>
 
@@ -465,11 +502,14 @@ export const QuantSidebar = ({
                     value: months[month]?.value || 0,
                     isActual: months[month]?.isActual || false,
                     isManuallyModified:
-                      months[month]?.isManuallyModified || false,
+                      Math.abs(
+                        (months[month]?.value || 0) -
+                          (originalMonths[month]?.value || 0)
+                      ) > 0.0001,
                   })),
                 })
               )}
-              onMonthValueChange={onMonthValueChange}
+              onMonthValueChange={handleMonthValueChange}
               label="MONTHLY VALUES"
               defaultExpanded={true}
               gsvRate={gsvRate}

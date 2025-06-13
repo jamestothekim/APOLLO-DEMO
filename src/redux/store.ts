@@ -10,6 +10,7 @@ import guidanceCalculationsReducer from './slices/guidanceCalculationsSlice';
 // --- Import Dashboard Reducer --- START
 import dashboardReducer from './slices/dashboardSlice';
 // --- Import Dashboard Reducer --- END
+import sidebarReducer from './slices/sidebarSlice';
 
 export const store = configureStore({
   reducer: {
@@ -24,18 +25,16 @@ export const store = configureStore({
     // --- Add Dashboard Reducer --- START
     dashboard: dashboardReducer,
     // --- Add Dashboard Reducer --- END
+    sidebar: sidebarReducer,
   },
 });
 
-// Infer the `RootState` and `AppDispatch` types from the store itself
 export type RootState = ReturnType<typeof store.getState>;
-// Inferred type: {posts: PostsState, comments: CommentsState, users: UsersState}
-export type AppDispatch = typeof store.dispatch; 
+export type AppDispatch = typeof store.dispatch;
 
 // --- Typed Hooks ---
-// Import hooks from react-redux
 import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 
 // Define and export the typed hooks
 export const useAppDispatch: () => AppDispatch = useDispatch;
-export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector; 
+export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;

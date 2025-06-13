@@ -529,7 +529,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         }
       });
 
-      // Use projected volume for the current month if available
+      // Use projected volume for the current month if available (except Control states)
       const currentMonthIndex = lastActualMonthIndex + 1;
       if (currentMonthIndex < MONTH_NAMES.length) {
         const currentMonth = MONTH_NAMES[currentMonthIndex];
@@ -537,14 +537,22 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           (item: any) => item.month === currentMonthIndex + 1
         );
 
-        if (currentMonthData?.projected_case_equivalent_volume !== undefined) {
-          updatedMonths[currentMonth] = {
-            ...updatedMonths[currentMonth],
-            value:
-              Math.round(
-                currentMonthData.projected_case_equivalent_volume * 100
-              ) / 100,
-          };
+        if (currentMonthData) {
+          // For Control states we purposely bypass projected volumes because of data-lag
+          const shouldUseProjected =
+            rowData.market_area_name !== "Control" &&
+            currentMonthData.projected_case_equivalent_volume !== undefined;
+
+          const newValue = shouldUseProjected
+            ? currentMonthData.projected_case_equivalent_volume
+            : currentMonthData.case_equivalent_volume;
+
+          if (newValue !== undefined) {
+            updatedMonths[currentMonth] = {
+              ...updatedMonths[currentMonth],
+              value: Math.round(newValue * 100) / 100,
+            };
+          }
         }
       }
 
@@ -1208,7 +1216,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                     maximumFractionDigits: 1,
                   })}
                 </Box>
-                {data.isManuallyModified && (
+                {data.isManuallyModified && !data.isActual && (
                   <Tooltip title="Manually Edited">
                     <EditIcon
                       sx={{
