@@ -1,0 +1,348 @@
+import React, { useState, useMemo } from "react";
+import {
+  Paper,
+  Box,
+  Typography,
+  IconButton,
+  Divider,
+  Autocomplete,
+  TextField,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+} from "@mui/material";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import DeleteIcon from "@mui/icons-material/Delete";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
+import EditIcon from "@mui/icons-material/Edit";
+import { SCAN_WEEKS } from "../scanPlayData/scanData";
+import { ProductEntry } from "./scanSidebarProducts";
+import {
+  generatePrice as generateRetailPrice,
+  generateQD,
+  generateRetailerMargin,
+  generateLoyalty,
+} from "../scanPlayData/scanDataFn";
+import { getProjectedScanDollars } from "../scanUtil/scanUtil";
+
+interface ScansPaneProps {
+  products: ProductEntry[];
+  setProducts: React.Dispatch<React.SetStateAction<ProductEntry[]>>;
+  selectedProductIdx: number;
+  selectedWeekIdx: number | null;
+  setSelectedWeekIdx: React.Dispatch<React.SetStateAction<number | null>>;
+  showError: (msg: string) => void;
+  readOnly?: boolean;
+}
+
+const ScanSidebarScans: React.FC<ScansPaneProps> = ({
+  products,
+  setProducts,
+  selectedProductIdx,
+  selectedWeekIdx,
+  setSelectedWeekIdx,
+  showError,
+  readOnly = false,
+}) => {
+  const [addingScan, setAddingScan] = useState(false);
+  const [newScanWeek, setNewScanWeek] = useState("");
+  const [newScanAmountStr, setNewScanAmountStr] = useState("");
+
+  const [editingScanIdx, setEditingScanIdx] = useState<number | null>(null);
+  const [editingWeek, setEditingWeek] = useState("");
+  const [editingScanAmountStr, setEditingScanAmountStr] = useState("");
+
+  const WEEK_OPTIONS = useMemo(() => {
+    const allWeeks = SCAN_WEEKS.map((w) =>
+      new Date(w.week).toLocaleDateString()
+    );
+    const usedWeeks = new Set(
+      products[selectedProductIdx]?.scans.map((s) => s.week)
+    );
+    return allWeeks.filter((w) => !usedWeeks.has(w));
+  }, [products, selectedProductIdx]);
+
+  const computeMetrics = (
+    prod: ProductEntry,
+    weekStr: string,
+    scanAmount: number
+  ) => {
+    const dateObj = new Date(weekStr);
+    const monthIdx = dateObj.getMonth();
+    const trendVal = prod.nielsenTrend?.[monthIdx]?.value ?? 0;
+    const projectedMonthly =
+      Math.round(trendVal * (1 + (prod.growthRate || 0)) * 10) / 10;
+    const projectedScan =
+      projectedMonthly * getProjectedScanDollars(prod.name, scanAmount);
+    const projectedRetail = generateRetailPrice();
+    const qd = generateQD();
+    const retailerMargin = generateRetailerMargin();
+    const loyalty = generateLoyalty();
+    return { projectedScan, projectedRetail, qd, retailerMargin, loyalty };
+  };
+
+  return (
+    <Paper
+      sx={{
+        width: "100%",
+        p: 0,
+        height: 220,
+        maxHeight: 220,
+        display: "flex",
+        flexDirection: "column",
+      }}
+      variant="outlined"
+    >
+      <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.5 }}>
+        <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+          Scans
+        </Typography>
+        <Box>
+          {!readOnly && (
+            <IconButton
+              size="small"
+              color="primary"
+              onClick={() => setAddingScan(true)}
+              disabled={
+                products.length === 0 ||
+                selectedProductIdx < 0 ||
+                !products[selectedProductIdx]
+              }
+              title={
+                products.length === 0 ||
+                selectedProductIdx < 0 ||
+                !products[selectedProductIdx]
+                  ? "Please select a product first"
+                  : "Add Scan"
+              }
+            >
+              <AddCircleOutlineIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+      </Box>
+      <Divider />
+      {addingScan && !readOnly && (
+        <Box
+          sx={{ px: 1, py: 1, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <Autocomplete
+            options={WEEK_OPTIONS}
+            value={newScanWeek || null}
+            onChange={(_e, v) => setNewScanWeek(v || "")}
+            renderInput={(p) => (
+              <TextField {...p} size="small" label="Week" fullWidth />
+            )}
+            sx={{ width: "45%" }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            sx={{ width: "45%" }}
+            value={newScanAmountStr}
+            onChange={(e) => setNewScanAmountStr(e.target.value)}
+            inputProps={{ step: 1, min: 0 }}
+          />
+          <IconButton
+            size="small"
+            color="success"
+            disabled={!newScanWeek || parseFloat(newScanAmountStr) <= 0}
+            onClick={() => {
+              const val = parseFloat(newScanAmountStr);
+              if (isNaN(val) || val <= 0) {
+                showError("Scan amount must be a valid number");
+                return;
+              }
+              setProducts((prev) =>
+                prev.map((p, idx) =>
+                  idx === selectedProductIdx
+                    ? {
+                        ...p,
+                        scans: [
+                          ...p.scans,
+                          {
+                            week: newScanWeek,
+                            scan: val,
+                            ...computeMetrics(p, newScanWeek, val),
+                          },
+                        ],
+                      }
+                    : p
+                )
+              );
+              setAddingScan(false);
+              setNewScanWeek("");
+              setNewScanAmountStr("");
+            }}
+          >
+            <CheckIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" onClick={() => setAddingScan(false)}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
+      <Divider />
+      <Table size="small" stickyHeader>
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ width: "45%" }}>Week</TableCell>
+            <TableCell sx={{ width: "45%" }}>Scan $</TableCell>
+            <TableCell sx={{ width: "10%" }} align="right" />
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {products[selectedProductIdx]?.scans.map((scan, idx) =>
+            !readOnly && editingScanIdx === idx ? (
+              <TableRow
+                key={idx}
+                hover
+                selected={idx === selectedWeekIdx}
+                sx={{ height: 44 }}
+              >
+                <TableCell sx={{ width: "45%" }}>
+                  <Autocomplete
+                    options={[...WEEK_OPTIONS, scan.week]}
+                    value={editingWeek || null}
+                    onChange={(_e, v) => setEditingWeek(v || "")}
+                    renderInput={(p) => <TextField {...p} size="small" />}
+                  />
+                </TableCell>
+                <TableCell sx={{ width: "45%" }}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    sx={{ width: "100%" }}
+                    value={editingScanAmountStr}
+                    onChange={(e) => setEditingScanAmountStr(e.target.value)}
+                  />
+                </TableCell>
+                <TableCell sx={{ width: "10%" }} align="right">
+                  {!readOnly && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 0.5,
+                        justifyContent: "flex-end",
+                      }}
+                    >
+                      <IconButton
+                        size="small"
+                        color="success"
+                        disabled={
+                          !editingWeek || parseFloat(editingScanAmountStr) <= 0
+                        }
+                        onClick={() => {
+                          const val = parseFloat(editingScanAmountStr);
+                          if (isNaN(val) || val <= 0) {
+                            showError("Scan amount must be a valid number");
+                            return;
+                          }
+                          setProducts((prev) =>
+                            prev.map((p, pi) =>
+                              pi === selectedProductIdx
+                                ? {
+                                    ...p,
+                                    scans: p.scans.map((s, si) =>
+                                      si === idx
+                                        ? {
+                                            week: editingWeek,
+                                            scan: val,
+                                            ...computeMetrics(
+                                              p,
+                                              editingWeek,
+                                              val
+                                            ),
+                                          }
+                                        : s
+                                    ),
+                                  }
+                                : p
+                            )
+                          );
+                          setEditingScanIdx(null);
+                          setEditingWeek("");
+                          setEditingScanAmountStr("");
+                        }}
+                      >
+                        <CheckIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => setEditingScanIdx(null)}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  )}
+                </TableCell>
+              </TableRow>
+            ) : (
+              <TableRow
+                key={idx}
+                hover
+                selected={idx === selectedWeekIdx}
+                onClick={() => setSelectedWeekIdx(idx)}
+                sx={{ cursor: "pointer", height: 44 }}
+              >
+                <TableCell sx={{ width: "45%" }}>{scan.week}</TableCell>
+                <TableCell sx={{ width: "45%" }}>
+                  ${scan.scan.toFixed(2)}
+                </TableCell>
+                <TableCell sx={{ width: "10%" }} align="right">
+                  {!readOnly && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 0.5,
+                        justifyContent: "flex-end",
+                      }}
+                    >
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => {
+                          setEditingScanIdx(idx);
+                          setEditingWeek(scan.week);
+                          setEditingScanAmountStr(scan.scan.toString());
+                        }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setProducts((prev) =>
+                            prev.map((p, pi) =>
+                              pi === selectedProductIdx
+                                ? {
+                                    ...p,
+                                    scans: p.scans.filter(
+                                      (_, si) => si !== idx
+                                    ),
+                                  }
+                                : p
+                            )
+                          );
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  )}
+                </TableCell>
+              </TableRow>
+            )
+          )}
+        </TableBody>
+      </Table>
+    </Paper>
+  );
+};
+
+export default ScanSidebarScans;

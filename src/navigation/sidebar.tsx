@@ -12,6 +12,7 @@ import ShowChartIcon from "@mui/icons-material/ShowChart";
 import SettingsIcon from "@mui/icons-material/Settings";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import LogoutIcon from "@mui/icons-material/Logout";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../userContext";
 
@@ -33,6 +34,11 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
       path: "/report-builder",
     },
     { text: "Volume", icon: <ShowChartIcon />, path: "/volume" },
+    {
+      text: "Scan Planner",
+      icon: <CalendarMonthIcon />,
+      path: "/scan-planner",
+    },
     { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
   ];
 

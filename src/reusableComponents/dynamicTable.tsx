@@ -56,6 +56,8 @@ export interface DynamicTableProps {
   sections?: { label: string; value: string }[];
   onSectionChange?: (value: string) => void;
   onRowClick?: (row: any) => void;
+  onRowHover?: (row: any) => void;
+  onRowHoverEnd?: () => void;
   expandedRowIds?: Set<string>;
   rowsPerPageOptions?: Array<number | { value: number; label: string }>;
   defaultRowsPerPage?: number;
@@ -110,6 +112,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   sections,
   onSectionChange,
   onRowClick,
+  onRowHover,
+  onRowHoverEnd,
   expandedRowIds,
   rowsPerPageOptions = [10, 25, 50, { value: -1, label: "All" }],
   defaultRowsPerPage = 10,
@@ -726,19 +730,24 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
               <TableBody>
                 {displayData.map((row) => {
                   const rowId = getRowId(row);
-                  const isSelected = expandedRowIds?.has(rowId);
+                  const isHighlighted = expandedRowIds?.has(rowId);
                   // const tooltipTitle = `Market: ${row.market_name || 'N/A'} - Product: ${row.variant_size_pack_desc || 'N/A'} - Logic: ${row.forecastLogic || 'N/A'}`;
 
                   const tableRow = (
                     <TableRow
-                      hover={!!onRowClick}
+                      hover
                       onClick={() => onRowClick?.(row)}
-                      selected={isSelected}
+                      onMouseEnter={() => onRowHover?.(row)}
+                      onMouseLeave={() => onRowHoverEnd?.()}
+                      selected={false}
                       sx={{
                         cursor: onRowClick ? "pointer" : "default",
-                        backgroundColor: isSelected
-                          ? theme.palette.action.selected
+                        backgroundColor: isHighlighted
+                          ? theme.palette.action.hover
                           : undefined,
+                        "& > td, & > th": {
+                          backgroundColor: "inherit",
+                        },
                         "&:last-child td, &:last-child th": { border: 0 },
                       }}
                     >
@@ -790,7 +799,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                         tableRow
                       )}
                       {renderExpandedRow &&
-                        isSelected &&
+                        isHighlighted &&
                         renderExpandedRow(row, flatColumns)}
                     </Fragment>
                   );

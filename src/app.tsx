@@ -21,6 +21,7 @@ import { ResetPassword } from "./login/resetPassword";
 import { UserProvider, useUser } from "./userContext";
 import { LoadingApollo } from "./reusableComponents/loadingApollo";
 import { ActivateAccount } from "./accountActivation/activateAccount";
+import { ScanContainer } from "./scanPlanner/scanContainer";
 
 const drawerWidth = 240;
 
@@ -80,6 +81,7 @@ const AppLayout = () => {
             <Route path="/" element={<DashboardContainer />} />
             <Route path="/report-builder" element={<ReportBuilder />} />
             <Route path="/volume" element={<VolumeView />} />
+            <Route path="/scan-planner" element={<ScanContainer />} />
             <Route path="/settings" element={<SettingsContainer />} />
           </Routes>
         </Box>

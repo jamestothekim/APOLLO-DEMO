@@ -11,6 +11,7 @@ import guidanceCalculationsReducer from './slices/guidanceCalculationsSlice';
 import dashboardReducer from './slices/dashboardSlice';
 // --- Import Dashboard Reducer --- END
 import sidebarReducer from './slices/sidebarSlice';
+import scanReducer from './slices/scanSlice';
 
 export const store = configureStore({
   reducer: {
@@ -26,6 +27,7 @@ export const store = configureStore({
     dashboard: dashboardReducer,
     // --- Add Dashboard Reducer --- END
     sidebar: sidebarReducer,
+    scan: scanReducer,
   },
 });
 
