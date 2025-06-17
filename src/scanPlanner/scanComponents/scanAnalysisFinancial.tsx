@@ -103,8 +103,10 @@ const ScanAnalysisFinancial: React.FC<Props> = ({
       }}
       variant="outlined"
     >
-      <Box sx={{ px: 1, py: 0.5 }}>
-        <Typography variant="subtitle2">Financial Metrics</Typography>
+      <Box sx={{ px: 1, py: 1 }}>
+        <Typography variant="subtitle2" textAlign="center">
+          FINANCIAL METRICS
+        </Typography>
       </Box>
       <Divider />
       <Box sx={{ flex: 1, overflow: "auto" }}>

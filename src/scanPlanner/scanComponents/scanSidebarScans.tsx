@@ -12,6 +12,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  Popover,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -50,6 +51,7 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
   const [addingScan, setAddingScan] = useState(false);
   const [newScanWeek, setNewScanWeek] = useState("");
   const [newScanAmountStr, setNewScanAmountStr] = useState("");
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const [editingScanIdx, setEditingScanIdx] = useState<number | null>(null);
   const [editingWeek, setEditingWeek] = useState("");
@@ -97,15 +99,21 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
       variant="outlined"
     >
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.5 }}>
-        <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
-          Scans
+        <Typography
+          variant="subtitle2"
+          sx={{ flexGrow: 1, textAlign: "center" }}
+        >
+          SCANS
         </Typography>
         <Box>
           {!readOnly && (
             <IconButton
               size="small"
               color="primary"
-              onClick={() => setAddingScan(true)}
+              onClick={(e) => {
+                setAddingScan(true);
+                setAnchorEl(e.currentTarget);
+              }}
               disabled={
                 products.length === 0 ||
                 selectedProductIdx < 0 ||
@@ -125,27 +133,48 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
         </Box>
       </Box>
       <Divider />
-      {addingScan && !readOnly && (
-        <Box
-          sx={{ px: 1, py: 1, display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <Autocomplete
-            options={WEEK_OPTIONS}
-            value={newScanWeek || null}
-            onChange={(_e, v) => setNewScanWeek(v || "")}
-            renderInput={(p) => (
-              <TextField {...p} size="small" label="Week" fullWidth />
-            )}
-            sx={{ width: "45%" }}
-          />
-          <TextField
-            size="small"
-            type="number"
-            sx={{ width: "45%" }}
-            value={newScanAmountStr}
-            onChange={(e) => setNewScanAmountStr(e.target.value)}
-            inputProps={{ step: 1, min: 0 }}
-          />
+      <Popover
+        open={addingScan && !readOnly}
+        anchorEl={anchorEl}
+        onClose={() => {
+          setAddingScan(false);
+          setNewScanWeek("");
+          setNewScanAmountStr("");
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        PaperProps={{
+          sx: {
+            p: 1.5,
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 2,
+            boxShadow: 4,
+            minWidth: 370,
+            maxWidth: 370,
+            ml: "-7px",
+          },
+        }}
+      >
+        <Autocomplete
+          options={WEEK_OPTIONS}
+          value={newScanWeek || null}
+          onChange={(_e, v) => setNewScanWeek(v || "")}
+          renderInput={(p) => (
+            <TextField {...p} size="small" label="Week" fullWidth />
+          )}
+          sx={{ flex: 1, mr: 1 }}
+        />
+        <TextField
+          size="small"
+          type="number"
+          sx={{ width: 120, mr: 1 }}
+          value={newScanAmountStr}
+          onChange={(e) => setNewScanAmountStr(e.target.value)}
+          inputProps={{ step: 1, min: 0 }}
+          label="Scan $"
+        />
+        <Box sx={{ display: "flex", gap: 0.5 }}>
           <IconButton
             size="small"
             color="success"
@@ -180,11 +209,18 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
           >
             <CheckIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={() => setAddingScan(false)}>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setAddingScan(false);
+              setNewScanWeek("");
+              setNewScanAmountStr("");
+            }}
+          >
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
-      )}
+      </Popover>
       <Divider />
       <Table size="small" stickyHeader>
         <TableHead>

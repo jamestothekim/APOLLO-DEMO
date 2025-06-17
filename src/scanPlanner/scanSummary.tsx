@@ -64,6 +64,7 @@ export const ScanSummary: React.FC = () => {
     {
       key: "tyBud",
       header: "Total Projected ($)",
+      subHeader: "BUD",
       align: "right",
       render: (_: any, row: any) =>
         (row.tyBud ?? 0).toLocaleString(undefined, {
@@ -87,6 +88,7 @@ export const ScanSummary: React.FC = () => {
     ].map((m) => ({
       key: m,
       header: m.toUpperCase(),
+      subHeader: "BUD",
       align: "right" as const,
       render: (_: any, row: any) =>
         (row.months?.[m] ?? 0).toLocaleString(undefined, {

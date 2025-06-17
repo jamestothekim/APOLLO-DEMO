@@ -27,14 +27,14 @@ import ScanAnalysisGraph from "./scanAnalysisGraph";
 import ScanAnalysisFinancial from "./scanAnalysisFinancial";
 import { generateNielsenTrend } from "../scanPlayData/scanDataFn";
 import { buildPlannerRows } from "../scanCalculations/scanPlannerCalculations";
-import { useAppDispatch } from "../../redux/store";
+import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { saveClusterRows } from "../../redux/slices/scanSlice";
 import { exportScanPlanToExcel } from "../scanUtil/scanUtil";
 
 interface ClusterPayload {
   market: string;
   account: string;
-  products: { name: string; scans: { week: string; scan: number }[] }[];
+  products: ProductEntry[];
 }
 
 interface ScanSidebarProps {
@@ -46,6 +46,7 @@ interface ScanSidebarProps {
   clusterId?: string;
   readOnly?: boolean;
   status?: "draft" | "review" | "approved";
+  role?: "commercial" | "finance";
 }
 
 const ScanSidebar: React.FC<ScanSidebarProps> = ({
@@ -57,6 +58,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
   clusterId,
   readOnly = false,
   status = "draft",
+  role = "commercial",
 }) => {
   const [values, setValues] = useState<{ market: string; account: string }>({
     market: initialData?.market || "",
@@ -145,6 +147,8 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
   const [confirmOpen, setConfirmOpen] = React.useState(false);
 
   const dispatch = useAppDispatch();
+  const mode = useAppSelector((s) => s.scan.mode);
+  const plannerRows = useAppSelector((s) => s.scan.plannerRows as any[]);
 
   const content = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -282,10 +286,21 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
 
   const handleAdd = () => {
     if (!isAddEnabled) return;
+    // Ensure every product has a persisted Nielsen trend before saving
+    const ensuredProducts: ProductEntry[] = products.map((p) =>
+      p.nielsenTrend ? p : { ...p, nielsenTrend: generateNielsenTrend() }
+    );
+
+    // Determine status based on mode and role
+    let nextStatus: "draft" | "review" | "approved" = "draft";
+    if (mode === "forecast") {
+      nextStatus = role === "commercial" ? "review" : "approved";
+    }
+
     const payload: ClusterPayload = {
       market: values.market,
       account: values.account,
-      products,
+      products: ensuredProducts,
     };
     onAdd(payload, clusterId);
     onClose();
@@ -294,13 +309,43 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
     setProducts([]);
 
     // compute planner rows and dispatch
-    const rows = buildPlannerRows(payload, clusterId || "cluster" + Date.now());
+    const rows = buildPlannerRows(
+      payload,
+      clusterId || "cluster" + Date.now(),
+      nextStatus
+    );
     dispatch(
       saveClusterRows({
         clusterId: (clusterId || rows[0]?.clusterId) ?? "tmp",
         rows,
       })
     );
+  };
+
+  // Approve handler (finance role)
+  const handleApprove = () => {
+    if (!clusterId) return;
+    const rows = buildPlannerRows(
+      {
+        market: values.market,
+        account: values.account,
+        products,
+      },
+      clusterId,
+      "approved"
+    );
+    dispatch(saveClusterRows({ clusterId, rows }));
+    onClose();
+  };
+
+  // Reject handler – reverts status to draft for commercial revision
+  const handleReject = () => {
+    if (!clusterId) return;
+    const updatedRows = plannerRows
+      .filter((r: any) => r.clusterId === clusterId)
+      .map((r: any) => ({ ...r, status: "draft" }));
+    dispatch(saveClusterRows({ clusterId, rows: updatedRows }));
+    onClose();
   };
 
   /* Snackbar component */
@@ -330,7 +375,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
       },
     ];
 
-  if (!readOnly && clusterId && onDeleteCluster) {
+  if (!readOnly && role !== "finance" && clusterId && onDeleteCluster) {
     footerButtons.push({
       label: "Delete",
       variant: "outlined",
@@ -339,17 +384,37 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
     });
   }
 
-  if (!readOnly) {
+  // Finance approve & reject buttons when status is review
+  if (role === "finance" && status === "review") {
+    footerButtons.push({
+      label: "Approve",
+      variant: "contained",
+      color: "primary",
+      onClick: handleApprove,
+    });
+    footerButtons.push({
+      label: "Reject",
+      variant: "contained",
+      color: "error",
+      onClick: handleReject,
+    });
+  }
+
+  if (!readOnly && role !== "finance") {
     footerButtons.push({
       label: initialData ? "Save Changes" : "Add Scan",
       variant: "contained",
       onClick: handleAdd,
       disabled: !isAddEnabled,
     });
-  } else if (status === "approved") {
+  }
+
+  // Export to Excel always available for approved clusters
+  if (status === "approved") {
     footerButtons.push({
       label: "Export to Excel",
       variant: "contained",
+      align: "left",
       onClick: () => {
         if (!initialData) return;
         const rows = buildPlannerRows(
@@ -358,7 +423,8 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
             account: initialData.account,
             products,
           },
-          clusterId || "export"
+          clusterId || "export",
+          "approved"
         );
         exportScanPlanToExcel(rows as any);
       },

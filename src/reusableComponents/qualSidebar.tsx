@@ -62,6 +62,7 @@ export interface FooterButton {
     | "info"
     | "success"
     | "warning";
+  align?: "left" | "right";
 }
 
 export interface SidebarSection {
@@ -205,22 +206,43 @@ const QualSidebar: React.FC<QualSidebarProps> = ({
             borderTop: 1,
             borderColor: "divider",
             display: "flex",
-            justifyContent: "flex-end",
-            gap: 2,
+            justifyContent: "space-between",
+            alignItems: "center",
             bgcolor: theme.palette.background.paper,
           }}
         >
-          {footerButtons.map((button, index) => (
-            <Button
-              key={index}
-              variant={button.variant}
-              onClick={button.onClick}
-              disabled={button.disabled}
-              color={button.color || "primary"}
-            >
-              {button.label}
-            </Button>
-          ))}
+          {/* Left aligned buttons */}
+          <Box sx={{ display: "flex", gap: 2 }}>
+            {footerButtons
+              .filter((b) => b.align === "left")
+              .map((button, index) => (
+                <Button
+                  key={`left-${index}`}
+                  variant={button.variant}
+                  onClick={button.onClick}
+                  disabled={button.disabled}
+                  color={button.color || "primary"}
+                >
+                  {button.label}
+                </Button>
+              ))}
+          </Box>
+          {/* Right aligned buttons */}
+          <Box sx={{ display: "flex", gap: 2 }}>
+            {footerButtons
+              .filter((b) => b.align !== "left")
+              .map((button, index) => (
+                <Button
+                  key={`right-${index}`}
+                  variant={button.variant}
+                  onClick={button.onClick}
+                  disabled={button.disabled}
+                  color={button.color || "primary"}
+                >
+                  {button.label}
+                </Button>
+              ))}
+          </Box>
         </Box>
       )}
     </Drawer>

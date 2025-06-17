@@ -12,6 +12,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  Popover,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -53,6 +54,7 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
 }) => {
   const [addingProduct, setAddingProduct] = useState(false);
   const [newProductName, setNewProductName] = useState("");
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -70,33 +72,59 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
       variant="outlined"
     >
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.5 }}>
-        <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
-          Products
+        <Typography
+          variant="subtitle2"
+          sx={{ flexGrow: 1, textAlign: "center" }}
+        >
+          PRODUCTS
         </Typography>
         {!readOnly && (
           <IconButton
             size="small"
             color="primary"
-            onClick={() => setAddingProduct(true)}
+            onClick={(e) => {
+              setAddingProduct(true);
+              setAnchorEl(e.currentTarget);
+            }}
           >
             <AddCircleOutlineIcon fontSize="small" />
           </IconButton>
         )}
       </Box>
       <Divider />
-      {addingProduct && !readOnly && (
-        <Box
-          sx={{ px: 1, py: 1, display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <Autocomplete
-            options={productNames}
-            value={newProductName || null}
-            onChange={(_e, v) => setNewProductName(v || "")}
-            renderInput={(params) => (
-              <TextField {...params} size="small" label="Product" fullWidth />
-            )}
-            fullWidth
-          />
+      <Popover
+        open={addingProduct && !readOnly}
+        anchorEl={anchorEl}
+        onClose={() => {
+          setAddingProduct(false);
+          setNewProductName("");
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        PaperProps={{
+          sx: {
+            p: 1.5,
+            display: "flex",
+            alignItems: "center",
+            borderRadius: 2,
+            boxShadow: 4,
+            minWidth: 370,
+            maxWidth: 370,
+            ml: "-334px",
+          },
+        }}
+      >
+        <Autocomplete
+          options={productNames}
+          value={newProductName || null}
+          onChange={(_e, v) => setNewProductName(v || "")}
+          renderInput={(params) => (
+            <TextField {...params} size="small" label="Product" fullWidth />
+          )}
+          fullWidth
+          sx={{ flex: 1, mr: 1 }}
+        />
+        <Box sx={{ display: "flex", gap: 0.5 }}>
           <IconButton
             size="small"
             color="success"
@@ -132,7 +160,7 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
-      )}
+      </Popover>
       <Divider />
       <Box sx={{ flexGrow: 1, overflowY: "auto", overflowX: "hidden" }}>
         <Table size="small" stickyHeader>

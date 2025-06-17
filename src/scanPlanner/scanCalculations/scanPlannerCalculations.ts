@@ -16,6 +16,11 @@ export interface PlannerRow {
   qd: number;
   retailerMargin: number;
   loyalty: number;
+  // Persisted Nielsen LY monthly sales trend for the product (12 values JAN-DEC)
+  nielsenTrend?: { month: string; value: number }[];
+  // Growth rate applied when projecting sales for this product (decimal, e.g., 0.05 for 5%)
+  growthRate?: number;
+  status?: "draft" | "review" | "approved";
   rowType?: "week"; // flag retained for backward compatibility – may be removed later
 }
 
@@ -33,11 +38,11 @@ const getBrand = (productName: string) => {
   return productName;
 };
 
-export function buildPlannerRows(cluster: {
-  market: string;
-  account: string;
-  products: ProductEntry[];
-}, clusterId: string): PlannerRow[] {
+export function buildPlannerRows(
+  cluster: { market: string; account: string; products: ProductEntry[] },
+  clusterId: string,
+  status: "draft" | "review" | "approved" = "draft"
+): PlannerRow[] {
   const rows: PlannerRow[] = [];
   cluster.products.forEach((prod, pIdx) => {
     if (!prod.scans || prod.scans.length === 0) return; // skip products with no scans
@@ -74,6 +79,9 @@ export function buildPlannerRows(cluster: {
         qd: scan.qd ?? generateQD(),
         retailerMargin: scan.retailerMargin ?? generateRetailerMargin(),
         loyalty: scan.loyalty ?? generateLoyalty(),
+        nielsenTrend: prod.nielsenTrend,
+        growthRate: prod.growthRate,
+        status,
         rowType: "week",
       });
     });

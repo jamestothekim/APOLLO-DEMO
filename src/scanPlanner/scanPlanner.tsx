@@ -31,6 +31,8 @@ import SaveIcon from "@mui/icons-material/Save";
 import PublishIcon from "@mui/icons-material/Publish";
 import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import PendingIcon from "@mui/icons-material/Pending";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import type { ProductEntry } from "./scanComponents/scanSidebarProducts";
 
 interface ScanRow {
   id: string;
@@ -54,18 +56,7 @@ interface ScanRow {
 interface ClusterPayload {
   market: string;
   account: string;
-  products: {
-    name: string;
-    scans: {
-      week: string;
-      scan: number;
-      projectedScan?: number;
-      projectedRetail?: number;
-      qd?: number;
-      retailerMargin?: number;
-      loyalty?: number;
-    }[];
-  }[];
+  products: ProductEntry[];
 }
 
 export const ScanPlanner: React.FC = () => {
@@ -73,6 +64,7 @@ export const ScanPlanner: React.FC = () => {
   const rows: ScanRow[] = useSelector(
     (state: RootState) => state.scan.plannerRows as ScanRow[]
   );
+  const mode = useSelector((s: RootState) => s.scan.mode);
   const isLocked = rows.some(
     (r) => r.status === "review" || r.status === "approved"
   );
@@ -92,6 +84,7 @@ export const ScanPlanner: React.FC = () => {
   const [sidebarStatus, setSidebarStatus] = useState<
     "draft" | "review" | "approved"
   >("draft");
+  const [role, setRole] = useState<"commercial" | "finance">("commercial");
 
   const theme = useTheme();
 
@@ -247,24 +240,15 @@ export const ScanPlanner: React.FC = () => {
       return { market: "", account: "", products: [] };
     }
     const { market, account } = clusterRows[0];
-    const productMap: Record<
-      string,
-      {
-        name: string;
-        scans: {
-          week: string;
-          scan: number;
-          projectedScan?: number;
-          projectedRetail?: number;
-          qd?: number;
-          retailerMargin?: number;
-          loyalty?: number;
-        }[];
-      }
-    > = {};
+    const productMap: Record<string, ProductEntry> = {};
     clusterRows.forEach((r) => {
       if (!productMap[r.product]) {
-        productMap[r.product] = { name: r.product, scans: [] };
+        productMap[r.product] = {
+          name: r.product,
+          nielsenTrend: (r as any).nielsenTrend,
+          growthRate: (r as any).growthRate,
+          scans: [],
+        } as ProductEntry;
       }
       productMap[r.product].scans.push({
         week: r.week,
@@ -290,7 +274,8 @@ export const ScanPlanner: React.FC = () => {
     setEditingPayload(payload);
     const rowStatus = row.status as "draft" | "review" | "approved";
     setSidebarStatus(rowStatus);
-    setSidebarReadOnly(row.status === "review" || row.status === "approved");
+    const isReadOnly = role === "finance";
+    setSidebarReadOnly(isReadOnly);
     setSidebarOpen(true);
   };
 
@@ -331,7 +316,7 @@ export const ScanPlanner: React.FC = () => {
             setSidebarOpen(true);
           }}
           sx={{ fontWeight: 500 }}
-          disabled={isLocked}
+          disabled={isLocked || role === "finance"}
         >
           Add Scan
         </Button>
@@ -419,20 +404,38 @@ export const ScanPlanner: React.FC = () => {
           <SaveIcon sx={{ mr: 1 }} />
           Save Progress
         </Button>
+        {mode !== "forecast" && (
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => {
+              setPublishComment("");
+              setPublishConfirmationText("");
+              setPublishCommentError(false);
+              setPublishConfirmationError(false);
+              setPublishDialogOpen(true);
+            }}
+            disabled={hasApproved}
+          >
+            <PublishIcon sx={{ mr: 1 }} />
+            Publish
+          </Button>
+        )}
+      </Box>
+
+      {/* Role Toggle Prototype */}
+      <Box sx={{ position: "absolute", bottom: 8, left: 16 }}>
         <Button
           variant="contained"
-          color="secondary"
-          onClick={() => {
-            setPublishComment("");
-            setPublishConfirmationText("");
-            setPublishCommentError(false);
-            setPublishConfirmationError(false);
-            setPublishDialogOpen(true);
-          }}
-          disabled={hasApproved}
+          color="primary"
+          startIcon={<SwapHorizIcon />}
+          onClick={() =>
+            setRole((r) => (r === "commercial" ? "finance" : "commercial"))
+          }
         >
-          <PublishIcon sx={{ mr: 1 }} />
-          Publish
+          {role === "commercial"
+            ? "Switch to Finance View"
+            : "Switch to Commercial View"}
         </Button>
       </Box>
 
@@ -450,6 +453,7 @@ export const ScanPlanner: React.FC = () => {
         clusterId={editingClusterId || undefined}
         readOnly={sidebarReadOnly}
         status={sidebarStatus}
+        role={role}
       />
 
       <Dialog
