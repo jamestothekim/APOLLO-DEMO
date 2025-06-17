@@ -59,6 +59,21 @@ interface ClusterPayload {
   products: ProductEntry[];
 }
 
+// Helper: determine if current user can edit a cluster given app mode and its status
+const canEditCluster = (
+  role: "commercial" | "finance",
+  mode: "budget" | "forecast",
+  status: "draft" | "review" | "approved"
+) => {
+  if (role === "finance") return false; // Finance never edits directly
+  if (mode === "budget") {
+    // Commercial can only edit draft clusters in Budget mode
+    return status === "draft";
+  }
+  // Forecast mode – commercial can always edit (draft, review, approved)
+  return true;
+};
+
 export const ScanPlanner: React.FC = () => {
   const dispatch = useDispatch();
   const rows: ScanRow[] = useSelector(
@@ -274,7 +289,7 @@ export const ScanPlanner: React.FC = () => {
     setEditingPayload(payload);
     const rowStatus = row.status as "draft" | "review" | "approved";
     setSidebarStatus(rowStatus);
-    const isReadOnly = role === "finance";
+    const isReadOnly = !canEditCluster(role, mode, rowStatus);
     setSidebarReadOnly(isReadOnly);
     setSidebarOpen(true);
   };
