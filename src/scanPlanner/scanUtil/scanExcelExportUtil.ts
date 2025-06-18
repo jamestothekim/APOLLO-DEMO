@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { ScanPlannerRow } from './types';
+import type { ScanPlannerRow } from '../../redux/slices/scanSlice';
 
 interface ExportConfig {
   selectedFields: string[];

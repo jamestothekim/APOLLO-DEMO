@@ -6,6 +6,7 @@ import {
   ListItemText,
   Toolbar,
   Box,
+  Chip,
 } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
@@ -22,11 +23,17 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+interface NavItem {
+  text: string;
+  icon: JSX.Element;
+  path: string;
+}
+
 export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
   const navigate = useNavigate();
-  const { logout } = useUser();
+  const { logout, user } = useUser();
 
-  const navigationItems = [
+  const navigationItems: (NavItem | false)[] = [
     { text: "Dashboard", icon: <DashboardIcon />, path: "/" },
     {
       text: "Report Builder",
@@ -34,13 +41,15 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
       path: "/report-builder",
     },
     { text: "Volume", icon: <ShowChartIcon />, path: "/volume" },
-    {
+    user?.user_access?.Admin && {
       text: "Scan Planner",
       icon: <CalendarMonthIcon />,
       path: "/scan-planner",
     },
     { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
   ];
+
+  const visibleItems = navigationItems.filter((i): i is NavItem => Boolean(i));
 
   const handleLogout = async () => {
     try {
@@ -71,7 +80,7 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <Toolbar />
         <List>
-          {navigationItems.map((item) => (
+          {visibleItems.map((item) => (
             <ListItem
               button
               key={item.text}
@@ -79,6 +88,14 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
+              {item.text === "Scan Planner" && (
+                <Chip
+                  label="PROTO"
+                  color="secondary"
+                  size="small"
+                  sx={{ borderRadius: 4, ml: 1, fontSize: "0.65em" }}
+                />
+              )}
             </ListItem>
           ))}
         </List>

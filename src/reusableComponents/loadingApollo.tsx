@@ -163,7 +163,7 @@ export const LoadingApollo: React.FC<LoadingApolloProps> = ({
     }
   }, [currentMessageIndex, showProgressMessages]);
 
-  const displayMessage = showProgressMessages ? "Loading Apollo" : message;
+  const displayMessage = showProgressMessages ? "Loading APOLLO" : message;
   const displaySubMessage = showProgressMessages
     ? progressMessages[currentMessageIndex]
     : subMessage;
