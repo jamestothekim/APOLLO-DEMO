@@ -663,26 +663,29 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     {
       header: "Status",
       key: "status",
+      align: "center" as const,
       render: (_: any, row: User) => {
         const status =
           row.user_access?.Status === "pending" ? "Pending" : "Active";
         return (
-          <Chip
-            label={status}
-            size="small"
-            color={status === "Active" ? "primary" : "primary"}
-            variant={status === "Active" ? "filled" : "outlined"}
-            sx={{
-              borderRadius: "16px",
-              backgroundColor:
-                status === "Active" ? "primary.main" : "transparent",
-              border: status === "Active" ? "none" : "1px solid",
-              borderColor: "primary.main",
-              color: status === "Active" ? "white" : "primary.main",
-              fontFamily: "theme.typography.fontFamily",
-              "& .MuiChip-label": { px: 1 },
-            }}
-          />
+          <Box sx={{ display: "flex", justifyContent: "center" }}>
+            <Chip
+              label={status}
+              size="small"
+              color={status === "Active" ? "primary" : "primary"}
+              variant={status === "Active" ? "filled" : "outlined"}
+              sx={{
+                borderRadius: "16px",
+                backgroundColor:
+                  status === "Active" ? "primary.main" : "transparent",
+                border: status === "Active" ? "none" : "1px solid",
+                borderColor: "primary.main",
+                color: status === "Active" ? "white" : "primary.main",
+                fontFamily: "theme.typography.fontFamily",
+                "& .MuiChip-label": { px: 1 },
+              }}
+            />
+          </Box>
         );
       },
       sortable: true,

@@ -133,7 +133,7 @@ export const NavigationAppBar = ({
                   marginTop: "-7px",
                 }}
               >
-                Alpha
+                BETA
               </Typography>
             </Box>
           </Box>
