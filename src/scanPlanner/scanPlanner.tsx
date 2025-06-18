@@ -25,6 +25,8 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
 import ScanSidebar from "./scanComponents/scanSidebar";
+import ScanToolbox from "./scanComponents/scanToolbox";
+import type { GuidanceOption } from "./scanComponents/scanGuidance";
 import { SCAN_MARKETS } from "./scanPlayData/scanData";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import SaveIcon from "@mui/icons-material/Save";
@@ -43,12 +45,15 @@ interface ScanRow {
   product: string;
   week: string;
   scanAmount: number;
-  totalScan: number;
+  totalScan?: number;
   projectedScan: number;
   projectedRetail: number;
   qd: number;
   retailerMargin: number;
   loyalty: number;
+  projectedVolume: number;
+  volumeLift: number;
+  volumeLiftPct: number;
   status: "draft" | "pending" | "approved" | "rejected" | "review";
   comments?: string;
 }
@@ -126,6 +131,31 @@ export const ScanPlanner: React.FC = () => {
     /* Row construction and saving are now handled inside ScanSidebar via saveClusterRows. */
   };
 
+  // Guidance – visible columns state
+  const MANDATORY_COL_KEYS = [
+    "market",
+    "account",
+    "product",
+    "week",
+    "scanAmount",
+    "status",
+  ];
+
+  const OPTIONAL_COL_KEYS = [
+    "projectedScan",
+    "projectedVolume",
+    "volumeLift",
+    "volumeLiftPct",
+    "projectedRetail",
+    "qd",
+    "loyalty",
+    "retailerMargin",
+  ];
+
+  const DEFAULT_COL_KEYS = [...MANDATORY_COL_KEYS, ...OPTIONAL_COL_KEYS];
+  const [visibleColKeys, setVisibleColKeys] =
+    useState<string[]>(DEFAULT_COL_KEYS);
+
   const columns: Column[] = [
     {
       key: "market",
@@ -176,6 +206,24 @@ export const ScanPlanner: React.FC = () => {
         }),
     },
     {
+      key: "projectedVolume",
+      header: "Proj. Vol.",
+      align: "right" as const,
+      render: (_: any, row: any) => (row.projectedVolume ?? 0).toLocaleString(),
+    },
+    {
+      key: "volumeLift",
+      header: "Vol. Lift",
+      align: "right" as const,
+      render: (_: any, row: any) => (row.volumeLift ?? 0).toLocaleString(),
+    },
+    {
+      key: "volumeLiftPct",
+      header: "Lift %",
+      align: "right" as const,
+      render: (_: any, row: any) => (row.volumeLiftPct ?? 0).toFixed(1) + "%",
+    },
+    {
       key: "projectedRetail",
       header: "Proj. Retail ($)",
       align: "right" as const,
@@ -223,6 +271,16 @@ export const ScanPlanner: React.FC = () => {
       },
     },
   ];
+
+  // Build guidance options from columns (exclude hidden columns like status maybe include)
+  const guidanceOptions: GuidanceOption[] = columns
+    .filter((c) => !MANDATORY_COL_KEYS.includes(c.key))
+    .map((c) => ({
+      key: c.key,
+      label: typeof c.header === "string" ? c.header : `${c.header}`,
+    }));
+
+  const filteredColumns = columns.filter((c) => visibleColKeys.includes(c.key));
 
   // Build unique option lists
   const marketOptions = SCAN_MARKETS.map((m: any) => m.name);
@@ -273,6 +331,9 @@ export const ScanPlanner: React.FC = () => {
         qd: r.qd,
         retailerMargin: r.retailerMargin,
         loyalty: r.loyalty,
+        projectedVolume: (r as any).projectedVolume,
+        volumeLift: (r as any).volumeLift,
+        volumeLiftPct: (r as any).volumeLiftPct,
       });
     });
     return {
@@ -391,11 +452,27 @@ export const ScanPlanner: React.FC = () => {
         </Box>
       )}
 
+      {/* Toolbox under filters */}
+      {!isCollapsed && (
+        <Box sx={{ mb: 1 }}>
+          <ScanToolbox
+            availableOptions={guidanceOptions}
+            selectedKeys={visibleColKeys}
+            onApply={(keys) =>
+              setVisibleColKeys([
+                ...MANDATORY_COL_KEYS,
+                ...keys.filter((k) => !MANDATORY_COL_KEYS.includes(k)),
+              ])
+            }
+          />
+        </Box>
+      )}
+
       {/* Table */}
       {!isCollapsed && (
         <DynamicTable
           data={filteredRows}
-          columns={columns}
+          columns={filteredColumns}
           onRowHover={(row: any) => setHoverClusterId(row.clusterId)}
           onRowHoverEnd={() => setHoverClusterId(null)}
           stickyHeader

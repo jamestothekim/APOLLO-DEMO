@@ -31,6 +31,9 @@ export interface ProductEntry {
     qd?: number;
     retailerMargin?: number;
     loyalty?: number;
+    projectedVolume?: number;
+    volumeLift?: number;
+    volumeLiftPct?: number;
   }[];
   growthRate?: number;
   nielsenTrend?: { month: string; value: number }[];

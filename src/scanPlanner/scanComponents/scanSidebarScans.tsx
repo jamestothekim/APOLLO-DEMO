@@ -79,11 +79,28 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
       Math.round(trendVal * (1 + (prod.growthRate || 0)) * 10) / 10;
     const projectedScan =
       projectedMonthly * getProjectedScanDollars(prod.name, scanAmount);
+    // --- Volume projections ---
+    // Approximate baseline weekly volume as monthly trend divided by 4
+    const baselineWeekly = trendVal / 4;
+    // Simple elasticity: assume lift proportionate to scan amount up to max 10%
+    const liftPct = Math.min(0.1, scanAmount / 10);
+    const projectedVolume = Math.round(baselineWeekly * (1 + liftPct));
+    const volumeLift = Math.round(projectedVolume - baselineWeekly);
+    const volumeLiftPct = Math.round(liftPct * 1000) / 10; // one decimal
     const projectedRetail = generateRetailPrice();
     const qd = generateQD();
     const retailerMargin = generateRetailerMargin();
     const loyalty = generateLoyalty();
-    return { projectedScan, projectedRetail, qd, retailerMargin, loyalty };
+    return {
+      projectedScan,
+      projectedRetail,
+      qd,
+      retailerMargin,
+      loyalty,
+      projectedVolume,
+      volumeLift,
+      volumeLiftPct,
+    };
   };
 
   // Helper to sort scans by week ascending

@@ -16,6 +16,10 @@ export interface PlannerRow {
   qd: number;
   retailerMargin: number;
   loyalty: number;
+  // --- Volume metrics ---
+  projectedVolume: number;
+  volumeLift: number;
+  volumeLiftPct: number;
   // Persisted Nielsen LY monthly sales trend for the product (12 values JAN-DEC)
   nielsenTrend?: { month: string; value: number }[];
   // Growth rate applied when projecting sales for this product (decimal, e.g., 0.05 for 5%)
@@ -64,6 +68,22 @@ export function buildPlannerRows(
               return projectedMonthly * scan.scan;
             })();
 
+      // --- Volume Metrics Calculation ---
+      const baselineWeekly = trendVal / 4; // approx 4 weeks per month
+      const liftPct = Math.min(0.1, scan.scan / 10); // linear elasticity capped at 10%
+      const projectedVolume =
+        scan.projectedVolume !== undefined
+          ? scan.projectedVolume
+          : Math.round(baselineWeekly * (1 + liftPct));
+      const volumeLift =
+        scan.volumeLift !== undefined
+          ? scan.volumeLift
+          : Math.round(projectedVolume - baselineWeekly);
+      const volumeLiftPct =
+        scan.volumeLiftPct !== undefined
+          ? scan.volumeLiftPct
+          : Math.round((volumeLift / (baselineWeekly || 1)) * 1000) / 10; // one decimal
+
       rows.push({
         id: `${clusterId}|${pIdx}|${sIdx}`,
         clusterId,
@@ -83,6 +103,9 @@ export function buildPlannerRows(
         growthRate: prod.growthRate,
         status,
         rowType: "week",
+        projectedVolume,
+        volumeLift,
+        volumeLiftPct,
       });
     });
   });
