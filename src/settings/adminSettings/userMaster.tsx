@@ -54,6 +54,7 @@ interface MarketOption {
   id: number;
   market: string;
   market_code: string;
+  market_id?: string;
 }
 
 // Type for the hierarchical market data
@@ -137,6 +138,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         id: market.id,
         market: market.market_name,
         market_code: market.market_code,
+        market_id: market.market_id,
       }));
       setAllMarkets(formattedMarkets);
     } catch (error) {
@@ -426,21 +428,33 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     }
   };
 
-  const getMarketNamesForDivision = (division: string): string[] => {
+  // Extract an array of market_ids for the given division, supporting
+  // both legacy (string array) and new (array of objects) formats
+  const getMarketIdsForDivision = (division: string): string[] => {
     if (!marketsByDivision || !division || !marketsByDivision[division]) {
       return [];
     }
-    let marketNames: string[] = [];
+
+    const ids: string[] = [];
     const teams = marketsByDivision[division];
-    Object.values(teams).forEach((marketsInTeam) => {
-      marketNames = marketNames.concat(marketsInTeam);
+    Object.values(teams).forEach((marketsInTeam: any) => {
+      if (!Array.isArray(marketsInTeam)) return;
+
+      marketsInTeam.forEach((item: any) => {
+        if (typeof item === "string") {
+          // legacy string of market_id or market_name (fallback)
+          ids.push(item);
+        } else if (item && typeof item === "object" && item.market_id) {
+          ids.push(item.market_id);
+        }
+      });
     });
-    return marketNames;
+    return ids;
   };
 
   const getMarketOptionsForDivision = (division: string): MarketOption[] => {
-    const marketNames = getMarketNamesForDivision(division);
-    return allMarkets.filter((market) => marketNames.includes(market.market));
+    const ids = getMarketIdsForDivision(division);
+    return allMarkets.filter((m) => m.market_id && ids.includes(m.market_id));
   };
 
   const availableMarketsForSelection = useMemo((): MarketOption[] => {

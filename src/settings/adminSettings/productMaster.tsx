@@ -64,7 +64,7 @@ interface SKUData {
   tags?: ProductTag[];
 }
 
-export const SKUMaster = () => {
+export const ProductMaster = () => {
   const [data, setData] = useState<SKUData[]>([]);
   const [selectedSKU, setSelectedSKU] = useState<SKUData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -463,7 +463,7 @@ export const SKUMaster = () => {
           <QualSidebar
             open={sidebarOpen}
             onClose={handleClose}
-            title="SKU Details"
+            title="Product Details"
             width="500px"
           >
             <Box sx={{ p: 3 }}>
