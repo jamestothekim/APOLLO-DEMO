@@ -215,6 +215,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         Division: initialDivision,
         Markets: initialMarkets,
         Admin: initialAdmin,
+        Status: user.user_access?.Status, // preserve status
       },
     };
     setEditingUser(userToEdit);
@@ -499,6 +500,26 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     );
   }, [editingUser?.user_access?.Markets, allMarkets]);
 
+  // ---- Resend Invite handler ----
+  const handleResendInvite = async (userId: number) => {
+    try {
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/users/resend-invite/${userId}`
+      );
+      showSnackbar("Invitation email resent successfully", "success");
+      // Close sidebar after successful resend
+      setSidebarOpen(false);
+      setEditingUser(null);
+    } catch (error) {
+      console.error("Error resending invite:", error);
+      let errorMessage = "Failed to resend invite";
+      if (axios.isAxiosError(error) && error.response?.data?.error) {
+        errorMessage += `: ${error.response.data.error}`;
+      }
+      showSnackbar(errorMessage, "error");
+    }
+  };
+
   const columns: Column[] = [
     {
       header: "Full Name",
@@ -741,6 +762,19 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         width="500px"
         title={editingUser?.id === 0 ? "Add New User" : "Edit User"}
         footerButtons={[
+          // Show Resend Invite button on the far left if the user is pending
+          ...(editingUser?.id !== 0 &&
+          editingUser?.user_access?.Status === "pending"
+            ? [
+                {
+                  label: "Resend Invite",
+                  onClick: () => handleResendInvite(editingUser.id),
+                  variant: "outlined" as const,
+                  align: "left" as const,
+                },
+              ]
+            : []),
+          // Existing Delete button
           ...(editingUser?.id !== 0
             ? [
                 {
@@ -751,6 +785,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                 },
               ]
             : []),
+          // Cancel & Save buttons
           {
             label: "Cancel",
             onClick: handleCloseSidebar,
@@ -982,6 +1017,57 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
               <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>
                 Permissions
               </Typography>
+
+              {/* Account Status Row (only for existing users) */}
+              {editingUser?.id !== 0 && (
+                <>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 1,
+                    }}
+                  >
+                    <Typography>Account Status</Typography>
+                    {(() => {
+                      const statusText =
+                        editingUser?.user_access?.Status === "pending"
+                          ? "Pending"
+                          : "Active";
+                      const isActive = statusText === "Active";
+                      return (
+                        <Chip
+                          label={statusText}
+                          size="small"
+                          color="primary"
+                          variant={isActive ? "filled" : "outlined"}
+                          sx={{
+                            borderRadius: "16px",
+                            backgroundColor: isActive
+                              ? "primary.main"
+                              : "transparent",
+                            border: isActive ? "none" : "1px solid",
+                            borderColor: "primary.main",
+                            color: isActive ? "white" : "primary.main",
+                            fontFamily: "theme.typography.fontFamily",
+                            "& .MuiChip-label": { px: 1 },
+                          }}
+                        />
+                      );
+                    })()}
+                  </Box>
+
+                  {/* Pending notice */}
+                  {editingUser?.user_access?.Status === "pending" && (
+                    <Alert severity="warning" variant="outlined" sx={{ mb: 2 }}>
+                      This user is still pending activation
+                    </Alert>
+                  )}
+                </>
+              )}
+
+              {/* Admin Access Row */}
               <Box
                 sx={{
                   display: "flex",

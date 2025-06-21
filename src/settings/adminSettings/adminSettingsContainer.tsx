@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Box, Tabs, Tab, Typography, Paper, Button, Chip } from "@mui/material";
 import UserMaster, { UserMasterHandle } from "./userMaster";
 import { MarketMaster } from "./marketMaster";
-import { Atlas } from "./atlas";
+import { Atlas } from "./atlas/atlas";
 import { RateMaster } from "./rateMaster";
 import { AuditLogs } from "./auditLogs";
 import { PersonAdd as PersonAddIcon } from "@mui/icons-material";

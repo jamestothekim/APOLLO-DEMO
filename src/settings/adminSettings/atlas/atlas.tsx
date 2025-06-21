@@ -14,12 +14,13 @@ import {
   Checkbox,
 } from "@mui/material";
 import axios from "axios";
-import { DynamicTable, Column } from "../../reusableComponents/dynamicTable";
-import QualSidebar from "../../reusableComponents/qualSidebar";
+import { DynamicTable, Column } from "../../../reusableComponents/dynamicTable";
+import QualSidebar from "../../../reusableComponents/qualSidebar";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
-import { LoadingProgress } from "../../reusableComponents/loadingProgress";
+import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
 import SyncIcon from "@mui/icons-material/Sync";
+import { StagingDialog, StagingConfig } from "./stagingDialog";
 
 interface ProductTag {
   tag_id: number;
@@ -77,6 +78,11 @@ export const Atlas = () => {
     vistaar: false,
   });
 
+  // Staging dialog state
+  const [stagingDialogOpen, setStagingDialogOpen] = useState(false);
+  // We currently only need the setter to receive updated configs
+  const [, setStagingConfigs] = useState<Record<string, StagingConfig>>({});
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -127,6 +133,11 @@ export const Atlas = () => {
       nabca: false,
       vistaar: false,
     });
+  };
+
+  const handleStagingSave = (configs: Record<string, StagingConfig>) => {
+    setStagingConfigs(configs);
+    setStagingDialogOpen(false);
   };
 
   const columns: Column[] = [
@@ -368,6 +379,21 @@ export const Atlas = () => {
             Sync Systems
           </Button>
 
+          {/* Configure Staging Floating Button */}
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => setStagingDialogOpen(true)}
+            sx={{
+              position: "absolute",
+              bottom: 16,
+              left: 160,
+              borderRadius: 1,
+            }}
+          >
+            Configure Staging
+          </Button>
+
           {/* Sync Dialog */}
           <Dialog
             open={syncDialogOpen}
@@ -425,6 +451,14 @@ export const Atlas = () => {
               </Button>
             </DialogActions>
           </Dialog>
+
+          {/* Staging Dialog */}
+          <StagingDialog
+            open={stagingDialogOpen}
+            onClose={() => setStagingDialogOpen(false)}
+            thirdPartyKeys={Object.keys(syncTargets)}
+            onSave={handleStagingSave}
+          />
         </>
       )}
     </Box>
