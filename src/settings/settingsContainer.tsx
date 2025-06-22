@@ -1,6 +1,6 @@
 import { Box, Divider } from "@mui/material";
 import { UserSettingsContainer } from "./userSettings/userSettingsContainer";
-import { AdminSettingsContainer } from "./adminSettings/adminSettingsContainer";
+import { AdminSettingsContainer } from "./adminSettings/adminSettingsContainer.tsx";
 import { useUser } from "../userContext";
 
 export const SettingsContainer = () => {

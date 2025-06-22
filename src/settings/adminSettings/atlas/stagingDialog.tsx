@@ -6,7 +6,6 @@ import {
   DialogActions,
   Button,
   Stack,
-  TextField,
   Typography,
   TableContainer,
   Table,
@@ -17,6 +16,13 @@ import {
   Paper,
 } from "@mui/material";
 import axios from "axios";
+import Alert from "@mui/material/Alert";
+import SyncIcon from "@mui/icons-material/Sync";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import { DataFormat } from "./dataFormat";
+import { SFTPConfig } from "./sftpConfig";
+import { DataFrequency, FrequencyConfig } from "./dataFrequency";
 
 export interface StagingConfig {
   delimiter: string;
@@ -29,6 +35,8 @@ export interface StagingConfig {
     port?: string;
     path?: string;
   };
+  frequency?: FrequencyConfig;
+  primaryKey: string[];
 }
 
 export interface StagingDialogProps {
@@ -37,16 +45,6 @@ export interface StagingDialogProps {
   thirdPartyKeys: string[]; // ["jenda", "nielsen", ...]
   onSave: (configs: Record<string, StagingConfig>) => void;
 }
-
-// A minimal list of fields available to map – should be replaced with dynamic data in future
-const AVAILABLE_FIELDS: string[] = [
-  "sku_id",
-  "sku_description",
-  "brand",
-  "variant",
-  "size_pack_desc",
-  "activation_date",
-];
 
 // Utility to create default config per third-party system
 const createDefaultConfig = (): StagingConfig => ({
@@ -60,6 +58,8 @@ const createDefaultConfig = (): StagingConfig => ({
     port: "22",
     path: "/",
   },
+  frequency: undefined,
+  primaryKey: [],
 });
 
 export const StagingDialog = ({
@@ -76,6 +76,42 @@ export const StagingDialog = ({
     });
     return initial;
   });
+
+  // View state for navigating between list and detail editors
+  const [view, setView] = useState<"main" | "format" | "sftp" | "freq">("main");
+  const [activeSystem, setActiveSystem] = useState<string | null>(null);
+
+  // Convenience helpers to evaluate completion status
+  const isFormattingComplete = (cfg: StagingConfig) =>
+    !!cfg.delimiter && cfg.selectedFields.length > 0;
+  const isSFTPComplete = (cfg: StagingConfig) =>
+    !!cfg.sftp.host && !!cfg.sftp.username && !!cfg.sftp.password;
+  const isFrequencySet = (cfg: StagingConfig) => !!cfg.frequency;
+  const isPrimaryKeySet = (cfg: StagingConfig) => cfg.primaryKey.length > 0;
+
+  const getStatus = (cfg: StagingConfig) => {
+    if (
+      isFormattingComplete(cfg) &&
+      isSFTPComplete(cfg) &&
+      isPrimaryKeySet(cfg)
+    )
+      return "Ready";
+    if (!isFormattingComplete(cfg) && !isSFTPComplete(cfg))
+      return "Missing Format & Credentials";
+    if (!isFormattingComplete(cfg)) return "Missing Format";
+    return "Missing Credentials";
+  };
+
+  const overallReady = thirdPartyKeys.every((k) => {
+    const cfg = configs[k];
+    return isFormattingComplete(cfg) && isSFTPComplete(cfg);
+  });
+
+  const handleSyncSystem = (system: string) => {
+    if (getStatus(configs[system]) !== "Ready") return;
+    console.log(`Initiate sync for ${system}`);
+    // TODO integrate with backend
+  };
 
   // --- Handlers ---
   const handleConfigFieldChange = (
@@ -139,151 +175,185 @@ export const StagingDialog = ({
           downloaded for validation.
         </Typography>
 
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>System</TableCell>
-                <TableCell>Delimiter</TableCell>
-                <TableCell>Fields (comma-separated)</TableCell>
-                <TableCell>Headers (comma-separated)</TableCell>
-                <TableCell>SFTP Host</TableCell>
-                <TableCell>SFTP User</TableCell>
-                <TableCell>SFTP Password</TableCell>
-                <TableCell>Export</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {thirdPartyKeys.map((system) => {
-                const cfg = configs[system];
-                return (
-                  <TableRow key={system} hover>
-                    <TableCell sx={{ textTransform: "capitalize" }}>
-                      {system}
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        value={cfg.delimiter}
-                        onChange={(e) =>
-                          handleConfigFieldChange(
-                            system,
-                            ["delimiter"],
-                            e.target.value
-                          )
-                        }
-                        size="small"
-                        inputProps={{ maxLength: 2, style: { width: 40 } }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        placeholder="field1,field2"
-                        value={cfg.selectedFields.join(",")}
-                        onChange={(e) =>
-                          handleConfigFieldChange(
-                            system,
-                            ["selectedFields"],
-                            e.target.value.split(",").map((s) => s.trim())
-                          )
-                        }
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        placeholder="header1,header2"
-                        value={cfg.selectedFields
-                          .map((f) => cfg.headerMap[f] || "")
-                          .join(",")}
-                        onChange={(e) => {
-                          const headers = e.target.value
-                            .split(",")
-                            .map((h) => h.trim());
-                          setConfigs((prev) => {
-                            const updated = { ...prev };
-                            const hMap: Record<string, string> = {};
-                            headers.forEach((h, idx) => {
-                              const field = cfg.selectedFields[idx];
-                              if (field) hMap[field] = h;
-                            });
-                            updated[system] = { ...cfg, headerMap: hMap };
-                            return updated;
-                          });
-                        }}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        value={cfg.sftp.host}
-                        onChange={(e) =>
-                          handleConfigFieldChange(
-                            system,
-                            ["sftp", "host"],
-                            e.target.value
-                          )
-                        }
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        value={cfg.sftp.username}
-                        onChange={(e) =>
-                          handleConfigFieldChange(
-                            system,
-                            ["sftp", "username"],
-                            e.target.value
-                          )
-                        }
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        type="password"
-                        value={cfg.sftp.password}
-                        onChange={(e) =>
-                          handleConfigFieldChange(
-                            system,
-                            ["sftp", "password"],
-                            e.target.value
-                          )
-                        }
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => handleExportExample(system)}
-                      >
-                        Example
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Alert severity={overallReady ? "success" : "warning"} sx={{ mb: 2 }}>
+          {overallReady
+            ? "All systems ready for sync."
+            : "Some systems are missing configuration. Please complete before syncing."}
+        </Alert>
 
-        {/* Field reference list */}
-        <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
-          {AVAILABLE_FIELDS.map((f) => (
-            <Typography key={f} variant="caption" sx={{ mr: 1 }}>
-              {f}
-            </Typography>
-          ))}
-        </Stack>
+        {view === "main" ? (
+          <>
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>System</TableCell>
+                    <TableCell>Format</TableCell>
+                    <TableCell>SFTP Credentials</TableCell>
+                    <TableCell>Frequency</TableCell>
+                    <TableCell>Actions</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {thirdPartyKeys.map((system) => {
+                    const cfg = configs[system];
+                    const statusText = getStatus(cfg);
+                    const ready = statusText === "Ready";
+                    return (
+                      <TableRow key={system} hover>
+                        <TableCell sx={{ textTransform: "capitalize" }}>
+                          {system}
+                        </TableCell>
+                        {/* Format column */}
+                        <TableCell>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            {isFormattingComplete(cfg) ? (
+                              <CheckCircleIcon
+                                color="primary"
+                                fontSize="small"
+                              />
+                            ) : (
+                              <CancelIcon color="error" fontSize="small" />
+                            )}
+                            <Button
+                              variant="text"
+                              size="small"
+                              onClick={() => {
+                                setActiveSystem(system);
+                                setView("format");
+                              }}
+                            >
+                              Configure
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                        {/* Credentials column */}
+                        <TableCell>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            {isSFTPComplete(cfg) ? (
+                              <CheckCircleIcon
+                                color="primary"
+                                fontSize="small"
+                              />
+                            ) : (
+                              <CancelIcon color="error" fontSize="small" />
+                            )}
+                            <Button
+                              variant="text"
+                              size="small"
+                              onClick={() => {
+                                setActiveSystem(system);
+                                setView("sftp");
+                              }}
+                            >
+                              Configure
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                        {/* Frequency column */}
+                        <TableCell>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            {isFrequencySet(cfg) ? (
+                              <CheckCircleIcon
+                                color="primary"
+                                fontSize="small"
+                              />
+                            ) : (
+                              <CancelIcon color="error" fontSize="small" />
+                            )}
+                            <Button
+                              variant="text"
+                              size="small"
+                              onClick={() => {
+                                setActiveSystem(system);
+                                setView("freq");
+                              }}
+                            >
+                              Configure
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                        {/* Actions column */}
+                        <TableCell>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handleExportExample(system)}
+                            >
+                              Export Sample
+                            </Button>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              startIcon={<SyncIcon fontSize="small" />}
+                              onClick={() => handleSyncSystem(system)}
+                              disabled={!ready}
+                            >
+                              Sync
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{statusText}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        ) : view === "format" && activeSystem ? (
+          <DataFormat
+            system={activeSystem}
+            config={configs[activeSystem]}
+            onBack={() => setView("main")}
+            onSave={() => setView("main")}
+            onFieldChange={(fieldPath, value) =>
+              handleConfigFieldChange(activeSystem!, fieldPath, value)
+            }
+          />
+        ) : view === "sftp" && activeSystem ? (
+          <SFTPConfig
+            system={activeSystem}
+            config={configs[activeSystem]}
+            onBack={() => setView("main")}
+            onFieldChange={(fieldPath, value) =>
+              handleConfigFieldChange(activeSystem!, fieldPath, value)
+            }
+          />
+        ) : view === "freq" && activeSystem ? (
+          <DataFrequency
+            system={activeSystem}
+            config={configs[activeSystem]}
+            onBack={() => setView("main")}
+            onSave={() => setView("main")}
+            onFieldChange={(fieldPath, value) =>
+              handleConfigFieldChange(activeSystem!, fieldPath, value)
+            }
+          />
+        ) : null}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleSave}>
-          Save
-        </Button>
-      </DialogActions>
+      {view === "main" && (
+        <DialogActions>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="contained" onClick={handleSave}>
+            Save
+          </Button>
+        </DialogActions>
+      )}
     </Dialog>
   );
 };

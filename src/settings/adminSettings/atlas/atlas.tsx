@@ -88,7 +88,7 @@ export const Atlas = () => {
       try {
         setLoading(true);
         const [skuResponse] = await Promise.all([
-          axios.get(`${import.meta.env.VITE_API_URL}/admin/sku-master-atlas`),
+          axios.get(`${import.meta.env.VITE_API_URL}/atlas/sku-master`),
         ]);
 
         setData(skuResponse.data);
@@ -291,6 +291,7 @@ export const Atlas = () => {
                             : prev
                         )
                       }
+                      size="small"
                     />
                     <TextField
                       fullWidth
@@ -306,6 +307,7 @@ export const Atlas = () => {
                             : prev
                         )
                       }
+                      size="small"
                     />
                     <TextField
                       fullWidth
@@ -321,6 +323,7 @@ export const Atlas = () => {
                             : prev
                         )
                       }
+                      size="small"
                     />
                     <TextField
                       fullWidth
@@ -336,6 +339,7 @@ export const Atlas = () => {
                             : prev
                         )
                       }
+                      size="small"
                     />
                   </Stack>
                 </Box>
