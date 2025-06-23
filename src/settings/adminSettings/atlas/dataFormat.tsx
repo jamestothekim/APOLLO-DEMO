@@ -105,11 +105,13 @@ export const DataFormat = ({
 
       {/* delimiter */}
       <TextField
-        label="Delimiter"
+        label="Delimiter (optional)"
         value={delimiter}
         onChange={(e) => setDelimiter(e.target.value)}
         size="small"
         inputProps={{ maxLength: 2, style: { width: 60 } }}
+        placeholder="," // default comma
+        helperText="Leave blank for comma (,)"
       />
 
       {/* tabs */}

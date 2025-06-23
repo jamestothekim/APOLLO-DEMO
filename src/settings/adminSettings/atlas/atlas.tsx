@@ -18,8 +18,8 @@ import { DynamicTable, Column } from "../../../reusableComponents/dynamicTable";
 import QualSidebar from "../../../reusableComponents/qualSidebar";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import HubIcon from "@mui/icons-material/Hub";
 import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
-import SyncIcon from "@mui/icons-material/Sync";
 import { StagingDialog, StagingConfig } from "./stagingDialog";
 
 interface ProductTag {
@@ -367,12 +367,12 @@ export const Atlas = () => {
             </Box>
           </QualSidebar>
 
-          {/* Sync Floating Button */}
+          {/* ATLAS Launchpad Floating Button */}
           <Button
             variant="contained"
             color="primary"
-            startIcon={<SyncIcon />}
-            onClick={() => setSyncDialogOpen(true)}
+            startIcon={<HubIcon fontSize="small" />}
+            onClick={() => setStagingDialogOpen(true)}
             sx={{
               position: "absolute",
               bottom: 16,
@@ -380,22 +380,7 @@ export const Atlas = () => {
               borderRadius: 1,
             }}
           >
-            Sync Systems
-          </Button>
-
-          {/* Configure Staging Floating Button */}
-          <Button
-            variant="outlined"
-            color="secondary"
-            onClick={() => setStagingDialogOpen(true)}
-            sx={{
-              position: "absolute",
-              bottom: 16,
-              left: 160,
-              borderRadius: 1,
-            }}
-          >
-            Configure Staging
+            Sync Master
           </Button>
 
           {/* Sync Dialog */}

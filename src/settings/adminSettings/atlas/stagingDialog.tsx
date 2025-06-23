@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -14,8 +14,12 @@ import {
   TableCell,
   TableBody,
   Paper,
+  Select,
+  MenuItem,
+  Box,
 } from "@mui/material";
 import axios from "axios";
+import { generateSampleFile } from "./exportLogic";
 import Alert from "@mui/material/Alert";
 import SyncIcon from "@mui/icons-material/Sync";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -34,9 +38,16 @@ export interface StagingConfig {
     password: string;
     port?: string;
     path?: string;
+    publicKey?: string;
+    allowedIp?: string;
+  };
+  api?: {
+    baseUrl: string;
+    token: string;
   };
   frequency?: FrequencyConfig;
   primaryKey: string[];
+  connectionMethod: string;
 }
 
 export interface StagingDialogProps {
@@ -48,7 +59,7 @@ export interface StagingDialogProps {
 
 // Utility to create default config per third-party system
 const createDefaultConfig = (): StagingConfig => ({
-  delimiter: "|",
+  delimiter: ",",
   selectedFields: [],
   headerMap: {},
   sftp: {
@@ -57,7 +68,11 @@ const createDefaultConfig = (): StagingConfig => ({
     password: "",
     port: "22",
     path: "/",
+    publicKey: "",
+    allowedIp: "",
   },
+  api: { baseUrl: "", token: "" },
+  connectionMethod: "outbound_sftp",
   frequency: undefined,
   primaryKey: [],
 });
@@ -81,11 +96,34 @@ export const StagingDialog = ({
   const [view, setView] = useState<"main" | "format" | "sftp" | "freq">("main");
   const [activeSystem, setActiveSystem] = useState<string | null>(null);
 
+  // master data cache
+  const [marketRows, setMarketRows] = useState<any[]>([]);
+  const [skuRows, setSkuRows] = useState<any[]>([]);
+
+  // load master data once
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        const [marketsRes, skusRes] = await Promise.all([
+          axios.get(`${import.meta.env.VITE_API_URL}/admin/get-states`),
+          axios.get(`${import.meta.env.VITE_API_URL}/atlas/sku-master`),
+        ]);
+        setMarketRows(marketsRes.data || []);
+        setSkuRows(skusRes.data || []);
+      } catch (err) {
+        console.error("Error fetching master data", err);
+      }
+    };
+    fetchMasterData();
+  }, []);
+
   // Convenience helpers to evaluate completion status
   const isFormattingComplete = (cfg: StagingConfig) =>
-    !!cfg.delimiter && cfg.selectedFields.length > 0;
+    cfg.selectedFields.length > 0;
   const isSFTPComplete = (cfg: StagingConfig) =>
-    !!cfg.sftp.host && !!cfg.sftp.username && !!cfg.sftp.password;
+    cfg.connectionMethod === "outbound_sftp"
+      ? !!cfg.sftp.host && !!cfg.sftp.username && !!cfg.sftp.password
+      : true;
   const isFrequencySet = (cfg: StagingConfig) => !!cfg.frequency;
   const isPrimaryKeySet = (cfg: StagingConfig) => cfg.primaryKey.length > 0;
 
@@ -111,6 +149,10 @@ export const StagingDialog = ({
     if (getStatus(configs[system]) !== "Ready") return;
     console.log(`Initiate sync for ${system}`);
     // TODO integrate with backend
+  };
+
+  const handleSyncAll = () => {
+    thirdPartyKeys.forEach((system) => handleSyncSystem(system));
   };
 
   // --- Handlers ---
@@ -144,15 +186,11 @@ export const StagingDialog = ({
     }
   };
 
-  const handleExportExample = async (system: string) => {
+  const handleExportExample = (system: string) => {
     try {
-      const res = await axios.post(
-        `${import.meta.env.VITE_API_URL}/admin/staging-config/export-example`,
-        { system, config: configs[system] },
-        { responseType: "blob" }
-      );
-      // Create blob url to download
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const sample = generateSampleFile(configs[system], marketRows, skuRows);
+      const blob = new Blob([sample], { type: "text/plain;charset=utf-8" });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute("download", `${system}_example.txt`);
@@ -160,7 +198,7 @@ export const StagingDialog = ({
       link.click();
       link.parentNode?.removeChild(link);
     } catch (err) {
-      console.error("Error exporting example", err);
+      console.error("Error generating sample export", err);
     }
   };
 
@@ -188,8 +226,9 @@ export const StagingDialog = ({
                 <TableHead>
                   <TableRow>
                     <TableCell>System</TableCell>
+                    <TableCell>Connection Method</TableCell>
                     <TableCell>Format</TableCell>
-                    <TableCell>SFTP Credentials</TableCell>
+                    <TableCell>Credentials</TableCell>
                     <TableCell>Frequency</TableCell>
                     <TableCell>Actions</TableCell>
                     <TableCell>Status</TableCell>
@@ -204,6 +243,29 @@ export const StagingDialog = ({
                       <TableRow key={system} hover>
                         <TableCell sx={{ textTransform: "capitalize" }}>
                           {system}
+                        </TableCell>
+                        {/* Connection Method column */}
+                        <TableCell>
+                          <Select
+                            size="small"
+                            value={cfg.connectionMethod}
+                            onChange={(e) =>
+                              handleConfigFieldChange(
+                                system,
+                                ["connectionMethod"],
+                                e.target.value
+                              )
+                            }
+                            sx={{ width: 160 }}
+                          >
+                            <MenuItem value="outbound_sftp">
+                              Outbound SFTP
+                            </MenuItem>
+                            <MenuItem value="inbound_sftp">
+                              Inbound SFTP
+                            </MenuItem>
+                            <MenuItem value="api">API</MenuItem>
+                          </Select>
                         </TableCell>
                         {/* Format column */}
                         <TableCell>
@@ -293,6 +355,7 @@ export const StagingDialog = ({
                               variant="outlined"
                               size="small"
                               onClick={() => handleExportExample(system)}
+                              disabled={!isFormattingComplete(cfg)}
                             >
                               Export Sample
                             </Button>
@@ -347,11 +410,24 @@ export const StagingDialog = ({
         ) : null}
       </DialogContent>
       {view === "main" && (
-        <DialogActions>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave}>
-            Save
+        <DialogActions sx={{ justifyContent: "space-between" }}>
+          {/* Left corner */}
+          <Button
+            variant="contained"
+            startIcon={<SyncIcon />}
+            onClick={handleSyncAll}
+            disabled={!overallReady}
+          >
+            Sync All
           </Button>
+
+          {/* Right side actions */}
+          <Box>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="contained" onClick={handleSave} sx={{ ml: 1 }}>
+              Save
+            </Button>
+          </Box>
         </DialogActions>
       )}
     </Dialog>
