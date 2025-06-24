@@ -18,9 +18,9 @@ import { DynamicTable, Column } from "../../../reusableComponents/dynamicTable";
 import QualSidebar from "../../../reusableComponents/qualSidebar";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
-import HubIcon from "@mui/icons-material/Hub";
+import ShareIcon from "@mui/icons-material/Share";
 import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
-import { StagingDialog, StagingConfig } from "./stagingDialog";
+import { StagingDialog, syncMaster } from "./syncMaster";
 
 interface ProductTag {
   tag_id: number;
@@ -81,7 +81,7 @@ export const Atlas = () => {
   // Staging dialog state
   const [stagingDialogOpen, setStagingDialogOpen] = useState(false);
   // We currently only need the setter to receive updated configs
-  const [, setStagingConfigs] = useState<Record<string, StagingConfig>>({});
+  const [, setsyncMasters] = useState<Record<string, syncMaster>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -135,8 +135,8 @@ export const Atlas = () => {
     });
   };
 
-  const handleStagingSave = (configs: Record<string, StagingConfig>) => {
-    setStagingConfigs(configs);
+  const handleStagingSave = (configs: Record<string, syncMaster>) => {
+    setsyncMasters(configs);
     setStagingDialogOpen(false);
   };
 
@@ -371,7 +371,7 @@ export const Atlas = () => {
           <Button
             variant="contained"
             color="primary"
-            startIcon={<HubIcon fontSize="small" />}
+            startIcon={<ShareIcon fontSize="small" />}
             onClick={() => setStagingDialogOpen(true)}
             sx={{
               position: "absolute",
@@ -380,7 +380,7 @@ export const Atlas = () => {
               borderRadius: 1,
             }}
           >
-            Sync Master
+            ATLAS Sync Master
           </Button>
 
           {/* Sync Dialog */}

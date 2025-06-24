@@ -17,18 +17,23 @@ import {
   Select,
   MenuItem,
   Box,
+  Tooltip,
 } from "@mui/material";
 import axios from "axios";
-import { generateSampleFile } from "./exportLogic";
+import { generateSampleFile } from "./syncMasterUtil/exportLogic";
 import Alert from "@mui/material/Alert";
 import SyncIcon from "@mui/icons-material/Sync";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
-import { DataFormat } from "./dataFormat";
-import { SFTPConfig } from "./sftpConfig";
-import { DataFrequency, FrequencyConfig } from "./dataFrequency";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import { DataFormat } from "./syncMasterComponents/dataFormat";
+import { SFTPConfig } from "./syncMasterComponents/sftpConfig";
+import {
+  DataFrequency,
+  FrequencyConfig,
+} from "./syncMasterComponents/dataFrequency";
 
-export interface StagingConfig {
+export interface syncMaster {
   delimiter: string;
   selectedFields: string[];
   headerMap: Record<string, string>; // field -> header name
@@ -54,11 +59,11 @@ export interface StagingDialogProps {
   open: boolean;
   onClose: () => void;
   thirdPartyKeys: string[]; // ["jenda", "nielsen", ...]
-  onSave: (configs: Record<string, StagingConfig>) => void;
+  onSave: (configs: Record<string, syncMaster>) => void;
 }
 
 // Utility to create default config per third-party system
-const createDefaultConfig = (): StagingConfig => ({
+const createDefaultConfig = (): syncMaster => ({
   delimiter: ",",
   selectedFields: [],
   headerMap: {},
@@ -84,8 +89,8 @@ export const StagingDialog = ({
   onSave,
 }: StagingDialogProps) => {
   // Local state holding configs per system key
-  const [configs, setConfigs] = useState<Record<string, StagingConfig>>(() => {
-    const initial: Record<string, StagingConfig> = {};
+  const [configs, setConfigs] = useState<Record<string, syncMaster>>(() => {
+    const initial: Record<string, syncMaster> = {};
     thirdPartyKeys.forEach((key) => {
       initial[key] = createDefaultConfig();
     });
@@ -117,17 +122,65 @@ export const StagingDialog = ({
     fetchMasterData();
   }, []);
 
-  // Convenience helpers to evaluate completion status
-  const isFormattingComplete = (cfg: StagingConfig) =>
-    cfg.selectedFields.length > 0;
-  const isSFTPComplete = (cfg: StagingConfig) =>
-    cfg.connectionMethod === "outbound_sftp"
-      ? !!cfg.sftp.host && !!cfg.sftp.username && !!cfg.sftp.password
-      : true;
-  const isFrequencySet = (cfg: StagingConfig) => !!cfg.frequency;
-  const isPrimaryKeySet = (cfg: StagingConfig) => cfg.primaryKey.length > 0;
+  // load existing configs from backend when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    const fetchExistingConfigs = async () => {
+      try {
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_URL}/atlas/sync-configs`
+        );
+        const rows: any[] = res.data || [];
+        setConfigs((prev) => {
+          const updated = { ...prev };
+          rows.forEach((row) => {
+            const def = createDefaultConfig();
+            const freq =
+              row.frequency && Object.keys(row.frequency).length
+                ? row.frequency
+                : undefined;
+            const merged: syncMaster = {
+              ...def,
+              ...(row.data_format || {}),
+              frequency: freq,
+            } as syncMaster;
+            if (row.credentials) {
+              if (row.credentials.sftp) merged.sftp = row.credentials.sftp;
+              if (row.credentials.api) merged.api = row.credentials.api;
+            }
+            if (row.connection_method)
+              merged.connectionMethod = row.connection_method;
+            updated[row.system_key] = merged;
+          });
+          return updated;
+        });
+      } catch (err) {
+        console.error("Error fetching existing sync configs", err);
+      }
+    };
+    fetchExistingConfigs();
+  }, [open]);
 
-  const getStatus = (cfg: StagingConfig) => {
+  // Convenience helpers to evaluate completion status
+  const isFormattingComplete = (cfg: syncMaster) =>
+    cfg.selectedFields.length > 0;
+  const isSFTPComplete = (cfg: syncMaster) => {
+    if (cfg.connectionMethod === "outbound_sftp") {
+      return !!cfg.sftp.host && !!cfg.sftp.username && !!cfg.sftp.password;
+    }
+    if (cfg.connectionMethod === "inbound_sftp") {
+      const hasPk =
+        typeof cfg.sftp.publicKey === "string" &&
+        cfg.sftp.publicKey.trim().length > 0;
+      return !!cfg.sftp.host && !!cfg.sftp.username && hasPk;
+    }
+    return true;
+  };
+  const isFrequencySet = (cfg: syncMaster) =>
+    !!cfg.frequency && Object.keys(cfg.frequency as any).length > 0;
+  const isPrimaryKeySet = (cfg: syncMaster) => cfg.primaryKey.length > 0;
+
+  const getStatus = (cfg: syncMaster) => {
     if (
       isFormattingComplete(cfg) &&
       isSFTPComplete(cfg) &&
@@ -176,8 +229,8 @@ export const StagingDialog = ({
 
   const handleSave = async () => {
     try {
-      // TODO: credentials should be encrypted on backend
-      await axios.post(`${import.meta.env.VITE_API_URL}/admin/staging-config`, {
+      // Save all configs to backend
+      await axios.post(`${import.meta.env.VITE_API_URL}/atlas/sync-configs`, {
         configs,
       });
       onSave(configs);
@@ -204,20 +257,27 @@ export const StagingDialog = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>Third-Party Staging Configuration</DialogTitle>
+      <DialogTitle>ATLAS Sync Master</DialogTitle>
       <DialogContent dividers>
-        <Typography variant="body2" sx={{ mb: 2 }}>
-          Configure the file format and SFTP credentials for each system. Fields
-          selected will be exported in the order specified. Header names are
-          optional; leave blank to use the field name. Example extracts can be
-          downloaded for validation.
-        </Typography>
+        {view === "main" && (
+          <>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Configure the file format and SFTP credentials for each system.
+              Fields selected will be exported in the order specified. Header
+              names are optional; leave blank to use the field name. Example
+              extracts can be downloaded for validation.
+            </Typography>
 
-        <Alert severity={overallReady ? "success" : "warning"} sx={{ mb: 2 }}>
-          {overallReady
-            ? "All systems ready for sync."
-            : "Some systems are missing configuration. Please complete before syncing."}
-        </Alert>
+            <Alert
+              severity={overallReady ? "success" : "warning"}
+              sx={{ mb: 2 }}
+            >
+              {overallReady
+                ? "All systems ready for sync."
+                : "Some systems are missing configuration. Please complete before syncing."}
+            </Alert>
+          </>
+        )}
 
         {view === "main" ? (
           <>
@@ -227,11 +287,11 @@ export const StagingDialog = ({
                   <TableRow>
                     <TableCell>System</TableCell>
                     <TableCell>Connection Method</TableCell>
-                    <TableCell>Format</TableCell>
-                    <TableCell>Credentials</TableCell>
-                    <TableCell>Frequency</TableCell>
-                    <TableCell>Actions</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell align="center">Format</TableCell>
+                    <TableCell align="center">Credentials</TableCell>
+                    <TableCell align="center">Frequency</TableCell>
+                    <TableCell align="center">Actions</TableCell>
+                    <TableCell align="center">Status</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -264,15 +324,15 @@ export const StagingDialog = ({
                             <MenuItem value="inbound_sftp">
                               Inbound SFTP
                             </MenuItem>
-                            <MenuItem value="api">API</MenuItem>
                           </Select>
                         </TableCell>
                         {/* Format column */}
-                        <TableCell>
+                        <TableCell align="center">
                           <Stack
                             direction="row"
                             spacing={1}
                             alignItems="center"
+                            justifyContent="center"
                           >
                             {isFormattingComplete(cfg) ? (
                               <CheckCircleIcon
@@ -280,7 +340,7 @@ export const StagingDialog = ({
                                 fontSize="small"
                               />
                             ) : (
-                              <CancelIcon color="error" fontSize="small" />
+                              <CancelIcon color="secondary" fontSize="small" />
                             )}
                             <Button
                               variant="text"
@@ -295,11 +355,12 @@ export const StagingDialog = ({
                           </Stack>
                         </TableCell>
                         {/* Credentials column */}
-                        <TableCell>
+                        <TableCell align="center">
                           <Stack
                             direction="row"
                             spacing={1}
                             alignItems="center"
+                            justifyContent="center"
                           >
                             {isSFTPComplete(cfg) ? (
                               <CheckCircleIcon
@@ -307,7 +368,7 @@ export const StagingDialog = ({
                                 fontSize="small"
                               />
                             ) : (
-                              <CancelIcon color="error" fontSize="small" />
+                              <CancelIcon color="secondary" fontSize="small" />
                             )}
                             <Button
                               variant="text"
@@ -322,11 +383,12 @@ export const StagingDialog = ({
                           </Stack>
                         </TableCell>
                         {/* Frequency column */}
-                        <TableCell>
+                        <TableCell align="center">
                           <Stack
                             direction="row"
                             spacing={1}
                             alignItems="center"
+                            justifyContent="center"
                           >
                             {isFrequencySet(cfg) ? (
                               <CheckCircleIcon
@@ -334,7 +396,7 @@ export const StagingDialog = ({
                                 fontSize="small"
                               />
                             ) : (
-                              <CancelIcon color="error" fontSize="small" />
+                              <CancelIcon color="secondary" fontSize="small" />
                             )}
                             <Button
                               variant="text"
@@ -349,15 +411,22 @@ export const StagingDialog = ({
                           </Stack>
                         </TableCell>
                         {/* Actions column */}
-                        <TableCell>
-                          <Stack direction="row" spacing={1}>
+                        <TableCell align="center">
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            justifyContent="center"
+                            alignItems="center"
+                          >
                             <Button
                               variant="outlined"
                               size="small"
+                              startIcon={<FileDownloadIcon fontSize="small" />}
                               onClick={() => handleExportExample(system)}
                               disabled={!isFormattingComplete(cfg)}
+                              sx={{ minWidth: 90 }}
                             >
-                              Export Sample
+                              Export
                             </Button>
                             <Button
                               variant="contained"
@@ -365,12 +434,27 @@ export const StagingDialog = ({
                               startIcon={<SyncIcon fontSize="small" />}
                               onClick={() => handleSyncSystem(system)}
                               disabled={!ready}
+                              sx={{ minWidth: 90 }}
                             >
                               Sync
                             </Button>
                           </Stack>
                         </TableCell>
-                        <TableCell>{statusText}</TableCell>
+                        <TableCell align="center">
+                          <Tooltip
+                            title={ready ? "Ready for Sync" : statusText}
+                            arrow
+                          >
+                            {ready ? (
+                              <CheckCircleIcon
+                                color="primary"
+                                fontSize="small"
+                              />
+                            ) : (
+                              <CancelIcon color="secondary" fontSize="small" />
+                            )}
+                          </Tooltip>
+                        </TableCell>
                       </TableRow>
                     );
                   })}

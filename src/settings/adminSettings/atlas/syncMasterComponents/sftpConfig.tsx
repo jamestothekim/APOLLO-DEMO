@@ -1,9 +1,9 @@
-import { Stack, Button, Typography, TextField } from "@mui/material";
-import { StagingConfig } from "./stagingDialog";
+import { Stack, Button, Typography, TextField, Box } from "@mui/material";
+import { syncMaster } from "../syncMaster";
 
 interface SFTPConfigProps {
   system: string;
-  config: StagingConfig;
+  config: syncMaster;
   onBack: () => void;
   onFieldChange: (fieldPath: string[], value: any) => void;
 }
@@ -53,11 +53,28 @@ export const SFTPConfig = ({
         </>
       ) : config.connectionMethod === "inbound_sftp" ? (
         <>
-          <Typography variant="body2">
-            An inbound SFTP connection will be provisioned for the partner to
-            push files into our AWS Transfer Family endpoint. Provide the
-            following details to create the user.
-          </Typography>
+          <TextField
+            label="Host"
+            value={config.sftp.host}
+            onChange={(e) => onFieldChange(["sftp", "host"], e.target.value)}
+          />
+          <TextField
+            label="Username"
+            value={config.sftp.username}
+            onChange={(e) =>
+              onFieldChange(["sftp", "username"], e.target.value)
+            }
+          />
+          <TextField
+            label="Port"
+            value={config.sftp.port}
+            onChange={(e) => onFieldChange(["sftp", "port"], e.target.value)}
+          />
+          <TextField
+            label="Path"
+            value={config.sftp.path}
+            onChange={(e) => onFieldChange(["sftp", "path"], e.target.value)}
+          />
           <TextField
             label="SSH Public Key"
             multiline
@@ -96,12 +113,27 @@ export const SFTPConfig = ({
         </>
       )}
 
-      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+      {/* Sticky footer */}
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 1,
+          px: 2,
+          py: 1,
+          borderTop: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          mb: 0,
+        }}
+      >
         <Button onClick={onBack}>Back</Button>
         <Button variant="contained" onClick={onBack}>
           Save
         </Button>
-      </Stack>
+      </Box>
     </Stack>
   );
 };

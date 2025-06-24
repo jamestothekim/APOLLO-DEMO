@@ -1,6 +1,13 @@
-import { Stack, Button, Typography, TextField, MenuItem } from "@mui/material";
+import {
+  Stack,
+  Button,
+  Typography,
+  TextField,
+  MenuItem,
+  Box,
+} from "@mui/material";
 import dayjs from "dayjs";
-import { StagingConfig } from "./stagingDialog";
+import { syncMaster } from "../syncMaster";
 
 export interface FrequencyConfig {
   startDate: string; // YYYY-MM-DD
@@ -10,7 +17,7 @@ export interface FrequencyConfig {
 
 interface DataFrequencyProps {
   system: string;
-  config: StagingConfig;
+  config: syncMaster;
   onBack: () => void;
   onSave: () => void;
   onFieldChange: (fieldPath: string[], value: any) => void;
@@ -36,7 +43,7 @@ export const DataFrequency = ({
   return (
     <Stack spacing={1.5} sx={{ mt: 1 }}>
       <Typography variant="h6">Feed Frequency – {system}</Typography>
-      <Stack direction="row" spacing={1}>
+      <Stack direction="row" spacing={1} alignItems="center">
         <TextField
           label="Start Date"
           type="date"
@@ -55,31 +62,46 @@ export const DataFrequency = ({
           InputLabelProps={{ shrink: true }}
           sx={{ flex: 1 }}
         />
+        <TextField
+          select
+          label="Cadence"
+          value={freq.cadence}
+          onChange={(e) => handleChange("cadence", e.target.value)}
+          size="small"
+          sx={{ width: 200 }}
+        >
+          {[
+            { label: "Daily", value: "Daily" },
+            { label: "Weekly", value: "Weekly" },
+            { label: "Monthly", value: "Monthly" },
+          ].map((opt) => (
+            <MenuItem key={opt.value} value={opt.value}>
+              {opt.label}
+            </MenuItem>
+          ))}
+        </TextField>
       </Stack>
-      <TextField
-        select
-        label="Cadence"
-        value={freq.cadence}
-        onChange={(e) => handleChange("cadence", e.target.value)}
-        size="small"
-        sx={{ width: 200 }}
+      {/* Sticky footer */}
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 1,
+          px: 2,
+          py: 1,
+          borderTop: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          mb: 0,
+        }}
       >
-        {[
-          { label: "Daily", value: "Daily" },
-          { label: "Weekly", value: "Weekly" },
-          { label: "Monthly", value: "Monthly" },
-        ].map((opt) => (
-          <MenuItem key={opt.value} value={opt.value}>
-            {opt.label}
-          </MenuItem>
-        ))}
-      </TextField>
-      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
         <Button onClick={onBack}>Back</Button>
         <Button variant="contained" onClick={onSave}>
           Save
         </Button>
-      </Stack>
+      </Box>
     </Stack>
   );
 };

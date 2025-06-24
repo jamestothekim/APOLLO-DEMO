@@ -3,7 +3,7 @@ Utility for generating a sample extract using in-memory data that was
 previously fetched by StagingDialog. No extra API calls are performed.
 */
 
-import { StagingConfig } from "./stagingDialog";
+import { syncMaster } from "../syncMaster";
 
 export interface MarketRow {
   [key: string]: any;
@@ -18,7 +18,7 @@ export interface SkuRow {
  * for every valid combination of Market ⇢ (Customer?) ⇢ (SKU?).
  */
 export function generateSampleFile(
-  config: StagingConfig,
+  config: syncMaster,
   marketRows: MarketRow[],
   skuRows: SkuRow[]
 ): string {

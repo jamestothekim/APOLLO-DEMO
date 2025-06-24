@@ -14,9 +14,10 @@ import {
   TableCell,
   TableBody,
   Paper,
+  Box,
 } from "@mui/material";
 import axios from "axios";
-import { StagingConfig } from "./stagingDialog";
+import { syncMaster } from "../syncMaster";
 
 interface FieldMeta {
   name: string;
@@ -24,7 +25,7 @@ interface FieldMeta {
 
 interface DataFormatProps {
   system: string;
-  config: StagingConfig;
+  config: syncMaster;
   onBack: () => void; // cancel
   onSave: () => void; // save & close
   onFieldChange: (fieldPath: string[], value: any) => void;
@@ -76,19 +77,29 @@ export const DataFormat = ({
   const currentFields = tab === "markets" ? marketFields : skuFields;
 
   const toggleSelected = (field: string) => {
-    setSelected((prev) =>
-      prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]
-    );
+    setSelected((prev) => {
+      const included = prev.includes(field);
+      if (included) {
+        // removing field – clean up header map
+        setHeaderMap((m) => {
+          const { [field]: _omit, ...rest } = m;
+          return rest;
+        });
+        return prev.filter((f) => f !== field);
+      }
+      // adding field – default header to field name if not already set
+      setHeaderMap((m) => (m[field] ? m : { ...m, [field]: field }));
+      return [...prev, field];
+    });
   };
 
   const updateHeader = (field: string, value: string) => {
     setHeaderMap((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Only allow a single field to be selected as the primary key
   const togglePK = (field: string) => {
-    setPrimaryKey((prev) =>
-      prev.includes(field) ? prev.filter((f) => f !== field) : [...prev, field]
-    );
+    setPrimaryKey((prev) => (prev[0] === field ? [] : [field]));
   };
 
   const handleSave = () => {
@@ -102,17 +113,6 @@ export const DataFormat = ({
   return (
     <Stack spacing={2} sx={{ mt: 1 }}>
       <Typography variant="h6">Format Data – {system}</Typography>
-
-      {/* delimiter */}
-      <TextField
-        label="Delimiter (optional)"
-        value={delimiter}
-        onChange={(e) => setDelimiter(e.target.value)}
-        size="small"
-        inputProps={{ maxLength: 2, style: { width: 60 } }}
-        placeholder="," // default comma
-        helperText="Leave blank for comma (,)"
-      />
 
       {/* tabs */}
       <Tabs
@@ -150,7 +150,7 @@ export const DataFormat = ({
                   <TableCell>{name}</TableCell>
                   <TableCell>
                     <TextField
-                      value={headerMap[name] || ""}
+                      value={headerMap[name] ?? (included ? name : "")}
                       onChange={(e) => updateHeader(name, e.target.value)}
                       size="small"
                       disabled={!included}
@@ -171,12 +171,46 @@ export const DataFormat = ({
         </Table>
       </TableContainer>
 
-      {/* Summary */}
-      <Typography variant="body2">
-        Primary Key: {primaryKey.length ? primaryKey.join(" + ") : "— none —"}
-      </Typography>
+      {/* Summary with delimiter control */}
+      <Stack
+        direction="row"
+        spacing={2}
+        alignItems="center"
+        justifyContent="space-between"
+      >
+        <Typography variant="body2">
+          Primary Key: {primaryKey.length ? primaryKey.join(" + ") : "— none —"}
+        </Typography>
+        <TextField
+          label="Delimiter"
+          value={delimiter}
+          onChange={(e) => setDelimiter(e.target.value)}
+          size="small"
+          inputProps={{
+            maxLength: 2,
+            style: { width: 40, textAlign: "center" },
+          }}
+          placeholder="," // default comma
+          sx={{ width: 120 }}
+        />
+      </Stack>
 
-      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+      {/* Sticky footer buttons */}
+      <Box
+        sx={{
+          position: "sticky",
+          bottom: 0,
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 1,
+          px: 0,
+          py: 1,
+          borderTop: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          mb: 0,
+        }}
+      >
         <Button onClick={onBack}>Back</Button>
         <Button
           variant="contained"
@@ -185,7 +219,7 @@ export const DataFormat = ({
         >
           Save
         </Button>
-      </Stack>
+      </Box>
     </Stack>
   );
 };
