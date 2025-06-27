@@ -69,7 +69,7 @@ export const AdminSettingsContainer = () => {
                   <Box sx={{ display: "flex", alignItems: "center" }}>
                     Atlas
                     <Chip
-                      label="BETA"
+                      label="PROTO"
                       color="secondary"
                       size="small"
                       sx={{ borderRadius: 4, ml: 1, fontSize: "0.65em" }}

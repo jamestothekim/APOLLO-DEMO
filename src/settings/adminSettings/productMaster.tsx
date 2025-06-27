@@ -410,7 +410,7 @@ export const ProductMaster = () => {
           {hasActiveHyperionSKUs(row.variant_size_pack_desc) ? (
             <CheckCircleIcon color="primary" />
           ) : (
-            <CancelIcon color="error" />
+            <CancelIcon color="secondary" />
           )}
         </Box>
       ),
@@ -434,7 +434,7 @@ export const ProductMaster = () => {
           {hasActiveVIPSKUs(row.variant_size_pack_desc) ? (
             <CheckCircleIcon color="primary" />
           ) : (
-            <CancelIcon color="error" />
+            <CancelIcon color="secondary" />
           )}
         </Box>
       ),

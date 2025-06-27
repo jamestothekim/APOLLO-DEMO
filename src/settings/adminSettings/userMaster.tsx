@@ -67,12 +67,346 @@ interface MarketsByDivision {
 // Constants for Roles
 const EXECUTIVE_ROLE = "Executive";
 const FINANCE_ROLE = "Finance";
+const OPERATIONS_ROLE = "Operations";
 const MARKET_MANAGER_ROLE = "Market Manager";
 const CORPORATE_DIVISION_LABEL = "Corporate";
 const WGS_ALL_LABEL = "WGS - All";
 
-// Hardcoded Roles as per user request
-const FIXED_ROLES = [EXECUTIVE_ROLE, FINANCE_ROLE, MARKET_MANAGER_ROLE];
+// Centralized role configuration
+interface RoleConfig {
+  allowedDivisions:
+    | "corporate-only"
+    | "corporate-plus-others"
+    | "non-corporate-only";
+  defaultDivision: string | null;
+  marketAccess: "all" | "division-based" | "none";
+  isDivisionEditable: boolean;
+  isMarketEditable: boolean;
+}
+
+const ROLE_CONFIGS: Record<string, RoleConfig> = {
+  [EXECUTIVE_ROLE]: {
+    allowedDivisions: "corporate-only",
+    defaultDivision: CORPORATE_DIVISION_LABEL,
+    marketAccess: "all",
+    isDivisionEditable: false,
+    isMarketEditable: false,
+  },
+  [OPERATIONS_ROLE]: {
+    allowedDivisions: "corporate-only",
+    defaultDivision: CORPORATE_DIVISION_LABEL,
+    marketAccess: "all",
+    isDivisionEditable: false,
+    isMarketEditable: false,
+  },
+  [FINANCE_ROLE]: {
+    allowedDivisions: "corporate-plus-others",
+    defaultDivision: CORPORATE_DIVISION_LABEL,
+    marketAccess: "division-based",
+    isDivisionEditable: true,
+    isMarketEditable: true,
+  },
+  [MARKET_MANAGER_ROLE]: {
+    allowedDivisions: "non-corporate-only",
+    defaultDivision: null,
+    marketAccess: "division-based",
+    isDivisionEditable: true,
+    isMarketEditable: true,
+  },
+};
+
+// Helper functions for role-based logic
+const getRoleConfig = (role: string): RoleConfig | null => {
+  return ROLE_CONFIGS[role] || null;
+};
+
+const getAvailableDivisionsForRole = (
+  role: string,
+  allDivisions: string[]
+): string[] => {
+  const config = getRoleConfig(role);
+  if (!config) return allDivisions;
+
+  switch (config.allowedDivisions) {
+    case "corporate-only":
+      return [CORPORATE_DIVISION_LABEL];
+    case "corporate-plus-others": {
+      const divisions = [...allDivisions];
+      if (!divisions.includes(CORPORATE_DIVISION_LABEL)) {
+        divisions.unshift(CORPORATE_DIVISION_LABEL);
+      }
+      return divisions;
+    }
+    case "non-corporate-only":
+      return allDivisions.filter((d) => d !== CORPORATE_DIVISION_LABEL);
+    default:
+      return allDivisions;
+  }
+};
+
+const getAvailableMarketsForRole = (
+  role: string,
+  division: string | undefined,
+  allMarkets: MarketOption[],
+  marketsByDivision: MarketsByDivision | null,
+  getMarketOptionsForDivision: (division: string) => MarketOption[]
+): MarketOption[] => {
+  const config = getRoleConfig(role);
+  if (!config || !allMarkets.length) return [];
+
+  switch (config.marketAccess) {
+    case "all":
+      return allMarkets;
+    case "division-based": {
+      if (role === FINANCE_ROLE) {
+        if (
+          division &&
+          division !== CORPORATE_DIVISION_LABEL &&
+          marketsByDivision
+        ) {
+          return getMarketOptionsForDivision(division);
+        } else if (division === CORPORATE_DIVISION_LABEL) {
+          return allMarkets;
+        }
+      } else if (
+        role === MARKET_MANAGER_ROLE &&
+        division &&
+        marketsByDivision
+      ) {
+        return getMarketOptionsForDivision(division);
+      }
+      return [];
+    }
+    case "none":
+    default:
+      return [];
+  }
+};
+
+// Centralized function to normalize user access data based on role
+const normalizeUserAccess = (
+  role: string,
+  currentDivision: string,
+  currentMarkets: MarketOption[],
+  allMarkets: MarketOption[],
+  marketsByDivision: MarketsByDivision | null,
+  getMarketOptionsForDivision: (division: string) => MarketOption[]
+): { division: string; markets: MarketOption[] } => {
+  const config = getRoleConfig(role);
+  if (!config) return { division: currentDivision, markets: currentMarkets };
+
+  let normalizedDivision = currentDivision;
+  let normalizedMarkets = currentMarkets;
+
+  // Set default division if role requires it
+  if (config.defaultDivision && !normalizedDivision) {
+    normalizedDivision = config.defaultDivision;
+  }
+
+  // Handle market access based on role configuration
+  switch (config.marketAccess) {
+    case "all":
+      normalizedMarkets = allMarkets;
+      if (config.defaultDivision) {
+        normalizedDivision = config.defaultDivision;
+      }
+      break;
+    case "division-based":
+      if (role === FINANCE_ROLE || role === OPERATIONS_ROLE) {
+        if (normalizedDivision === CORPORATE_DIVISION_LABEL) {
+          normalizedMarkets = allMarkets;
+        } else if (normalizedDivision && marketsByDivision) {
+          // For Finance with specific division, preserve existing valid markets
+          // Only reset to all division markets if no markets are currently selected
+          const divisionMarkets =
+            getMarketOptionsForDivision(normalizedDivision);
+          const validMarketCodes = new Set(
+            divisionMarkets.map((m) => m.market_code)
+          );
+
+          // Filter current markets to only include valid ones for this division
+          const validCurrentMarkets = normalizedMarkets.filter((market) =>
+            validMarketCodes.has(market.market_code)
+          );
+
+          // If no valid markets remain, default to all division markets
+          // Otherwise, keep the user's existing valid selections
+          normalizedMarkets =
+            validCurrentMarkets.length > 0
+              ? validCurrentMarkets
+              : divisionMarkets;
+        } else {
+          // Default to Corporate for Finance/Operations if no valid division
+          normalizedDivision = CORPORATE_DIVISION_LABEL;
+          normalizedMarkets = allMarkets;
+        }
+      } else if (role === MARKET_MANAGER_ROLE) {
+        if (normalizedDivision && marketsByDivision) {
+          const divisionMarkets =
+            getMarketOptionsForDivision(normalizedDivision);
+          const validMarketCodes = new Set(
+            divisionMarkets.map((m) => m.market_code)
+          );
+
+          // Filter current markets to only include valid ones for this division
+          const validCurrentMarkets = normalizedMarkets.filter((market) =>
+            validMarketCodes.has(market.market_code)
+          );
+
+          // If no valid markets remain or this is a new division selection,
+          // default to all division markets
+          normalizedMarkets =
+            validCurrentMarkets.length > 0
+              ? validCurrentMarkets
+              : divisionMarkets;
+        } else {
+          normalizedDivision = "";
+          normalizedMarkets = [];
+        }
+      }
+      break;
+    case "none":
+    default:
+      // Keep current values
+      break;
+  }
+
+  return { division: normalizedDivision, markets: normalizedMarkets };
+};
+
+// Helper functions for UI state
+const isFieldDisabled = (
+  role: string,
+  field: "division" | "markets"
+): boolean => {
+  const config = getRoleConfig(role);
+  if (!config) return false;
+
+  if (field === "division") {
+    return !config.isDivisionEditable;
+  } else if (field === "markets") {
+    return !config.isMarketEditable;
+  }
+  return false;
+};
+
+const getMarketDisplayInfo = (
+  role: string,
+  division: string | undefined,
+  selectedMarkets: MarketOption[],
+  marketsByDivision: MarketsByDivision | null,
+  getMarketOptionsForDivision: (division: string) => MarketOption[]
+): { displayLabel: string; showIndividualChips: boolean } => {
+  const numSelected = selectedMarkets.length;
+  let displayLabel = "-";
+  let showIndividualChips = false;
+
+  const config = getRoleConfig(role);
+  if (!config) return { displayLabel, showIndividualChips };
+
+  if (config.marketAccess === "all") {
+    displayLabel = WGS_ALL_LABEL;
+  } else if (config.marketAccess === "division-based" && division) {
+    if (role === FINANCE_ROLE || role === OPERATIONS_ROLE) {
+      if (division === CORPORATE_DIVISION_LABEL) {
+        displayLabel = WGS_ALL_LABEL;
+      } else if (marketsByDivision) {
+        const marketsForDivision = getMarketOptionsForDivision(division);
+        if (
+          numSelected === marketsForDivision.length &&
+          marketsForDivision.length > 0
+        ) {
+          displayLabel = `${division} - All`;
+        } else if (numSelected > 0) {
+          showIndividualChips = true;
+          displayLabel = "";
+        }
+      }
+    } else if (role === MARKET_MANAGER_ROLE && marketsByDivision) {
+      const marketsForDivision = getMarketOptionsForDivision(division);
+      if (
+        numSelected === marketsForDivision.length &&
+        marketsForDivision.length > 0
+      ) {
+        displayLabel = `${division} - All`;
+      } else if (numSelected > 0) {
+        showIndividualChips = true;
+        displayLabel = "";
+      }
+    }
+  }
+
+  return { displayLabel, showIndividualChips };
+};
+
+const getMarketTagDisplay = (
+  role: string,
+  division: string | undefined,
+  selectedMarkets: MarketOption[],
+  getMarketOptionsForDivision: (division: string) => MarketOption[]
+): { chipLabel: string; showSummaryChip: boolean } => {
+  const numSelected = selectedMarkets.length;
+  let chipLabel = "";
+  let showSummaryChip = false;
+
+  const config = getRoleConfig(role);
+  if (!config) return { chipLabel, showSummaryChip };
+
+  if (config.marketAccess === "all") {
+    chipLabel = WGS_ALL_LABEL;
+    showSummaryChip = true;
+  } else if (config.marketAccess === "division-based" && division) {
+    if (role === FINANCE_ROLE || role === OPERATIONS_ROLE) {
+      if (division === CORPORATE_DIVISION_LABEL) {
+        chipLabel = WGS_ALL_LABEL;
+        showSummaryChip = true;
+      } else {
+        const marketsForDivision = getMarketOptionsForDivision(division);
+        if (
+          numSelected === marketsForDivision.length &&
+          marketsForDivision.length > 0
+        ) {
+          chipLabel = `${division} - All`;
+          showSummaryChip = true;
+        }
+      }
+    } else if (role === MARKET_MANAGER_ROLE) {
+      const marketsForDivision = getMarketOptionsForDivision(division);
+      if (
+        numSelected === marketsForDivision.length &&
+        marketsForDivision.length > 0
+      ) {
+        chipLabel = `${division} - All`;
+        showSummaryChip = true;
+      }
+    }
+  }
+
+  return { chipLabel, showSummaryChip };
+};
+
+const getDivisionDisplayValue = (
+  role: string,
+  division: string | undefined
+): string => {
+  const config = getRoleConfig(role);
+  if (!config) return division || "-";
+
+  // For roles with "all" market access, always show Corporate
+  if (config.marketAccess === "all") {
+    return CORPORATE_DIVISION_LABEL;
+  }
+
+  // For Finance/Operations with Corporate division, show Corporate
+  if (
+    (role === FINANCE_ROLE || role === OPERATIONS_ROLE) &&
+    division === CORPORATE_DIVISION_LABEL
+  ) {
+    return CORPORATE_DIVISION_LABEL;
+  }
+
+  return division || "-";
+};
 
 // Define the type for the exposed handle
 export interface UserMasterHandle {
@@ -93,16 +427,15 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
   const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
     "success"
   );
-  const [availableRoles] = useState<string[]>(FIXED_ROLES);
+  // Roles will be loaded from backend; start empty to avoid showing incorrect list before fetch
+  const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  // Define available divisions including the "Corporate" option for Finance role
+  // Get available divisions based on role configuration
   const divisionsForAutocomplete = useMemo(() => {
-    if (editingUser?.role === FINANCE_ROLE) {
-      return [CORPORATE_DIVISION_LABEL, ...availableDivisions];
-    }
-    return availableDivisions;
+    if (!editingUser?.role) return availableDivisions;
+    return getAvailableDivisionsForRole(editingUser.role, availableDivisions);
   }, [editingUser?.role, availableDivisions]);
 
   // Expose the handleAdd function via the ref
@@ -115,6 +448,7 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     fetchUsers();
     fetchMarkets();
     fetchMarketsByDivision();
+    fetchAccessRoles();
   }, []);
 
   const fetchUsers = async () => {
@@ -153,8 +487,8 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
         `${import.meta.env.VITE_API_URL}/util/get-markets-by-division`
       );
       setMarketsByDivision(response.data);
-      // Derive available divisions from the fetched data
-      if (response.data) {
+      // Derive available divisions from the fetched data if not already set via access roles
+      if (response.data && !availableDivisions.length) {
         setAvailableDivisions(Object.keys(response.data));
       }
     } catch (error) {
@@ -163,59 +497,45 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     }
   };
 
-  const handleEdit = (user: User) => {
-    // Preprocess user data to align with current rules before editing
-    let initialDivision = user.user_access?.Division ?? "";
-    let initialMarkets = user.user_access?.Markets ?? [];
-    const initialRole = user.role;
-    const initialAdmin = user.user_access?.Admin ?? false;
+  const fetchAccessRoles = async () => {
+    try {
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/util/get-access-roles`
+      );
+      const { roles, divisions } = response.data || {};
 
-    // --- Logic Adjustment for consolidated Finance role ---
-    if (initialRole === EXECUTIVE_ROLE) {
-      initialDivision = CORPORATE_DIVISION_LABEL;
-      initialMarkets = allMarkets;
-    } else if (initialRole === FINANCE_ROLE) {
-      // If it's Finance role, check the division.
-      // "Corporate" means all markets, actual division means markets for that division.
-      if (initialDivision === CORPORATE_DIVISION_LABEL) {
-        initialMarkets = allMarkets;
-      } else if (initialDivision && marketsByDivision) {
-        initialMarkets = getMarketOptionsForDivision(initialDivision);
-      } else {
-        // Default to Corporate if division is missing or invalid for Finance
-        initialDivision = CORPORATE_DIVISION_LABEL;
-        initialMarkets = allMarkets;
+      if (roles && Array.isArray(roles)) {
+        setAvailableRoles(roles);
       }
-    } else if (initialRole === MARKET_MANAGER_ROLE) {
-      // Distributor Manager logic remains largely the same, but ensure division exists
-      if (initialDivision && marketsByDivision) {
-        const divisionMarkets = getMarketOptionsForDivision(initialDivision);
-        const validMarketCodes = new Set(
-          divisionMarkets.map((m) => m.market_code)
-        );
-        initialMarkets = initialMarkets.filter((market) =>
-          validMarketCodes.has(market.market_code)
-        );
-        // If after filtering, no markets are left (e.g., division changed), reset markets
-        if (initialMarkets.length === 0 && divisionMarkets.length > 0) {
-          // Decide if you want to default to all markets for the division or keep empty
-          // initialMarkets = divisionMarkets; // Option: Default to all division markets
-        }
-      } else {
-        initialDivision = ""; // Ensure division is empty if invalid/missing
-        initialMarkets = []; // No division, so markets should be empty
+
+      if (divisions && Array.isArray(divisions)) {
+        setAvailableDivisions(divisions);
       }
+    } catch (error) {
+      console.error("Error fetching access roles:", error);
+      showSnackbar("Failed to fetch access roles", "error");
     }
-    // For other roles (if any added later), keep the loaded data as is.
+  };
+
+  const handleEdit = (user: User) => {
+    // Normalize user access data based on role configuration
+    const { division: normalizedDivision, markets: normalizedMarkets } =
+      normalizeUserAccess(
+        user.role,
+        user.user_access?.Division ?? "",
+        user.user_access?.Markets ?? [],
+        allMarkets,
+        marketsByDivision,
+        getMarketOptionsForDivision
+      );
 
     const userToEdit = {
       ...user,
-      // Use the potentially corrected values
       user_access: {
-        Division: initialDivision,
-        Markets: initialMarkets,
-        Admin: initialAdmin,
-        Status: user.user_access?.Status, // preserve status
+        Division: normalizedDivision,
+        Markets: normalizedMarkets,
+        Admin: user.user_access?.Admin ?? false,
+        Status: user.user_access?.Status,
       },
     };
     setEditingUser(userToEdit);
@@ -319,36 +639,42 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
     let updatedUser = { ...editingUser };
 
     if (field === "markets") {
-      const selectedMarkets = value as MarketOption[];
       updatedUser = {
         ...updatedUser,
         user_access: {
           ...updatedUser.user_access,
-          Markets: selectedMarkets,
+          Markets: value as MarketOption[],
         },
       };
     } else if (field === "Division") {
       const newDivision = value as string | null;
-      let marketsToSet: MarketOption[] = [];
 
-      if (updatedUser.role === FINANCE_ROLE) {
-        if (newDivision === CORPORATE_DIVISION_LABEL) {
-          marketsToSet = allMarkets;
-        } else if (newDivision) {
-          marketsToSet = getMarketOptionsForDivision(newDivision);
-        }
-      } else if (updatedUser.role === MARKET_MANAGER_ROLE) {
-        marketsToSet = []; // Clear markets, user must re-select
-      } else {
-        marketsToSet = updatedUser.user_access?.Markets || [];
+      // For Market Manager changing division, reset markets to empty
+      // so they get all markets for the new division
+      let currentMarkets = updatedUser.user_access?.Markets || [];
+      if (
+        updatedUser.role === MARKET_MANAGER_ROLE &&
+        newDivision &&
+        marketsByDivision
+      ) {
+        currentMarkets = [];
       }
+
+      const { markets: updatedMarkets } = normalizeUserAccess(
+        updatedUser.role,
+        newDivision ?? "",
+        currentMarkets,
+        allMarkets,
+        marketsByDivision,
+        getMarketOptionsForDivision
+      );
 
       updatedUser = {
         ...updatedUser,
         user_access: {
           ...updatedUser.user_access,
           Division: newDivision ?? "",
-          Markets: marketsToSet,
+          Markets: updatedMarkets,
         },
       };
     } else if (field === "Admin") {
@@ -361,39 +687,56 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       };
     } else if (field === "role") {
       const newRole = value as string;
-      let marketsToSet: MarketOption[] = updatedUser.user_access?.Markets || [];
-      let divisionToSet = updatedUser.user_access?.Division || "";
 
-      if (newRole === EXECUTIVE_ROLE) {
-        marketsToSet = allMarkets;
-        divisionToSet = CORPORATE_DIVISION_LABEL;
-      } else if (newRole === FINANCE_ROLE) {
-        divisionToSet = CORPORATE_DIVISION_LABEL;
-        marketsToSet = allMarkets;
-      } else if (newRole === MARKET_MANAGER_ROLE) {
-        const currentDivision = divisionToSet;
-        if (currentDivision && marketsByDivision?.[currentDivision]) {
-          const divisionMarkets = getMarketOptionsForDivision(currentDivision);
-          const validMarketCodes = new Set(
-            divisionMarkets.map((m) => m.market_code)
-          );
-          marketsToSet = marketsToSet.filter((m) =>
-            validMarketCodes.has(m.market_code)
-          );
-          if (marketsToSet.length === 0) marketsToSet = [];
-        } else {
-          divisionToSet = "";
-          marketsToSet = [];
-        }
+      // Handle division changes when switching roles
+      let currentDivision = updatedUser.user_access?.Division || "";
+      let currentMarkets = updatedUser.user_access?.Markets || [];
+
+      // If switching to Market Manager from a role that was Corporate,
+      // set division to first available non-corporate option
+      if (
+        newRole === MARKET_MANAGER_ROLE &&
+        currentDivision === CORPORATE_DIVISION_LABEL
+      ) {
+        const availableForMarketManager = getAvailableDivisionsForRole(
+          newRole,
+          availableDivisions
+        );
+        currentDivision =
+          availableForMarketManager.length > 0
+            ? availableForMarketManager[0]
+            : "";
+        // Reset markets since division is changing
+        currentMarkets = [];
       }
+      // For Market Manager role switching, if they already have a valid division,
+      // we want to ensure they get all markets for that division
+      else if (
+        newRole === MARKET_MANAGER_ROLE &&
+        currentDivision &&
+        marketsByDivision
+      ) {
+        // Reset markets to empty so normalizeUserAccess will default to all division markets
+        currentMarkets = [];
+      }
+
+      const { division: updatedDivision, markets: updatedMarkets } =
+        normalizeUserAccess(
+          newRole,
+          currentDivision,
+          currentMarkets,
+          allMarkets,
+          marketsByDivision,
+          getMarketOptionsForDivision
+        );
 
       updatedUser = {
         ...updatedUser,
         role: newRole,
         user_access: {
           ...updatedUser.user_access,
-          Division: divisionToSet,
-          Markets: marketsToSet,
+          Division: updatedDivision,
+          Markets: updatedMarkets,
         },
       };
     } else {
@@ -459,33 +802,14 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
   };
 
   const availableMarketsForSelection = useMemo((): MarketOption[] => {
-    if (!editingUser || !editingUser.role || !allMarkets.length) {
-      return [];
-    }
-
-    const role = editingUser.role;
-    const division = editingUser.user_access?.Division;
-
-    if (role === EXECUTIVE_ROLE) {
-      return allMarkets;
-    } else if (role === FINANCE_ROLE) {
-      // Finance can select markets only if a non-Corporate division is chosen
-      if (
-        division &&
-        division !== CORPORATE_DIVISION_LABEL &&
-        marketsByDivision
-      ) {
-        return getMarketOptionsForDivision(division);
-      } else if (division === CORPORATE_DIVISION_LABEL) {
-        // If Corporate is selected, technically all markets are assigned,
-        // but the dropdown should be disabled or show "WGS - All"
-        return allMarkets; // Or return [] and disable? Let's return all and disable/manage display in component
-      }
-    } else if (role === MARKET_MANAGER_ROLE && division && marketsByDivision) {
-      return getMarketOptionsForDivision(division);
-    }
-
-    return []; // Default to empty if no division/role match allows selection
+    if (!editingUser?.role) return [];
+    return getAvailableMarketsForRole(
+      editingUser.role,
+      editingUser.user_access?.Division,
+      allMarkets,
+      marketsByDivision,
+      getMarketOptionsForDivision
+    );
   }, [editingUser, allMarkets, marketsByDivision]);
 
   const selectedMarketOptions = useMemo((): MarketOption[] => {
@@ -548,17 +872,8 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       header: "Division",
       key: "division",
       filterable: true,
-      render: (_: any, row: User) => {
-        if (
-          row.role === EXECUTIVE_ROLE ||
-          (row.role === FINANCE_ROLE &&
-            row.user_access?.Division === CORPORATE_DIVISION_LABEL)
-        ) {
-          return CORPORATE_DIVISION_LABEL;
-        }
-        // Display the actual division name otherwise, or '-' if none
-        return row.user_access?.Division || "-";
-      },
+      render: (_: any, row: User) =>
+        getDivisionDisplayValue(row.role, row.user_access?.Division),
       sortable: true,
       sortAccessor: (row: User) => row.user_access?.Division,
       sx: { width: 190 },
@@ -567,60 +882,21 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
       header: "Markets",
       key: "markets",
       render: (_: any, row: User) => {
-        const role = row.role;
-        const division = row.user_access?.Division;
         const selectedMarkets = row.user_access?.Markets || [];
-        const numSelected = selectedMarkets.length;
+        const { displayLabel, showIndividualChips } = getMarketDisplayInfo(
+          row.role,
+          row.user_access?.Division,
+          selectedMarkets,
+          marketsByDivision,
+          getMarketOptionsForDivision
+        );
 
-        let displayLabel = "-"; // Default to '-'
-        let showIndividualChips = false;
-
-        if (role === EXECUTIVE_ROLE) {
-          displayLabel = WGS_ALL_LABEL; // Executive always gets all
-        } else if (role === FINANCE_ROLE) {
-          if (division === CORPORATE_DIVISION_LABEL) {
-            displayLabel = WGS_ALL_LABEL; // Finance + Corporate gets all
-          } else if (division && marketsByDivision) {
-            // Finance + Specific Division gets all markets *for that division*
-            const marketsForDivision = getMarketOptionsForDivision(division);
-            if (
-              numSelected === marketsForDivision.length &&
-              marketsForDivision.length > 0
-            ) {
-              displayLabel = `${division} - All`;
-            } else if (numSelected > 0) {
-              // displayLabel = ""; // Old: Show individual chips
-              showIndividualChips = true; // New: Flag to show individual chips
-              displayLabel = ""; // Clear label if showing chips
-            }
-          }
-        } else if (
-          role === MARKET_MANAGER_ROLE &&
-          division &&
-          marketsByDivision
-        ) {
-          // Distributor Manager can have specific markets within their division
-          const marketsForDivision = getMarketOptionsForDivision(division);
-          if (
-            numSelected === marketsForDivision.length &&
-            marketsForDivision.length > 0
-          ) {
-            displayLabel = `${division} - All`;
-          } else if (numSelected > 0) {
-            // displayLabel = ""; // Old: Show individual chips
-            showIndividualChips = true; // New: Flag to show individual chips
-            displayLabel = ""; // Clear label if showing chips
-          }
-        }
-        // Fallback if numSelected is 0, displayLabel remains "-"
-
-        // Determine chips to render
         const MAX_CHIPS = 4;
         const chipsToRender = showIndividualChips
           ? selectedMarkets.slice(0, MAX_CHIPS)
           : [];
         const remainingCount = showIndividualChips
-          ? numSelected - chipsToRender.length
+          ? selectedMarkets.length - chipsToRender.length
           : 0;
 
         return (
@@ -683,11 +959,13 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
               />
             )}
             {/* Render '-' if no label and no chips */}{" "}
-            {!displayLabel && !showIndividualChips && numSelected === 0 && (
-              <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                -
-              </Typography>
-            )}
+            {!displayLabel &&
+              !showIndividualChips &&
+              selectedMarkets.length === 0 && (
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  -
+                </Typography>
+              )}
           </Box>
         );
       },
@@ -841,21 +1119,16 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                   )}
                 />
                 <Autocomplete
-                  options={divisionsForAutocomplete} // Use the dynamic list
+                  options={divisionsForAutocomplete}
                   value={
-                    // Handle display for Executive and Finance/Corporate explicitly
                     editingUser?.role === EXECUTIVE_ROLE
-                      ? CORPORATE_DIVISION_LABEL // Value is "Corporate" for Executive
-                      : editingUser?.role === FINANCE_ROLE &&
-                        editingUser?.user_access?.Division ===
-                          CORPORATE_DIVISION_LABEL
-                      ? CORPORATE_DIVISION_LABEL // Value is "Corporate"
-                      : editingUser?.user_access?.Division || "" // Actual division or empty
+                      ? CORPORATE_DIVISION_LABEL
+                      : editingUser?.user_access?.Division || ""
                   }
                   onChange={(_, newValue) =>
                     handleEditChange("Division", newValue)
                   }
-                  getOptionLabel={(option) => option} // Display option name directly
+                  getOptionLabel={(option) => option}
                   renderInput={(params) => (
                     <TextField
                       {...params}
@@ -863,15 +1136,14 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                       size="small"
                       placeholder={
                         editingUser?.role === EXECUTIVE_ROLE
-                          ? CORPORATE_DIVISION_LABEL // Placeholder reflects the default value
+                          ? CORPORATE_DIVISION_LABEL
                           : ""
                       }
                     />
                   )}
                   disabled={
-                    // Disable if Executive role OR
-                    // if it's Finance/Distributor role and no base divisions exist
-                    editingUser?.role === EXECUTIVE_ROLE ||
+                    (editingUser?.role &&
+                      isFieldDisabled(editingUser.role, "division")) ||
                     (!availableDivisions.length &&
                       (editingUser?.role === FINANCE_ROLE ||
                         editingUser?.role === MARKET_MANAGER_ROLE))
@@ -904,7 +1176,6 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                       label="Select Markets"
                       size="small"
                       helperText={
-                        // Updated helper text logic
                         editingUser?.role === MARKET_MANAGER_ROLE &&
                         !editingUser?.user_access?.Division
                           ? "Select a Division to enable market selection"
@@ -922,39 +1193,14 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                     const role = editingUser?.role;
                     const division = editingUser?.user_access?.Division;
 
-                    let chipLabel = "";
-                    let showSummaryChip = false;
-
-                    if (role === EXECUTIVE_ROLE) {
-                      chipLabel = WGS_ALL_LABEL;
-                      showSummaryChip = true;
-                    } else if (role === FINANCE_ROLE) {
-                      if (division === CORPORATE_DIVISION_LABEL) {
-                        chipLabel = WGS_ALL_LABEL;
-                        showSummaryChip = true;
-                      } else if (division) {
-                        const marketsForDivision =
-                          getMarketOptionsForDivision(division);
-                        if (
-                          numSelected === marketsForDivision.length &&
-                          marketsForDivision.length > 0
-                        ) {
-                          chipLabel = `${division} - All`;
-                          showSummaryChip = true;
-                        }
-                      }
-                    } else if (role === MARKET_MANAGER_ROLE && division) {
-                      const marketsForDivision =
-                        getMarketOptionsForDivision(division);
-                      // Show summary chip only if ALL markets for the division are selected
-                      if (
-                        numSelected === marketsForDivision.length &&
-                        marketsForDivision.length > 0
-                      ) {
-                        chipLabel = `${division} - All`;
-                        showSummaryChip = true;
-                      }
-                    }
+                    const { chipLabel, showSummaryChip } = role
+                      ? getMarketTagDisplay(
+                          role,
+                          division,
+                          value,
+                          getMarketOptionsForDivision
+                        )
+                      : { chipLabel: "", showSummaryChip: false };
 
                     if (showSummaryChip) {
                       return [
@@ -968,13 +1214,13 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                       ];
                     } else if (numSelected > 3) {
                       const firstOption = value[0];
-                      chipLabel = `${firstOption.market} (${
+                      const overflowLabel = `${firstOption.market} (${
                         firstOption.market_code
                       }) + ${numSelected - 1} more`;
                       return [
                         <Chip
                           key="summary-chip"
-                          label={chipLabel}
+                          label={overflowLabel}
                           size="small"
                           color="primary"
                           variant="outlined"
@@ -997,11 +1243,9 @@ const UserMaster = forwardRef<UserMasterHandle>((_props, ref) => {
                     }
                   }}
                   disabled={
-                    // Disable market selection for Executive,
-                    // for Finance if Corporate or no division is selected,
-                    // and for Distributor Manager if no division is selected.
                     !marketsByDivision ||
-                    editingUser?.role === EXECUTIVE_ROLE ||
+                    (editingUser?.role &&
+                      isFieldDisabled(editingUser.role, "markets")) ||
                     (editingUser?.role === FINANCE_ROLE &&
                       (!editingUser?.user_access?.Division ||
                         editingUser?.user_access?.Division ===

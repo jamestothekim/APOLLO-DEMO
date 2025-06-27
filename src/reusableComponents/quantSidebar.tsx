@@ -84,6 +84,14 @@ interface QuantSidebarProps {
   gsvRate?: number;
   // Add prop for Total LY Volume
   pyTotalVolume?: number;
+  // Shipment-specific guidance summary props
+  shipmentGuidanceSummary?: {
+    tyForecast: number;
+    lyActual: number;
+    inventory: number;
+    currentDDOI: number;
+    leadTimes: number;
+  };
   // Commentary
   commentary?: string;
   onCommentaryChange?: (value: string) => void;
@@ -122,6 +130,7 @@ export const QuantSidebar = ({
   onMonthValueChange,
   gsvRate,
   pyTotalVolume,
+  shipmentGuidanceSummary,
   commentary,
   onCommentaryChange,
   footerButtons = [],
@@ -409,6 +418,87 @@ export const QuantSidebar = ({
                       yearlyGuidance.percentChange,
                       "percent"
                     )}
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </Grid>
+        )}
+
+        {/* Shipment Guidance Summary Grid */}
+        {shipmentGuidanceSummary && (
+          <Grid
+            item
+            xs={12}
+            sx={{
+              p: 1.5,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+              mt: yearlyGuidance && pyTotalVolume !== undefined ? 2 : 0,
+            }}
+          >
+            <Typography
+              variant="overline"
+              display="block"
+              gutterBottom
+              sx={{ mb: 1.5, color: "primary.main", fontWeight: "bold" }}
+            >
+              GUIDANCE SUMMARY
+            </Typography>
+            <Grid container spacing={1}>
+              {/* TY Forecast */}
+              <Grid item xs={6} sm={2.4}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    TY Forecast
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {formatGuidanceValue(shipmentGuidanceSummary.tyForecast)}
+                  </Typography>
+                </Box>
+              </Grid>
+              {/* LY Actual */}
+              <Grid item xs={6} sm={2.4}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    LY Actual
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {formatGuidanceValue(shipmentGuidanceSummary.lyActual)}
+                  </Typography>
+                </Box>
+              </Grid>
+              {/* Inventory */}
+              <Grid item xs={6} sm={2.4}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    Inv.
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {formatGuidanceValue(shipmentGuidanceSummary.inventory)}
+                  </Typography>
+                </Box>
+              </Grid>
+              {/* Current DDOI */}
+              <Grid item xs={6} sm={2.4}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    Current DDOI
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {shipmentGuidanceSummary.currentDDOI}
+                  </Typography>
+                </Box>
+              </Grid>
+              {/* Lead Times */}
+              <Grid item xs={6} sm={2.4}>
+                <Box textAlign="center">
+                  <Typography variant="caption" display="block">
+                    Lead time
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+                    {shipmentGuidanceSummary.leadTimes}
                   </Typography>
                 </Box>
               </Grid>
