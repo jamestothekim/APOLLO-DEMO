@@ -35,7 +35,6 @@ import {
   setVolumeForecastTags,
 } from "../redux/slices/userSettingsSlice";
 import type { Guidance } from "../redux/slices/userSettingsSlice";
-import { SHIPMENT_GUIDANCE_OPTIONS } from "./shipments/shipmentGuidance";
 import { useUser } from "../userContext";
 import axios from "axios";
 
