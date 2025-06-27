@@ -80,6 +80,8 @@ export async function exportFinanceExcel(
   fileName: string,
   markets: Market[],
   retailers: string[],
+  selectedMarkets: string[],
+  selectedRetailers: string[],
 ): Promise<void> {
   const workbook = new ExcelJS.Workbook();
 
@@ -104,8 +106,23 @@ export async function exportFinanceExcel(
     .filter(([_, selected]) => selected)
     .map(([field]) => field as keyof ExportFieldConfig);
 
+  // Filter rows based on selected markets and retailers
+  let filteredRows = rows;
+
+  if (selectedMarkets.length > 0) {
+    filteredRows = filteredRows.filter((row) =>
+      selectedMarkets.includes(row.market),
+    );
+  }
+
+  if (selectedRetailers.length > 0) {
+    filteredRows = filteredRows.filter((row) =>
+      selectedRetailers.includes(row.account),
+    );
+  }
+
   // Group data by market
-  const marketGroups = rows.reduce((acc, row) => {
+  const marketGroups = filteredRows.reduce((acc, row) => {
     if (!acc[row.market]) {
       acc[row.market] = [];
     }
@@ -117,15 +134,25 @@ export async function exportFinanceExcel(
   for (const [marketName, marketRows] of Object.entries(marketGroups)) {
     const ws = workbook.addWorksheet(`${marketName} Market`);
 
+    // Get unique retailers for this market
+    const marketRetailers = Array.from(
+      new Set(marketRows.map((row) => row.account)),
+    );
+    const retailerText =
+      marketRetailers.length === 1
+        ? marketRetailers[0]
+        : `${marketRetailers.length} Retailers`;
+
     // Title row
     const titleRow = ws.addRow([
-      `${marketName} Market - ${
-        marketRows[0]?.account || 'All Retailers'
-      } - ${new Date().toLocaleDateString('en-US', {
-        month: '2-digit',
-        day: '2-digit',
-        year: '2-digit',
-      })}`,
+      `${marketName} Market - ${retailerText} - ${new Date().toLocaleDateString(
+        'en-US',
+        {
+          month: '2-digit',
+          day: '2-digit',
+          year: '2-digit',
+        },
+      )}`,
     ]);
     titleRow.font = { bold: true, size: 14, color: { argb: 'FF000000' } };
     titleRow.alignment = { horizontal: 'center', vertical: 'middle' };

@@ -139,6 +139,8 @@ export const ScanPlanner: React.FC = () => {
   const handleExportConfig = async (
     config: ExportFieldConfig,
     fileName: string,
+    selectedMarkets: string[],
+    selectedRetailers: string[],
   ) => {
     try {
       await exportFinanceExcel(
@@ -147,6 +149,8 @@ export const ScanPlanner: React.FC = () => {
         fileName,
         SCAN_MARKETS,
         retailerOptions,
+        selectedMarkets,
+        selectedRetailers,
       );
       showSnackbar('Excel file exported successfully!', 'success');
     } catch (error) {

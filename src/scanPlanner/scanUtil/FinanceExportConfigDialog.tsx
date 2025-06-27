@@ -6,16 +6,14 @@ import {
   DialogActions,
   Button,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   FormGroup,
   FormControlLabel,
   Checkbox,
   Box,
   Typography,
   Divider,
+  Chip,
+  Autocomplete,
 } from '@mui/material';
 
 export interface ExportFieldConfig {
@@ -33,7 +31,12 @@ export interface ExportFieldConfig {
 interface FinanceExportConfigDialogProps {
   open: boolean;
   onClose: () => void;
-  onExport: (config: ExportFieldConfig, fileName: string) => void;
+  onExport: (
+    config: ExportFieldConfig,
+    fileName: string,
+    selectedMarkets: string[],
+    selectedRetailers: string[],
+  ) => void;
   markets: Array<{ id: string; name: string }>;
   retailers: Array<{ id: string; name: string }>;
 }
@@ -65,30 +68,47 @@ const FIELD_LABELS = {
 export const FinanceExportConfigDialog: React.FC<
   FinanceExportConfigDialogProps
 > = ({ open, onClose, onExport, markets, retailers }) => {
-  const [selectedMarket, setSelectedMarket] = useState<string>('');
-  const [selectedRetailer, setSelectedRetailer] = useState<string>('');
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
+  const [selectedRetailers, setSelectedRetailers] = useState<string[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [fieldConfig, setFieldConfig] =
     useState<ExportFieldConfig>(DEFAULT_FIELDS);
 
-  // Auto-generate filename when market or retailer changes
+  // Auto-generate filename when markets or retailers change
   useEffect(() => {
-    if (selectedMarket || selectedRetailer) {
+    if (selectedMarkets.length > 0 || selectedRetailers.length > 0) {
       const today = new Date().toISOString().split('T')[0];
-      const marketName =
-        markets.find((m) => m.id === selectedMarket)?.name?.toLowerCase() || '';
-      const retailerName =
-        retailers.find((r) => r.id === selectedRetailer)?.name?.toLowerCase() ||
-        '';
 
       let title = 'scan_calendar';
-      if (marketName) title += `_${marketName.replace(/\s+/g, '_')}`;
-      if (retailerName) title += `_${retailerName.replace(/\s+/g, '_')}`;
-      title += `_${today}`;
 
+      if (selectedMarkets.length > 0) {
+        if (selectedMarkets.length === 1) {
+          const marketName =
+            markets
+              .find((m) => m.id === selectedMarkets[0])
+              ?.name?.toLowerCase() || '';
+          title += `_${marketName.replace(/\s+/g, '_')}`;
+        } else {
+          title += `_${selectedMarkets.length}_markets`;
+        }
+      }
+
+      if (selectedRetailers.length > 0) {
+        if (selectedRetailers.length === 1) {
+          const retailerName =
+            retailers
+              .find((r) => r.id === selectedRetailers[0])
+              ?.name?.toLowerCase() || '';
+          title += `_${retailerName.replace(/\s+/g, '_')}`;
+        } else {
+          title += `_${selectedRetailers.length}_retailers`;
+        }
+      }
+
+      title += `_${today}`;
       setFileName(title);
     }
-  }, [selectedMarket, selectedRetailer, markets, retailers]);
+  }, [selectedMarkets, selectedRetailers, markets, retailers]);
 
   const handleFieldToggle = (field: keyof ExportFieldConfig) => {
     setFieldConfig((prev) => ({
@@ -110,14 +130,14 @@ export const FinanceExportConfigDialog: React.FC<
   };
 
   const handleExport = () => {
-    onExport(fieldConfig, fileName);
+    onExport(fieldConfig, fileName, selectedMarkets, selectedRetailers);
     onClose();
   };
 
   const handleClose = () => {
     // Reset form when closing
-    setSelectedMarket('');
-    setSelectedRetailer('');
+    setSelectedMarkets([]);
+    setSelectedRetailers([]);
     setFileName('');
     setFieldConfig(DEFAULT_FIELDS);
     onClose();
@@ -137,40 +157,66 @@ export const FinanceExportConfigDialog: React.FC<
         <Box sx={{ mt: 2 }}>
           {/* Market and Retailer Selection */}
           <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-            <FormControl fullWidth>
-              <InputLabel>Market</InputLabel>
-              <Select
-                value={selectedMarket}
-                label='Market'
-                onChange={(e) => setSelectedMarket(e.target.value)}
-              >
-                <MenuItem value=''>
-                  <em>All Markets</em>
-                </MenuItem>
-                {markets.map((market) => (
-                  <MenuItem key={market.id} value={market.id}>
-                    {market.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>Retailer</InputLabel>
-              <Select
-                value={selectedRetailer}
-                label='Retailer'
-                onChange={(e) => setSelectedRetailer(e.target.value)}
-              >
-                <MenuItem value=''>
-                  <em>All Retailers</em>
-                </MenuItem>
-                {retailers.map((retailer) => (
-                  <MenuItem key={retailer.id} value={retailer.id}>
-                    {retailer.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              multiple
+              limitTags={2}
+              options={markets}
+              getOptionLabel={(option) => option.name}
+              value={markets.filter((m) => selectedMarkets.includes(m.id))}
+              onChange={(_, newValue) =>
+                setSelectedMarkets(newValue.map((m) => m.id))
+              }
+              renderInput={(params) => (
+                <TextField {...params} label='Filter Markets' />
+              )}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    label={option.name}
+                    size='small'
+                    variant='outlined'
+                    color='primary'
+                    sx={{
+                      borderRadius: '16px',
+                      backgroundColor: 'transparent',
+                      '& .MuiChip-label': { px: 1 },
+                    }}
+                    {...getTagProps({ index })}
+                  />
+                ))
+              }
+              sx={{ flex: 1, minWidth: 180 }}
+            />
+            <Autocomplete
+              multiple
+              limitTags={2}
+              options={retailers}
+              getOptionLabel={(option) => option.name}
+              value={retailers.filter((r) => selectedRetailers.includes(r.id))}
+              onChange={(_, newValue) =>
+                setSelectedRetailers(newValue.map((r) => r.id))
+              }
+              renderInput={(params) => (
+                <TextField {...params} label='Filter Retailers' />
+              )}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    label={option.name}
+                    size='small'
+                    variant='outlined'
+                    color='primary'
+                    sx={{
+                      borderRadius: '16px',
+                      backgroundColor: 'transparent',
+                      '& .MuiChip-label': { px: 1 },
+                    }}
+                    {...getTagProps({ index })}
+                  />
+                ))
+              }
+              sx={{ flex: 1, minWidth: 180 }}
+            />
           </Box>
 
           {/* File Name */}
