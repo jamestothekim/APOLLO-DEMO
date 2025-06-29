@@ -121,6 +121,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
+  const [configureDialogOpen, setConfigureDialogOpen] = useState(false);
 
   // Shipment guidance state (separate from regular guidance)
   const [selectedShipmentGuidanceCols, setSelectedShipmentGuidanceCols] =
@@ -265,6 +266,10 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
 
   const handleColumns = () => {
     setColumnsDialogOpen(true);
+  };
+
+  const handleConfigure = () => {
+    setConfigureDialogOpen(true);
   };
 
   const handleApplyColumns = async (columns: Guidance[]) => {
@@ -450,6 +455,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
               "undo" as ToolType,
               "columns" as ToolType,
               "export" as ToolType,
+              ...(tabValue === 1 ? ["configure" as ToolType] : []),
               ...(marketData.some((m) => m.settings?.managed_by === "Customer")
                 ? ["customerToggle" as ToolType]
                 : []),
@@ -457,6 +463,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
             onUndo={handleUndo}
             onColumns={handleColumns}
             onExport={handleExportClick}
+            onConfigure={handleConfigure}
             onCustomerToggle={handleViewToggle}
             canUndo={true}
             isDepletionsView={true}
@@ -508,6 +515,8 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                 isCustomerView={isCustomerView}
                 selectedGuidance={selectedShipmentGuidanceCols}
                 rowGuidanceSelections={selectedShipmentGuidanceRows}
+                configureOpen={configureDialogOpen}
+                onConfigureClose={() => setConfigureDialogOpen(false)}
               />
             </TabPanel>
           )}

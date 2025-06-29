@@ -20,7 +20,7 @@ import {
 import { QuantSidebar } from "../../reusableComponents/quantSidebar";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
-import { DetailsContainer } from "../depletions/details/detailsContainer";
+import { ConfigureContainer } from "./configure/configureShipments";
 import type { MarketData } from "../volumeForecast";
 import type { Guidance } from "../../redux/slices/userSettingsSlice";
 
@@ -36,7 +36,7 @@ import {
   DynamicTable,
   type Column,
 } from "../../reusableComponents/dynamicTable";
-import { MONTH_NAMES, MONTH_MAPPING, calculateTotal } from "../util/volumeUtil";
+import { MONTH_NAMES, calculateTotal } from "../util/volumeUtil";
 import {
   Comment as CommentIcon,
   DescriptionOutlined as DescriptionOutlinedIcon,
@@ -75,6 +75,8 @@ export interface ShipmentsProps {
   onExport?: (handler: () => void) => void;
   selectedGuidance?: Guidance[];
   rowGuidanceSelections?: Guidance[];
+  configureOpen?: boolean;
+  onConfigureClose?: () => void;
 }
 
 export const Shipments: React.FC<ShipmentsProps> = ({
@@ -86,6 +88,8 @@ export const Shipments: React.FC<ShipmentsProps> = ({
   onExport,
   selectedGuidance,
   rowGuidanceSelections,
+  configureOpen = false,
+  onConfigureClose,
 }) => {
   const theme = useTheme();
 
@@ -111,20 +115,10 @@ export const Shipments: React.FC<ShipmentsProps> = ({
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [selectedComment, setSelectedComment] = useState<string | undefined>();
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState<"success" | "error">(
     "success"
   );
-  const [selectedDetails, setSelectedDetails] = useState<{
-    market_id: string;
-    product: string;
-    value: number;
-    month: number;
-    year: number;
-    variant_size_pack_id: string;
-    variant_size_pack_desc: string;
-  } | null>(null);
   const [comment, setComment] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
   const [filterChangeCount, setFilterChangeCount] = useState(0);
@@ -557,45 +551,19 @@ export const Shipments: React.FC<ShipmentsProps> = ({
             if (!row?.months?.[month]) return "-";
             const data = row.months[month];
             const value = data.value ?? 0;
-            const isRowActual = data.isActual;
             const isLocked =
               row.forecast_status === "review" ||
               row.forecast_status === "consensus";
-
-            // Click handler for details
-            const handleClick = (event: React.MouseEvent) => {
-              event.stopPropagation();
-              if (isRowActual) {
-                const currentYear = new Date().getFullYear();
-                setSelectedDetails({
-                  market_id: row.market_id,
-                  product: row.product,
-                  value: value === 0 ? -1 : Math.round(value),
-                  month: MONTH_MAPPING[month],
-                  year: currentYear,
-                  variant_size_pack_id: row.variant_size_pack_id,
-                  variant_size_pack_desc: row.variant_size_pack_desc,
-                });
-                setDetailsOpen(true);
-              }
-            };
-
-            const isClickable = isRowActual;
 
             return (
               <div style={{ position: "relative" }}>
                 <Box
                   component="span"
                   sx={(theme) => ({
-                    color: isRowActual
-                      ? theme.palette.primary.main
-                      : isLocked
+                    color: isLocked
                       ? theme.palette.text.disabled
                       : theme.palette.text.primary,
-                    cursor: isClickable ? "pointer" : "default",
-                    textDecoration: "none",
                   })}
-                  onClick={isClickable ? handleClick : undefined}
                 >
                   {value.toLocaleString(undefined, {
                     minimumFractionDigits: 1,
@@ -800,8 +768,6 @@ export const Shipments: React.FC<ShipmentsProps> = ({
       );
     }
 
-    const currentYear = new Date().getFullYear();
-    const previousYear = currentYear - 1;
     const cellPaddingSx = { py: "6px", px: "16px" };
 
     return guidanceData.map(({ guidance, monthlyData }) => {
@@ -851,22 +817,7 @@ export const Shipments: React.FC<ShipmentsProps> = ({
                   <Box
                     component="span"
                     sx={{
-                      color: "primary.main",
-                      cursor: "pointer",
                       display: "inline-block",
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedDetails({
-                        market_id: row.market_id,
-                        product: row.product,
-                        value: value === 0 ? -1 : Math.round(value || 0),
-                        month: MONTH_MAPPING[month],
-                        year: previousYear,
-                        variant_size_pack_id: row.variant_size_pack_id,
-                        variant_size_pack_desc: row.variant_size_pack_desc,
-                      });
-                      setDetailsOpen(true);
                     }}
                   >
                     {formattedValue}
@@ -1187,20 +1138,6 @@ export const Shipments: React.FC<ShipmentsProps> = ({
         </DialogActions>
       </Dialog>
 
-      {selectedDetails && (
-        <DetailsContainer
-          open={detailsOpen}
-          onClose={() => setDetailsOpen(false)}
-          market_id={selectedDetails.market_id}
-          product={selectedDetails.product}
-          value={selectedDetails.value}
-          month={selectedDetails.month}
-          year={selectedDetails.year}
-          variant_size_pack_id={selectedDetails.variant_size_pack_id}
-          variant_size_pack_desc={selectedDetails.variant_size_pack_desc}
-        />
-      )}
-
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={4000}
@@ -1216,6 +1153,11 @@ export const Shipments: React.FC<ShipmentsProps> = ({
           {snackbarMessage}
         </Alert>
       </Snackbar>
+
+      <ConfigureContainer
+        open={configureOpen}
+        onClose={onConfigureClose || (() => {})}
+      />
     </Box>
   );
 };

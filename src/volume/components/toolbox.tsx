@@ -9,6 +9,7 @@ import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import PublishIcon from "@mui/icons-material/Publish";
 import PieChartIcon from "@mui/icons-material/PieChart";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 
 export type ToolType =
   | "undo"
@@ -18,7 +19,8 @@ export type ToolType =
   | "customerToggle"
   | "publish"
   | "pieChart"
-  | "lineChart";
+  | "lineChart"
+  | "configure";
 
 interface ToolboxProps {
   tools?: ToolType[];
@@ -37,6 +39,7 @@ interface ToolboxProps {
   onPieChart?: () => void;
   canLineChart?: boolean;
   onLineChart?: () => void;
+  onConfigure?: () => void;
 }
 
 export const Toolbox: React.FC<ToolboxProps> = ({
@@ -55,6 +58,7 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   onPieChart,
   canLineChart = false,
   onLineChart,
+  onConfigure,
 }) => {
   const handleUndo = async () => {
     if (onUndo) {
@@ -93,6 +97,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   const handleLineChart = () => {
     if (onLineChart) {
       onLineChart();
+    }
+  };
+
+  const handleConfigure = () => {
+    if (onConfigure) {
+      onConfigure();
     }
   };
 
@@ -189,6 +199,21 @@ export const Toolbox: React.FC<ToolboxProps> = ({
             }}
           >
             Guidance
+          </Button>
+        )}
+
+        {tools.includes("configure") && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<LocalShippingIcon />}
+            onClick={handleConfigure}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            Shipment Logic
           </Button>
         )}
       </Box>
