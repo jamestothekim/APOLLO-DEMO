@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { useSelector, useDispatch } from "react-redux";
-import { RootState } from "../redux/store"; // adjust path accordingly
-import { deleteClusterRows, setPlannerRows } from "../redux/slices/scanSlice";
+import React, { useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState } from '../redux/store'; // adjust path accordingly
+import { deleteClusterRows, setPlannerRows } from '../redux/slices/scanSlice';
 import {
   Paper,
   Typography,
@@ -19,27 +19,33 @@ import {
   DialogActions,
   Snackbar,
   Alert,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
-import ScanSidebar from "./scanComponents/scanSidebar";
-import ScanToolbox from "./scanComponents/scanToolbox";
-import type { GuidanceOption } from "./scanComponents/scanGuidance";
-import { SCAN_MARKETS } from "./scanPlayData/scanData";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import SaveIcon from "@mui/icons-material/Save";
-import PublishIcon from "@mui/icons-material/Publish";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import PendingIcon from "@mui/icons-material/Pending";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import type { ProductEntry } from "./scanComponents/scanSidebarProducts";
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import { DynamicTable, type Column } from '../reusableComponents/dynamicTable';
+import ScanSidebar from './scanComponents/scanSidebar';
+import ScanToolbox from './scanComponents/scanToolbox';
+import type { GuidanceOption } from './scanComponents/scanGuidance';
+import { SCAN_MARKETS } from './scanPlayData/scanData';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import SaveIcon from '@mui/icons-material/Save';
+import PublishIcon from '@mui/icons-material/Publish';
+import PendingActionsIcon from '@mui/icons-material/PendingActions';
+import PendingIcon from '@mui/icons-material/Pending';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import type { ProductEntry } from './scanComponents/scanSidebarProducts';
+import {
+  FinanceExportConfigDialog,
+  type ExportFieldConfig,
+} from './scanUtil/FinanceExportConfigDialog';
+import { exportFinanceExcel } from './scanUtil/financeExportUtil';
 
 interface ScanRow {
   id: string;
   clusterId: string;
-  rowType: "week";
+  rowType: 'week';
   market: string;
   account: string;
   product: string;
@@ -54,7 +60,7 @@ interface ScanRow {
   projectedVolume: number;
   volumeLift: number;
   volumeLiftPct: number;
-  status: "draft" | "pending" | "approved" | "rejected" | "review";
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'review';
   comments?: string;
 }
 
@@ -66,14 +72,14 @@ interface ClusterPayload {
 
 // Helper: determine if current user can edit a cluster given app mode and its status
 const canEditCluster = (
-  role: "commercial" | "finance",
-  mode: "budget" | "forecast",
-  status: "draft" | "review" | "approved"
+  role: 'commercial' | 'finance',
+  mode: 'budget' | 'forecast',
+  status: 'draft' | 'review' | 'approved',
 ) => {
-  if (role === "finance") return false; // Finance never edits directly
-  if (mode === "budget") {
+  if (role === 'finance') return false; // Finance never edits directly
+  if (mode === 'budget') {
     // Commercial can only edit draft clusters in Budget mode
-    return status === "draft";
+    return status === 'draft';
   }
   // Forecast mode – commercial can always edit (draft, review, approved)
   return true;
@@ -82,14 +88,14 @@ const canEditCluster = (
 export const ScanPlanner: React.FC = () => {
   const dispatch = useDispatch();
   const rows: ScanRow[] = useSelector(
-    (state: RootState) => state.scan.plannerRows as ScanRow[]
+    (state: RootState) => state.scan.plannerRows as ScanRow[],
   );
   const mode = useSelector((s: RootState) => s.scan.mode);
   const isLocked = rows.some(
-    (r) => r.status === "review" || r.status === "approved"
+    (r) => r.status === 'review' || r.status === 'approved',
   );
-  const hasReview = rows.some((r) => r.status === "review");
-  const hasApproved = rows.some((r) => r.status === "approved");
+  const hasReview = rows.some((r) => r.status === 'review');
+  const hasApproved = rows.some((r) => r.status === 'approved');
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [selectedRetailers, setSelectedRetailers] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
@@ -98,58 +104,85 @@ export const ScanPlanner: React.FC = () => {
   const [hoverClusterId, setHoverClusterId] = useState<string | null>(null);
   const [editingClusterId, setEditingClusterId] = useState<string | null>(null);
   const [editingPayload, setEditingPayload] = useState<ClusterPayload | null>(
-    null
+    null,
   );
   const [sidebarReadOnly, setSidebarReadOnly] = useState(false);
   const [sidebarStatus, setSidebarStatus] = useState<
-    "draft" | "review" | "approved"
-  >("draft");
-  const [role, setRole] = useState<"commercial" | "finance">("commercial");
+    'draft' | 'review' | 'approved'
+  >('draft');
+  const [role, setRole] = useState<'commercial' | 'finance'>('commercial');
 
   const theme = useTheme();
 
+  // --- Export Config Dialog State ---
+  const [exportConfigDialogOpen, setExportConfigDialogOpen] = useState(false);
+
   // --- Publish Dialog State ---
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
-  const [publishComment, setPublishComment] = useState("");
+  const [publishComment, setPublishComment] = useState('');
   const [publishCommentError, setPublishCommentError] = useState(false);
-  const [publishConfirmationText, setPublishConfirmationText] = useState("");
+  const [publishConfirmationText, setPublishConfirmationText] = useState('');
   const [publishConfirmationError, setPublishConfirmationError] =
     useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     msg: string;
-    severity: "success" | "error";
-  }>({ open: false, msg: "", severity: "success" });
+    severity: 'success' | 'error';
+  }>({ open: false, msg: '', severity: 'success' });
 
   const showSnackbar = (
     msg: string,
-    severity: "success" | "error" = "success"
+    severity: 'success' | 'error' = 'success',
   ) => setSnackbar({ open: true, msg, severity });
 
   const handleSaveCluster = (_payload: ClusterPayload, _clusterId?: string) => {
     /* Row construction and saving are now handled inside ScanSidebar via saveClusterRows. */
   };
 
+  // --- Export Handler ---
+  const handleExportConfig = async (
+    config: ExportFieldConfig,
+    fileName: string,
+    selectedMarkets: string[],
+    selectedRetailers: string[],
+  ) => {
+    try {
+      await exportFinanceExcel(
+        rows,
+        config,
+        fileName,
+        SCAN_MARKETS,
+        retailerOptions,
+        selectedMarkets,
+        selectedRetailers,
+      );
+      showSnackbar('Excel file exported successfully!', 'success');
+    } catch (error) {
+      console.error('Export error:', error);
+      showSnackbar('Failed to export Excel file', 'error');
+    }
+  };
+
   // Guidance – visible columns state
   const MANDATORY_COL_KEYS = [
-    "market",
-    "account",
-    "product",
-    "week",
-    "scanAmount",
-    "status",
+    'market',
+    'account',
+    'product',
+    'week',
+    'scanAmount',
+    'status',
   ];
 
   const OPTIONAL_COL_KEYS = [
-    "projectedScan",
-    "projectedVolume",
-    "volumeLift",
-    "volumeLiftPct",
-    "projectedRetail",
-    "qd",
-    "loyalty",
-    "retailerMargin",
+    'projectedScan',
+    'projectedVolume',
+    'volumeLift',
+    'volumeLiftPct',
+    'projectedRetail',
+    'qd',
+    'loyalty',
+    'retailerMargin',
   ];
 
   const DEFAULT_COL_KEYS = [...MANDATORY_COL_KEYS, ...OPTIONAL_COL_KEYS];
@@ -158,8 +191,8 @@ export const ScanPlanner: React.FC = () => {
 
   const columns: Column[] = [
     {
-      key: "market",
-      header: "Market",
+      key: 'market',
+      header: 'Market',
       sortable: true,
       render: (market: string) => {
         const m = SCAN_MARKETS.find((mk: any) => mk.name === market);
@@ -168,37 +201,37 @@ export const ScanPlanner: React.FC = () => {
       },
     },
     {
-      key: "account",
-      header: "Account",
+      key: 'account',
+      header: 'Account',
       sortable: true,
     },
     {
-      key: "product",
-      header: "Product",
+      key: 'product',
+      header: 'Product',
       sortable: true,
       render: (product?: string) => {
-        if (!product) return "";
-        const firstDashIndex = product.indexOf(" - ");
+        if (!product) return '';
+        const firstDashIndex = product.indexOf(' - ');
         return firstDashIndex !== -1
           ? product.slice(firstDashIndex + 3)
           : product;
       },
     },
     {
-      key: "week",
-      header: "Week",
+      key: 'week',
+      header: 'Week',
       sortable: true,
     },
     {
-      key: "scanAmount",
-      header: "Scan ($)",
-      align: "right",
+      key: 'scanAmount',
+      header: 'Scan ($)',
+      align: 'right',
       render: (v: number) => (v ?? 0).toFixed(2),
     },
     {
-      key: "projectedScan",
-      header: "Projected Scan ($)",
-      align: "right" as const,
+      key: 'projectedScan',
+      header: 'Projected Scan ($)',
+      align: 'right' as const,
       render: (_: any, row: any) =>
         (row.projectedScan ?? 0).toLocaleString(undefined, {
           minimumFractionDigits: 2,
@@ -206,27 +239,27 @@ export const ScanPlanner: React.FC = () => {
         }),
     },
     {
-      key: "projectedVolume",
-      header: "Proj. Vol.",
-      align: "right" as const,
+      key: 'projectedVolume',
+      header: 'Proj. Vol.',
+      align: 'right' as const,
       render: (_: any, row: any) => (row.projectedVolume ?? 0).toLocaleString(),
     },
     {
-      key: "volumeLift",
-      header: "Vol. Lift",
-      align: "right" as const,
+      key: 'volumeLift',
+      header: 'Vol. Lift',
+      align: 'right' as const,
       render: (_: any, row: any) => (row.volumeLift ?? 0).toLocaleString(),
     },
     {
-      key: "volumeLiftPct",
-      header: "Lift %",
-      align: "right" as const,
-      render: (_: any, row: any) => (row.volumeLiftPct ?? 0).toFixed(1) + "%",
+      key: 'volumeLiftPct',
+      header: 'Lift %',
+      align: 'right' as const,
+      render: (_: any, row: any) => (row.volumeLiftPct ?? 0).toFixed(1) + '%',
     },
     {
-      key: "projectedRetail",
-      header: "Proj. Retail ($)",
-      align: "right" as const,
+      key: 'projectedRetail',
+      header: 'Proj. Retail ($)',
+      align: 'right' as const,
       render: (_: any, row: any) =>
         (row.projectedRetail ?? 0).toLocaleString(undefined, {
           minimumFractionDigits: 2,
@@ -234,15 +267,15 @@ export const ScanPlanner: React.FC = () => {
         }),
     },
     {
-      key: "qd",
-      header: "QD ($)",
-      align: "right" as const,
+      key: 'qd',
+      header: 'QD ($)',
+      align: 'right' as const,
       render: (_: any, row: any) => (row.qd ?? 0).toLocaleString(),
     },
     {
-      key: "loyalty",
-      header: "Loyalty ($)",
-      align: "right" as const,
+      key: 'loyalty',
+      header: 'Loyalty ($)',
+      align: 'right' as const,
       render: (_: any, row: any) =>
         (row.loyalty ?? 0).toLocaleString(undefined, {
           minimumFractionDigits: 2,
@@ -250,24 +283,24 @@ export const ScanPlanner: React.FC = () => {
         }),
     },
     {
-      key: "retailerMargin",
-      header: "Retail Margin %",
-      align: "right" as const,
-      render: (_: any, row: any) => (row.retailerMargin ?? 0).toFixed(1) + "%",
+      key: 'retailerMargin',
+      header: 'Retail Margin %',
+      align: 'right' as const,
+      render: (_: any, row: any) => (row.retailerMargin ?? 0).toFixed(1) + '%',
     },
     {
-      key: "status",
-      header: "Status",
-      align: "center" as const,
+      key: 'status',
+      header: 'Status',
+      align: 'center' as const,
       render: (status: string) => {
-        if (status === "approved") {
-          return <CheckCircleIcon color="primary" titleAccess="Approved" />;
+        if (status === 'approved') {
+          return <CheckCircleIcon color='primary' titleAccess='Approved' />;
         }
-        if (status === "review") {
-          return <PendingIcon color="secondary" titleAccess="Review" />;
+        if (status === 'review') {
+          return <PendingIcon color='secondary' titleAccess='Review' />;
         }
         // Draft/default
-        return <PendingActionsIcon color="secondary" titleAccess="Draft" />;
+        return <PendingActionsIcon color='secondary' titleAccess='Draft' />;
       },
     },
   ];
@@ -277,7 +310,7 @@ export const ScanPlanner: React.FC = () => {
     .filter((c) => !MANDATORY_COL_KEYS.includes(c.key))
     .map((c) => ({
       key: c.key,
-      label: typeof c.header === "string" ? c.header : `${c.header}`,
+      label: typeof c.header === 'string' ? c.header : `${c.header}`,
     }));
 
   const filteredColumns = columns.filter((c) => visibleColKeys.includes(c.key));
@@ -302,7 +335,7 @@ export const ScanPlanner: React.FC = () => {
   const highlightedRowIds = React.useMemo(() => {
     if (!hoverClusterId) return new Set<string>();
     return new Set<string>(
-      rows.filter((r) => r.clusterId === hoverClusterId).map((r) => r.id)
+      rows.filter((r) => r.clusterId === hoverClusterId).map((r) => r.id),
     );
   }, [hoverClusterId, rows]);
 
@@ -310,7 +343,7 @@ export const ScanPlanner: React.FC = () => {
   const buildPayloadFromCluster = (clusterId: string): ClusterPayload => {
     const clusterRows = rows.filter((r) => r.clusterId === clusterId);
     if (clusterRows.length === 0) {
-      return { market: "", account: "", products: [] };
+      return { market: '', account: '', products: [] };
     }
     const { market, account } = clusterRows[0];
     const productMap: Record<string, ProductEntry> = {};
@@ -348,7 +381,7 @@ export const ScanPlanner: React.FC = () => {
     const payload = buildPayloadFromCluster(clusterId);
     setEditingClusterId(clusterId);
     setEditingPayload(payload);
-    const rowStatus = row.status as "draft" | "review" | "approved";
+    const rowStatus = row.status as 'draft' | 'review' | 'approved';
     setSidebarStatus(rowStatus);
     const isReadOnly = !canEditCluster(role, mode, rowStatus);
     setSidebarReadOnly(isReadOnly);
@@ -356,12 +389,12 @@ export const ScanPlanner: React.FC = () => {
   };
 
   return (
-    <Paper elevation={2} sx={{ p: 2, mb: 2, position: "relative" }}>
+    <Paper elevation={2} sx={{ p: 2, mb: 2, position: 'relative' }}>
       {/* Header */}
-      <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", flex: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
           <Typography
-            variant="h6"
+            variant='h6'
             sx={{
               fontWeight: 500,
               color: theme.palette.primary.main,
@@ -370,8 +403,8 @@ export const ScanPlanner: React.FC = () => {
           >
             SCAN PLANNER
           </Typography>
-          <Tooltip title={isCollapsed ? "Expand" : "Collapse"}>
-            <IconButton onClick={() => setIsCollapsed((v) => !v)} size="small">
+          <Tooltip title={isCollapsed ? 'Expand' : 'Collapse'}>
+            <IconButton onClick={() => setIsCollapsed((v) => !v)} size='small'>
               {isCollapsed ? (
                 <KeyboardArrowDownIcon />
               ) : (
@@ -380,27 +413,39 @@ export const ScanPlanner: React.FC = () => {
             </IconButton>
           </Tooltip>
         </Box>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setEditingClusterId(null);
-            setEditingPayload(null);
-            setSidebarReadOnly(false);
-            setSidebarStatus("draft");
-            setSidebarOpen(true);
-          }}
-          sx={{ fontWeight: 500 }}
-          disabled={isLocked || role === "finance"}
-        >
-          Add Scan
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant='contained'
+            color='primary'
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setEditingClusterId(null);
+              setEditingPayload(null);
+              setSidebarReadOnly(false);
+              setSidebarStatus('draft');
+              setSidebarOpen(true);
+            }}
+            sx={{ fontWeight: 500 }}
+            disabled={isLocked || role === 'finance'}
+          >
+            Add Scan
+          </Button>
+          <Button
+            variant='outlined'
+            color='primary'
+            startIcon={<TableChartIcon />}
+            onClick={() => setExportConfigDialogOpen(true)}
+            sx={{ fontWeight: 500 }}
+            disabled={role !== 'finance'}
+          >
+            Configure Excel Export
+          </Button>
+        </Box>
       </Box>
 
       {/* Filters always visible */}
       {!isCollapsed && (
-        <Box sx={{ display: "flex", gap: 2, mb: 2, width: "100%" }}>
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, width: '100%' }}>
           <Autocomplete
             multiple
             limitTags={2}
@@ -408,11 +453,11 @@ export const ScanPlanner: React.FC = () => {
             value={selectedMarkets}
             onChange={(_e, v) => setSelectedMarkets(v)}
             renderInput={(params) => (
-              <TextField {...params} label="Filter Markets" />
+              <TextField {...params} label='Filter Markets' />
             )}
             renderTags={(value, getTagProps) =>
               value.map((option, index) => (
-                <Chip label={option} size="small" {...getTagProps({ index })} />
+                <Chip label={option} size='small' {...getTagProps({ index })} />
               ))
             }
             sx={{ flex: 1, minWidth: 180 }}
@@ -424,11 +469,11 @@ export const ScanPlanner: React.FC = () => {
             value={selectedRetailers}
             onChange={(_e, v) => setSelectedRetailers(v)}
             renderInput={(params) => (
-              <TextField {...params} label="Filter Retailers" />
+              <TextField {...params} label='Filter Retailers' />
             )}
             renderTags={(value, getTagProps) =>
               value.map((option, index) => (
-                <Chip label={option} size="small" {...getTagProps({ index })} />
+                <Chip label={option} size='small' {...getTagProps({ index })} />
               ))
             }
             sx={{ flex: 1, minWidth: 180 }}
@@ -440,11 +485,11 @@ export const ScanPlanner: React.FC = () => {
             value={selectedProducts}
             onChange={(_e, v) => setSelectedProducts(v)}
             renderInput={(params) => (
-              <TextField {...params} label="Filter Products" />
+              <TextField {...params} label='Filter Products' />
             )}
             renderTags={(value, getTagProps) =>
               value.map((option, index) => (
-                <Chip label={option} size="small" {...getTagProps({ index })} />
+                <Chip label={option} size='small' {...getTagProps({ index })} />
               ))
             }
             sx={{ flex: 1, minWidth: 180 }}
@@ -477,7 +522,7 @@ export const ScanPlanner: React.FC = () => {
           onRowHoverEnd={() => setHoverClusterId(null)}
           stickyHeader
           enableColumnFiltering={false}
-          maxHeight="calc(100vh - 300px)"
+          maxHeight='calc(100vh - 300px)'
           defaultRowsPerPage={10}
           rowsPerPageOptions={[10, 25, 50]}
           expandedRowIds={highlightedRowIds}
@@ -486,23 +531,23 @@ export const ScanPlanner: React.FC = () => {
       )}
 
       {/* Save/Publish Buttons */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 2, mt: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
         <Button
-          variant="contained"
-          color="primary"
-          onClick={() => console.log("Save clicked", rows)}
+          variant='contained'
+          color='primary'
+          onClick={() => console.log('Save clicked', rows)}
           disabled={hasReview || hasApproved}
         >
           <SaveIcon sx={{ mr: 1 }} />
           Save Progress
         </Button>
-        {mode !== "forecast" && (
+        {mode !== 'forecast' && (
           <Button
-            variant="contained"
-            color="secondary"
+            variant='contained'
+            color='secondary'
             onClick={() => {
-              setPublishComment("");
-              setPublishConfirmationText("");
+              setPublishComment('');
+              setPublishConfirmationText('');
               setPublishCommentError(false);
               setPublishConfirmationError(false);
               setPublishDialogOpen(true);
@@ -516,18 +561,18 @@ export const ScanPlanner: React.FC = () => {
       </Box>
 
       {/* Role Toggle Prototype */}
-      <Box sx={{ position: "absolute", bottom: 8, left: 16 }}>
+      <Box sx={{ position: 'absolute', bottom: 8, left: 16 }}>
         <Button
-          variant="contained"
-          color="primary"
+          variant='contained'
+          color='primary'
           startIcon={<SwapHorizIcon />}
           onClick={() =>
-            setRole((r) => (r === "commercial" ? "finance" : "commercial"))
+            setRole((r) => (r === 'commercial' ? 'finance' : 'commercial'))
           }
         >
-          {role === "commercial"
-            ? "Switch to Finance View"
-            : "Switch to Commercial View"}
+          {role === 'commercial'
+            ? 'Switch to Finance View'
+            : 'Switch to Commercial View'}
         </Button>
       </Box>
 
@@ -554,49 +599,49 @@ export const ScanPlanner: React.FC = () => {
           if (isPublishing) return; // prevent close during publishing
           setPublishDialogOpen(false);
         }}
-        maxWidth="sm"
+        maxWidth='sm'
         fullWidth
         disableEscapeKeyDown={isPublishing}
       >
-        <DialogTitle color="primary">Publish Scan Plan</DialogTitle>
+        <DialogTitle color='primary'>Publish Scan Plan</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" gutterBottom>
+          <Typography variant='body1' gutterBottom>
             By selecting "Publish", you will finalize this scan plan. Please
             provide a comment and type "PUBLISH" below to confirm.
           </Typography>
           <TextField
             autoFocus
             required
-            margin="dense"
-            label="Comment (Required)"
-            type="text"
+            margin='dense'
+            label='Comment (Required)'
+            type='text'
             fullWidth
-            variant="outlined"
+            variant='outlined'
             value={publishComment}
             onChange={(e) => {
               setPublishComment(e.target.value);
               if (e.target.value.trim()) setPublishCommentError(false);
             }}
             error={publishCommentError}
-            helperText={publishCommentError ? "Comment is required." : ""}
+            helperText={publishCommentError ? 'Comment is required.' : ''}
             disabled={isPublishing}
             multiline
             rows={3}
           />
           <TextField
             required
-            margin="dense"
+            margin='dense'
             label="To publish, please type 'PUBLISH' and then select 'Publish'"
-            type="text"
+            type='text'
             fullWidth
-            variant="outlined"
+            variant='outlined'
             value={publishConfirmationText}
             onChange={(e) => {
               const txt = e.target.value;
               setPublishConfirmationText(txt);
-              if (txt === "PUBLISH") {
+              if (txt === 'PUBLISH') {
                 setPublishConfirmationError(false);
-              } else if (txt.trim() !== "") {
+              } else if (txt.trim() !== '') {
                 setPublishConfirmationError(true);
               } else {
                 setPublishConfirmationError(false);
@@ -605,7 +650,7 @@ export const ScanPlanner: React.FC = () => {
             onBlur={() => {
               if (
                 publishConfirmationText.trim() &&
-                publishConfirmationText !== "PUBLISH"
+                publishConfirmationText !== 'PUBLISH'
               ) {
                 setPublishConfirmationError(true);
               }
@@ -613,8 +658,8 @@ export const ScanPlanner: React.FC = () => {
             error={publishConfirmationError}
             helperText={
               publishConfirmationError
-                ? "Confirmation text does not match."
-                : ""
+                ? 'Confirmation text does not match.'
+                : ''
             }
             disabled={isPublishing}
             sx={{ mt: 2 }}
@@ -630,44 +675,44 @@ export const ScanPlanner: React.FC = () => {
             Cancel
           </Button>
           <Button
-            variant="contained"
-            color="secondary"
+            variant='contained'
+            color='secondary'
             onClick={() => {
-              if (publishComment.trim() === "") {
+              if (publishComment.trim() === '') {
                 setPublishCommentError(true);
                 return;
               }
-              if (publishConfirmationText !== "PUBLISH") {
+              if (publishConfirmationText !== 'PUBLISH') {
                 setPublishConfirmationError(true);
                 return;
               }
               setIsPublishing(true);
-              const nextStatus = rows.some((r) => r.status === "review")
-                ? "approved"
-                : "review";
+              const nextStatus = rows.some((r) => r.status === 'review')
+                ? 'approved'
+                : 'review';
               setTimeout(() => {
                 setIsPublishing(false);
                 setPublishDialogOpen(false);
                 showSnackbar(
-                  nextStatus === "approved"
-                    ? "Published to Approved"
-                    : "Submitted for Review",
-                  "success"
+                  nextStatus === 'approved'
+                    ? 'Published to Approved'
+                    : 'Submitted for Review',
+                  'success',
                 );
                 dispatch(
                   setPlannerRows(
-                    rows.map((r) => ({ ...r, status: nextStatus }))
-                  )
+                    rows.map((r) => ({ ...r, status: nextStatus })),
+                  ),
                 );
               }, 1000);
             }}
             disabled={
               isPublishing ||
-              publishComment.trim() === "" ||
-              publishConfirmationText !== "PUBLISH"
+              publishComment.trim() === '' ||
+              publishConfirmationText !== 'PUBLISH'
             }
           >
-            {isPublishing ? "Publishing..." : "Publish"}
+            {isPublishing ? 'Publishing...' : 'Publish'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -676,16 +721,25 @@ export const ScanPlanner: React.FC = () => {
         open={snackbar.open}
         autoHideDuration={3000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           onClose={() => setSnackbar({ ...snackbar, open: false })}
           severity={snackbar.severity}
-          sx={{ width: "100%" }}
+          sx={{ width: '100%' }}
         >
           {snackbar.msg}
         </Alert>
       </Snackbar>
+
+      {/* Export Configuration Dialog */}
+      <FinanceExportConfigDialog
+        open={exportConfigDialogOpen}
+        onClose={() => setExportConfigDialogOpen(false)}
+        onExport={handleExportConfig}
+        markets={SCAN_MARKETS.map((m: any) => ({ id: m.name, name: m.name }))}
+        retailers={retailerOptions.map((r: string) => ({ id: r, name: r }))}
+      />
     </Paper>
   );
 };
