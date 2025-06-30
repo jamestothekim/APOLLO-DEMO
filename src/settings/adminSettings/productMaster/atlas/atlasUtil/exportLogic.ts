@@ -3,7 +3,7 @@ Utility for generating a sample extract using in-memory data that was
 previously fetched by StagingDialog. No extra API calls are performed.
 */
 
-import { syncMaster } from "../syncMaster";
+import { syncMaster } from "../atlas";
 
 export interface MarketRow {
   [key: string]: any;

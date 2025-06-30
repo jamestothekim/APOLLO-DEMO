@@ -20,18 +20,15 @@ import {
   Tooltip,
 } from "@mui/material";
 import axios from "axios";
-import { generateSampleFile } from "./syncMasterUtil/exportLogic";
+import { generateSampleFile } from "./atlasUtil/exportLogic";
 import Alert from "@mui/material/Alert";
 import SyncIcon from "@mui/icons-material/Sync";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import { DataFormat } from "./syncMasterComponents/dataFormat";
-import { SFTPConfig } from "./syncMasterComponents/sftpConfig";
-import {
-  DataFrequency,
-  FrequencyConfig,
-} from "./syncMasterComponents/dataFrequency";
+import { DataFormat } from "./dataFormat";
+import { SFTPConfig } from "./sftpConfig";
+import { DataFrequency, FrequencyConfig } from "./dataFrequency";
 
 export interface syncMaster {
   delimiter: string;
@@ -111,7 +108,7 @@ export const StagingDialog = ({
       try {
         const [marketsRes, skusRes] = await Promise.all([
           axios.get(`${import.meta.env.VITE_API_URL}/admin/get-states`),
-          axios.get(`${import.meta.env.VITE_API_URL}/atlas/sku-master`),
+          axios.get(`${import.meta.env.VITE_API_URL}/syncMaster/sku-master`),
         ]);
         setMarketRows(marketsRes.data || []);
         setSkuRows(skusRes.data || []);
@@ -128,7 +125,7 @@ export const StagingDialog = ({
     const fetchExistingConfigs = async () => {
       try {
         const res = await axios.get(
-          `${import.meta.env.VITE_API_URL}/atlas/sync-configs`
+          `${import.meta.env.VITE_API_URL}/syncMaster/sync-configs`
         );
         const rows: any[] = res.data || [];
         setConfigs((prev) => {
@@ -230,9 +227,12 @@ export const StagingDialog = ({
   const handleSave = async () => {
     try {
       // Save all configs to backend
-      await axios.post(`${import.meta.env.VITE_API_URL}/atlas/sync-configs`, {
-        configs,
-      });
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/syncMaster/sync-configs`,
+        {
+          configs,
+        }
+      );
       onSave(configs);
     } catch (err) {
       console.error("Error saving staging configuration", err);
@@ -257,7 +257,7 @@ export const StagingDialog = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>ATLAS Sync Master</DialogTitle>
+      <DialogTitle>ATLAS - Product Master Sync</DialogTitle>
       <DialogContent dividers>
         {view === "main" && (
           <>

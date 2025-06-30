@@ -7,7 +7,7 @@ import {
   Box,
 } from "@mui/material";
 import dayjs from "dayjs";
-import { syncMaster } from "../syncMaster";
+import { syncMaster } from "./atlas";
 
 export interface FrequencyConfig {
   startDate: string; // YYYY-MM-DD

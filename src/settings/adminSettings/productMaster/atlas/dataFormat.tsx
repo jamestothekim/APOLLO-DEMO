@@ -17,7 +17,7 @@ import {
   Box,
 } from "@mui/material";
 import axios from "axios";
-import { syncMaster } from "../syncMaster";
+import { syncMaster } from "./atlas";
 
 interface FieldMeta {
   name: string;
@@ -59,10 +59,10 @@ export const DataFormat = ({
       try {
         const [marketsRes, skuRes] = await Promise.all([
           axios.get<string[]>(
-            `${import.meta.env.VITE_API_URL}/atlas/market-fields`
+            `${import.meta.env.VITE_API_URL}/syncMaster/market-fields`
           ),
           axios.get<string[]>(
-            `${import.meta.env.VITE_API_URL}/atlas/sku-fields`
+            `${import.meta.env.VITE_API_URL}/syncMaster/sku-fields`
           ),
         ]);
         setMarketFields(marketsRes.data.map((name) => ({ name })));

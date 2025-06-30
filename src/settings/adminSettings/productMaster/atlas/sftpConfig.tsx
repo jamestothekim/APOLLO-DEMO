@@ -1,5 +1,5 @@
 import { Stack, Button, Typography, TextField, Box } from "@mui/material";
-import { syncMaster } from "../syncMaster";
+import { syncMaster } from "./atlas";
 
 interface SFTPConfigProps {
   system: string;
