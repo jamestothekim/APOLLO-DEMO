@@ -78,7 +78,7 @@ export async function exportFinanceExcel(
   rows: ScanRow[],
   config: ExportFieldConfig,
   fileName: string,
-  _markets: Market[],
+  _markets: ReadonlyArray<Market>,
   _retailers: string[],
   selectedMarkets: string[],
   selectedRetailers: string[],
