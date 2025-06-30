@@ -43,7 +43,7 @@ export const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onBack }) => {
 
     try {
       const response = await fetch(
-        "http://localhost:3000/users/forgot-password",
+        `${import.meta.env.VITE_API_URL}/users/forgot-password`,
         {
           method: "POST",
           headers: {

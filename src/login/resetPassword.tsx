@@ -116,7 +116,7 @@ export const ResetPassword: React.FC = () => {
 
     try {
       const response = await fetch(
-        "http://localhost:3000/users/reset-password",
+        `${import.meta.env.VITE_API_URL}/users/reset-password`,
         {
           method: "POST",
           headers: {
