@@ -19,7 +19,6 @@ import {
   DialogActions,
   Snackbar,
   Alert,
-<<<<<<< HEAD
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -27,6 +26,8 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import { DynamicTable, type Column } from '../reusableComponents/dynamicTable';
 import ScanSidebar from './scanComponents/scanSidebar';
+import ScanToolbox from './scanComponents/scanToolbox';
+import type { GuidanceOption } from './scanComponents/scanGuidance';
 import { SCAN_MARKETS } from './scanPlayData/scanData';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SaveIcon from '@mui/icons-material/Save';
@@ -40,24 +41,6 @@ import {
   type ExportFieldConfig,
 } from './scanUtil/FinanceExportConfigDialog';
 import { exportFinanceExcel } from './scanUtil/financeExportUtil';
-=======
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import { DynamicTable, type Column } from "../reusableComponents/dynamicTable";
-import ScanSidebar from "./scanComponents/scanSidebar";
-import ScanToolbox from "./scanComponents/scanToolbox";
-import type { GuidanceOption } from "./scanComponents/scanGuidance";
-import { SCAN_MARKETS } from "./scanPlayData/scanData";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import SaveIcon from "@mui/icons-material/Save";
-import PublishIcon from "@mui/icons-material/Publish";
-import PendingActionsIcon from "@mui/icons-material/PendingActions";
-import PendingIcon from "@mui/icons-material/Pending";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import type { ProductEntry } from "./scanComponents/scanSidebarProducts";
->>>>>>> 998186ee31cda0b19dba85e5889b35b5e9afba1e
 
 interface ScanRow {
   id: string;
@@ -74,14 +57,10 @@ interface ScanRow {
   qd: number;
   retailerMargin: number;
   loyalty: number;
-<<<<<<< HEAD
-  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'review';
-=======
   projectedVolume: number;
   volumeLift: number;
   volumeLiftPct: number;
-  status: "draft" | "pending" | "approved" | "rejected" | "review";
->>>>>>> 998186ee31cda0b19dba85e5889b35b5e9afba1e
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'review';
   comments?: string;
 }
 
@@ -161,7 +140,6 @@ export const ScanPlanner: React.FC = () => {
     /* Row construction and saving are now handled inside ScanSidebar via saveClusterRows. */
   };
 
-<<<<<<< HEAD
   // --- Export Handler ---
   const handleExportConfig = async (
     config: ExportFieldConfig,
@@ -185,32 +163,31 @@ export const ScanPlanner: React.FC = () => {
       showSnackbar('Failed to export Excel file', 'error');
     }
   };
-=======
+
   // Guidance – visible columns state
   const MANDATORY_COL_KEYS = [
-    "market",
-    "account",
-    "product",
-    "week",
-    "scanAmount",
-    "status",
+    'market',
+    'account',
+    'product',
+    'week',
+    'scanAmount',
+    'status',
   ];
 
   const OPTIONAL_COL_KEYS = [
-    "projectedScan",
-    "projectedVolume",
-    "volumeLift",
-    "volumeLiftPct",
-    "projectedRetail",
-    "qd",
-    "loyalty",
-    "retailerMargin",
+    'projectedScan',
+    'projectedVolume',
+    'volumeLift',
+    'volumeLiftPct',
+    'projectedRetail',
+    'qd',
+    'loyalty',
+    'retailerMargin',
   ];
 
   const DEFAULT_COL_KEYS = [...MANDATORY_COL_KEYS, ...OPTIONAL_COL_KEYS];
   const [visibleColKeys, setVisibleColKeys] =
     useState<string[]>(DEFAULT_COL_KEYS);
->>>>>>> 998186ee31cda0b19dba85e5889b35b5e9afba1e
 
   const columns: Column[] = [
     {
@@ -262,33 +239,27 @@ export const ScanPlanner: React.FC = () => {
         }),
     },
     {
-<<<<<<< HEAD
-      key: 'projectedRetail',
-      header: 'Proj. Retail ($)',
+      key: 'projectedVolume',
+      header: 'Proj. Vol.',
       align: 'right' as const,
-=======
-      key: "projectedVolume",
-      header: "Proj. Vol.",
-      align: "right" as const,
       render: (_: any, row: any) => (row.projectedVolume ?? 0).toLocaleString(),
     },
     {
-      key: "volumeLift",
-      header: "Vol. Lift",
-      align: "right" as const,
+      key: 'volumeLift',
+      header: 'Vol. Lift',
+      align: 'right' as const,
       render: (_: any, row: any) => (row.volumeLift ?? 0).toLocaleString(),
     },
     {
-      key: "volumeLiftPct",
-      header: "Lift %",
-      align: "right" as const,
-      render: (_: any, row: any) => (row.volumeLiftPct ?? 0).toFixed(1) + "%",
+      key: 'volumeLiftPct',
+      header: 'Lift %',
+      align: 'right' as const,
+      render: (_: any, row: any) => (row.volumeLiftPct ?? 0).toFixed(1) + '%',
     },
     {
-      key: "projectedRetail",
-      header: "Proj. Retail ($)",
-      align: "right" as const,
->>>>>>> 998186ee31cda0b19dba85e5889b35b5e9afba1e
+      key: 'projectedRetail',
+      header: 'Proj. Retail ($)',
+      align: 'right' as const,
       render: (_: any, row: any) =>
         (row.projectedRetail ?? 0).toLocaleString(undefined, {
           minimumFractionDigits: 2,
@@ -339,7 +310,7 @@ export const ScanPlanner: React.FC = () => {
     .filter((c) => !MANDATORY_COL_KEYS.includes(c.key))
     .map((c) => ({
       key: c.key,
-      label: typeof c.header === "string" ? c.header : `${c.header}`,
+      label: typeof c.header === 'string' ? c.header : `${c.header}`,
     }));
 
   const filteredColumns = columns.filter((c) => visibleColKeys.includes(c.key));
