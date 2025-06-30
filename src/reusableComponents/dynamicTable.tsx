@@ -266,19 +266,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     }
   };
 
-  const handleClearTagFilter = (columnKey: string) => {
-    setTagFilterValues((prev) => {
-      const newFilters = { ...prev };
-      delete newFilters[columnKey];
-      return newFilters;
-    });
-    if (controlledPageChange) {
-      controlledPageChange(null, 0);
-    } else {
-      setInternalPage(0);
-    }
-  };
-
   const flatColumns = useMemo(() => {
     return columns.reduce((acc: Column[], col) => {
       if (col.columnGroup && col.columns) {
@@ -454,8 +441,6 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
 
       // Second pass: filter to include matching parents and their children
       processedData = processedData.filter((row) => {
-        const rowId = typeof getRowId === "function" ? getRowId(row) : row.id;
-
         // Include if this row itself matches tag filters
         const matchesTagFilter = activeTagFilters.every(
           ([columnKey, selectedTags]) => {
@@ -778,7 +763,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                     return (
                       <TableCell
                         key={column.key}
-                        align="left"
+                        align={column.align === "left" ? "left" : "center"}
                         data-section={sectionInfo.name.toLowerCase()}
                         data-first-in-section={sectionInfo.isFirst}
                         sx={{
@@ -808,7 +793,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                           sx={{
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "flex-start",
+                            justifyContent:
+                              column.align === "left" ? "flex-start" : "center",
                             width: "100%",
                             height: "100%",
                           }}
@@ -817,7 +803,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                             variant="body2"
                             component="span"
                             sx={{
-                              textAlign: "left",
+                              textAlign:
+                                column.align === "left" ? "left" : "center",
                               fontWeight:
                                 sortConfig?.key === column.key
                                   ? "bold"
@@ -906,7 +893,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                             sx={{
                               fontStyle: "italic",
                               marginTop: "2px",
-                              textAlign: "left",
+                              textAlign:
+                                column.align === "left" ? "left" : "center",
                               width: "100%",
                             }}
                           >
