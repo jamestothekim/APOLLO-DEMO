@@ -12,11 +12,13 @@ import {
   Autocomplete,
 } from "@mui/material";
 import { Depletions } from "./depletions/depletions";
+import { Shipments } from "./shipments/shipments";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { Toolbox } from "./components/toolbox";
 import type { ToolType } from "./components/toolbox";
 import { GuidanceDialog } from "./components/guidance";
+import { ShipmentGuidanceDialog } from "./shipments/shipmentGuidanceDialog";
 import { useSelector, useDispatch } from "react-redux";
 import type { AppDispatch } from "../redux/store";
 import {
@@ -33,6 +35,7 @@ import {
   setVolumeForecastTags,
 } from "../redux/slices/userSettingsSlice";
 import type { Guidance } from "../redux/slices/userSettingsSlice";
+import { useUser } from "../userContext";
 import axios from "axios";
 
 const MAX_CHIPS_VISIBLE = 3; // Define how many chips to show
@@ -94,6 +97,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   marketData,
 }) => {
   const dispatch: AppDispatch = useDispatch();
+  const { user } = useUser();
   const availableGuidance = useSelector(selectAvailableGuidance);
   const volumeForecastMarkets = useSelector(selectVolumeForecastMarkets);
   const volumeForecastBrands = useSelector(selectVolumeForecastBrands);
@@ -117,6 +121,13 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isCustomerView, setIsCustomerView] = useState(false);
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
+  const [configureDialogOpen, setConfigureDialogOpen] = useState(false);
+
+  // Shipment guidance state (separate from regular guidance)
+  const [selectedShipmentGuidanceCols, setSelectedShipmentGuidanceCols] =
+    useState<Guidance[]>([]);
+  const [selectedShipmentGuidanceRows, setSelectedShipmentGuidanceRows] =
+    useState<Guidance[]>([]);
 
   // Sync with Redux state
   useEffect(() => {
@@ -136,6 +147,13 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
       setSelectedTags(volumeForecastTags);
     }
   }, [volumeForecastTags]);
+
+  // Reset tab to Depletion if user is on Shipments tab but doesn't have admin access
+  useEffect(() => {
+    if (tabValue === 1 && !user?.user_access?.Admin) {
+      setTabValue(0);
+    }
+  }, [tabValue, user?.user_access?.Admin]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -250,15 +268,31 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
     setColumnsDialogOpen(true);
   };
 
+  const handleConfigure = () => {
+    setConfigureDialogOpen(true);
+  };
+
   const handleApplyColumns = async (columns: Guidance[]) => {
     setColumnsDialogOpen(false);
-    const columnIds = columns.map((col) => col.id);
-    dispatch(setPendingForecastCols(columnIds));
+    if (tabValue === 1) {
+      // Shipments tab - update local state only
+      setSelectedShipmentGuidanceCols(columns);
+    } else {
+      // Depletion tab - update Redux
+      const columnIds = columns.map((col) => col.id);
+      dispatch(setPendingForecastCols(columnIds));
+    }
   };
 
   const handleApplyRows = async (rows: Guidance[]) => {
-    const rowIds = rows.map((row) => row.id);
-    dispatch(setPendingForecastRows(rowIds));
+    if (tabValue === 1) {
+      // Shipments tab - update local state only
+      setSelectedShipmentGuidanceRows(rows);
+    } else {
+      // Depletion tab - update Redux
+      const rowIds = rows.map((row) => row.id);
+      dispatch(setPendingForecastRows(rowIds));
+    }
   };
 
   const isCustomerData = (
@@ -421,6 +455,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
               "undo" as ToolType,
               "columns" as ToolType,
               "export" as ToolType,
+              ...(tabValue === 1 ? ["configure" as ToolType] : []),
               ...(marketData.some((m) => m.settings?.managed_by === "Customer")
                 ? ["customerToggle" as ToolType]
                 : []),
@@ -428,6 +463,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
             onUndo={handleUndo}
             onColumns={handleColumns}
             onExport={handleExportClick}
+            onConfigure={handleConfigure}
             onCustomerToggle={handleViewToggle}
             canUndo={true}
             isDepletionsView={true}
@@ -437,6 +473,21 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
           <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
             <Tabs value={tabValue} onChange={handleTabChange}>
               <Tab label="Depletion" />
+              {user?.user_access?.Admin && (
+                <Tab
+                  label={
+                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                      Shipments
+                      <Chip
+                        label="PROTO"
+                        color="secondary"
+                        size="small"
+                        sx={{ borderRadius: 4, ml: 1, fontSize: "0.65em" }}
+                      />
+                    </Box>
+                  }
+                />
+              )}
             </Tabs>
           </Box>
 
@@ -453,20 +504,51 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
               rowGuidanceSelections={selectedGuidanceRows}
             />
           </TabPanel>
+
+          {user?.user_access?.Admin && (
+            <TabPanel value={tabValue} index={1}>
+              <Shipments
+                selectedMarkets={selectedMarkets}
+                selectedBrands={selectedBrands}
+                selectedTags={selectedTags}
+                marketMetadata={marketData}
+                isCustomerView={isCustomerView}
+                selectedGuidance={selectedShipmentGuidanceCols}
+                rowGuidanceSelections={selectedShipmentGuidanceRows}
+                configureOpen={configureDialogOpen}
+                onConfigureClose={() => setConfigureDialogOpen(false)}
+              />
+            </TabPanel>
+          )}
         </Box>
       </Collapse>
 
-      <GuidanceDialog
-        open={columnsDialogOpen}
-        onClose={() => setColumnsDialogOpen(false)}
-        title="Forecast Guidance Options"
-        availableGuidance={availableGuidance}
-        initialSelectedColumns={selectedGuidanceCols}
-        initialSelectedRows={selectedGuidanceRows}
-        onApplyColumns={handleApplyColumns}
-        onApplyRows={handleApplyRows}
-        viewContext="depletions"
-      />
+      {/* Conditional Guidance Dialog Rendering */}
+      {tabValue === 1 && user?.user_access?.Admin ? (
+        // Shipments tab - show shipment guidance dialog (admin only)
+        <ShipmentGuidanceDialog
+          open={columnsDialogOpen}
+          onClose={() => setColumnsDialogOpen(false)}
+          title="Shipment Guidance Options"
+          initialSelectedColumns={selectedShipmentGuidanceCols}
+          initialSelectedRows={selectedShipmentGuidanceRows}
+          onApplyColumns={handleApplyColumns}
+          onApplyRows={handleApplyRows}
+        />
+      ) : (
+        // Depletion tab - show regular guidance dialog
+        <GuidanceDialog
+          open={columnsDialogOpen}
+          onClose={() => setColumnsDialogOpen(false)}
+          title="Forecast Guidance Options"
+          availableGuidance={availableGuidance}
+          initialSelectedColumns={selectedGuidanceCols}
+          initialSelectedRows={selectedGuidanceRows}
+          onApplyColumns={handleApplyColumns}
+          onApplyRows={handleApplyRows}
+          viewContext="depletions"
+        />
+      )}
     </Paper>
   );
 };

@@ -13,6 +13,7 @@ import {
   TableCell,
   TableBody,
   Popover,
+  Chip,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -30,6 +31,9 @@ export interface ProductEntry {
     qd?: number;
     retailerMargin?: number;
     loyalty?: number;
+    projectedVolume?: number;
+    volumeLift?: number;
+    volumeLiftPct?: number;
   }[];
   growthRate?: number;
   nielsenTrend?: { month: string; value: number }[];
@@ -53,7 +57,7 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
   readOnly = false,
 }) => {
   const [addingProduct, setAddingProduct] = useState(false);
-  const [newProductName, setNewProductName] = useState("");
+  const [newProductNames, setNewProductNames] = useState<string[]>([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -97,7 +101,7 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
         anchorEl={anchorEl}
         onClose={() => {
           setAddingProduct(false);
-          setNewProductName("");
+          setNewProductNames([]);
         }}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
         transformOrigin={{ vertical: "top", horizontal: "left" }}
@@ -115,9 +119,25 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
         }}
       >
         <Autocomplete
+          multiple
           options={productNames}
-          value={newProductName || null}
-          onChange={(_e, v) => setNewProductName(v || "")}
+          value={newProductNames}
+          onChange={(_e, v) => setNewProductNames(v as string[])}
+          disableCloseOnSelect
+          disableClearable
+          renderTags={(value, getTagProps) =>
+            value.length <= 1 ? (
+              value.map((option, index) => (
+                <Chip label={option} size="small" {...getTagProps({ index })} />
+              ))
+            ) : (
+              <Chip
+                label={`${value.length} Products`}
+                size="small"
+                {...getTagProps({ index: 0 })}
+              />
+            )
+          }
           renderInput={(params) => (
             <TextField {...params} size="small" label="Product" fullWidth />
           )}
@@ -128,23 +148,25 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
           <IconButton
             size="small"
             color="success"
-            disabled={!newProductName}
+            disabled={newProductNames.length === 0}
             onClick={() => {
-              if (!newProductName) return;
+              if (newProductNames.length === 0) return;
               setProducts((prev) => {
+                const existing = new Set(prev.map((p) => p.name));
+                const toAdd = newProductNames.filter((n) => !existing.has(n));
                 const upd = [
                   ...prev,
-                  {
-                    name: newProductName,
+                  ...toAdd.map((n) => ({
+                    name: n,
                     scans: [],
                     growthRate: 0,
                     nielsenTrend: undefined,
-                  },
+                  })),
                 ];
                 setSelectedProductIdx(upd.length - 1);
                 return upd;
               });
-              setNewProductName("");
+              setNewProductNames([]);
               setAddingProduct(false);
             }}
           >
@@ -154,7 +176,7 @@ const ScanSidebarProducts: React.FC<ProductsPaneProps> = ({
             size="small"
             onClick={() => {
               setAddingProduct(false);
-              setNewProductName("");
+              setNewProductNames([]);
             }}
           >
             <CloseIcon fontSize="small" />

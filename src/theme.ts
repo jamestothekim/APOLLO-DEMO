@@ -219,6 +219,11 @@ declare module '@mui/material/styles' {
           },
         },
       },
+      MuiTextField: {
+        defaultProps: {
+          size: 'small',
+        },
+      },
       MuiDynamicTable: {
         styleOverrides: {
           sectionHeader: {

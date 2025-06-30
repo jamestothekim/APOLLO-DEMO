@@ -13,6 +13,7 @@ import {
   TableCell,
   TableBody,
   Popover,
+  Chip,
 } from "@mui/material";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -49,12 +50,11 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
   readOnly = false,
 }) => {
   const [addingScan, setAddingScan] = useState(false);
-  const [newScanWeek, setNewScanWeek] = useState("");
+  const [newScanWeeks, setNewScanWeeks] = useState<string[]>([]);
   const [newScanAmountStr, setNewScanAmountStr] = useState("");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const [editingScanIdx, setEditingScanIdx] = useState<number | null>(null);
-  const [editingWeek, setEditingWeek] = useState("");
   const [editingScanAmountStr, setEditingScanAmountStr] = useState("");
 
   const WEEK_OPTIONS = useMemo(() => {
@@ -79,12 +79,35 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
       Math.round(trendVal * (1 + (prod.growthRate || 0)) * 10) / 10;
     const projectedScan =
       projectedMonthly * getProjectedScanDollars(prod.name, scanAmount);
+    // --- Volume projections ---
+    // Approximate baseline weekly volume as monthly trend divided by 4
+    const baselineWeekly = trendVal / 4;
+    // Simple elasticity: assume lift proportionate to scan amount up to max 10%
+    const liftPct = Math.min(0.1, scanAmount / 10);
+    const projectedVolume = Math.round(baselineWeekly * (1 + liftPct));
+    const volumeLift = Math.round(projectedVolume - baselineWeekly);
+    const volumeLiftPct = Math.round(liftPct * 1000) / 10; // one decimal
     const projectedRetail = generateRetailPrice();
     const qd = generateQD();
     const retailerMargin = generateRetailerMargin();
     const loyalty = generateLoyalty();
-    return { projectedScan, projectedRetail, qd, retailerMargin, loyalty };
+    return {
+      projectedScan,
+      projectedRetail,
+      qd,
+      retailerMargin,
+      loyalty,
+      projectedVolume,
+      volumeLift,
+      volumeLiftPct,
+    };
   };
+
+  // Helper to sort scans by week ascending
+  const sortScansByWeek = (arr: (typeof products)[number]["scans"]) =>
+    [...arr].sort(
+      (a, b) => new Date(a.week).getTime() - new Date(b.week).getTime()
+    );
 
   return (
     <Paper
@@ -95,6 +118,7 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
         maxHeight: 220,
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
       }}
       variant="outlined"
     >
@@ -138,7 +162,7 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
         anchorEl={anchorEl}
         onClose={() => {
           setAddingScan(false);
-          setNewScanWeek("");
+          setNewScanWeeks([]);
           setNewScanAmountStr("");
         }}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
@@ -157,13 +181,38 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
         }}
       >
         <Autocomplete
+          multiple
           options={WEEK_OPTIONS}
-          value={newScanWeek || null}
-          onChange={(_e, v) => setNewScanWeek(v || "")}
+          value={newScanWeeks}
+          onChange={(_e, v) => setNewScanWeeks(v as string[])}
+          disableCloseOnSelect
+          disableClearable
+          ListboxProps={{ style: { maxHeight: 200 } }}
+          renderTags={(value, getTagProps) =>
+            value.length <= 1 ? (
+              value.map((option, index) => (
+                <Chip label={option} size="small" {...getTagProps({ index })} />
+              ))
+            ) : (
+              <Chip
+                label={`${value.length} Weeks`}
+                size="small"
+                {...getTagProps({ index: 0 })}
+              />
+            )
+          }
           renderInput={(p) => (
             <TextField {...p} size="small" label="Week" fullWidth />
           )}
-          sx={{ flex: 1, mr: 1 }}
+          sx={{
+            width: 160,
+            mr: 1,
+            "& .MuiAutocomplete-inputRoot": {
+              flexWrap: "nowrap",
+              minHeight: 32,
+            },
+            "& .MuiChip-root": { maxWidth: "90px", height: 24 },
+          }}
         />
         <TextField
           size="small"
@@ -178,7 +227,9 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
           <IconButton
             size="small"
             color="success"
-            disabled={!newScanWeek || parseFloat(newScanAmountStr) <= 0}
+            disabled={
+              newScanWeeks.length === 0 || parseFloat(newScanAmountStr) <= 0
+            }
             onClick={() => {
               const val = parseFloat(newScanAmountStr);
               if (isNaN(val) || val <= 0) {
@@ -190,20 +241,20 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
                   idx === selectedProductIdx
                     ? {
                         ...p,
-                        scans: [
+                        scans: sortScansByWeek([
                           ...p.scans,
-                          {
-                            week: newScanWeek,
+                          ...newScanWeeks.map((w) => ({
+                            week: w,
                             scan: val,
-                            ...computeMetrics(p, newScanWeek, val),
-                          },
-                        ],
+                            ...computeMetrics(p, w, val),
+                          })),
+                        ]),
                       }
                     : p
                 )
               );
               setAddingScan(false);
-              setNewScanWeek("");
+              setNewScanWeeks([]);
               setNewScanAmountStr("");
             }}
           >
@@ -213,7 +264,7 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
             size="small"
             onClick={() => {
               setAddingScan(false);
-              setNewScanWeek("");
+              setNewScanWeeks([]);
               setNewScanAmountStr("");
             }}
           >
@@ -222,161 +273,151 @@ const ScanSidebarScans: React.FC<ScansPaneProps> = ({
         </Box>
       </Popover>
       <Divider />
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ width: "45%" }}>Week</TableCell>
-            <TableCell sx={{ width: "45%" }}>Scan $</TableCell>
-            <TableCell sx={{ width: "10%" }} align="right" />
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {products[selectedProductIdx]?.scans.map((scan, idx) =>
-            !readOnly && editingScanIdx === idx ? (
-              <TableRow
-                key={idx}
-                hover
-                selected={idx === selectedWeekIdx}
-                sx={{ height: 44 }}
-              >
-                <TableCell sx={{ width: "45%" }}>
-                  <Autocomplete
-                    options={[...WEEK_OPTIONS, scan.week]}
-                    value={editingWeek || null}
-                    onChange={(_e, v) => setEditingWeek(v || "")}
-                    renderInput={(p) => <TextField {...p} size="small" />}
-                  />
-                </TableCell>
-                <TableCell sx={{ width: "45%" }}>
-                  <TextField
-                    size="small"
-                    type="number"
-                    sx={{ width: "100%" }}
-                    value={editingScanAmountStr}
-                    onChange={(e) => setEditingScanAmountStr(e.target.value)}
-                  />
-                </TableCell>
-                <TableCell sx={{ width: "10%" }} align="right">
-                  {!readOnly && (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        gap: 0.5,
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <IconButton
-                        size="small"
-                        color="success"
-                        disabled={
-                          !editingWeek || parseFloat(editingScanAmountStr) <= 0
-                        }
-                        onClick={() => {
-                          const val = parseFloat(editingScanAmountStr);
-                          if (isNaN(val) || val <= 0) {
-                            showError("Scan amount must be a valid number");
-                            return;
-                          }
-                          setProducts((prev) =>
-                            prev.map((p, pi) =>
-                              pi === selectedProductIdx
-                                ? {
-                                    ...p,
-                                    scans: p.scans.map((s, si) =>
-                                      si === idx
-                                        ? {
-                                            week: editingWeek,
-                                            scan: val,
-                                            ...computeMetrics(
-                                              p,
-                                              editingWeek,
-                                              val
-                                            ),
-                                          }
-                                        : s
-                                    ),
-                                  }
-                                : p
-                            )
-                          );
-                          setEditingScanIdx(null);
-                          setEditingWeek("");
-                          setEditingScanAmountStr("");
+      <Box sx={{ flex: 1, overflowY: "auto" }}>
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ width: "50%" }}>Week</TableCell>
+              <TableCell sx={{ width: "50%" }}>Scan $</TableCell>
+              <TableCell sx={{ width: "10%" }} align="right" />
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {(products[selectedProductIdx]?.scans
+              ? sortScansByWeek(products[selectedProductIdx].scans)
+              : []
+            ).map((scan, idx) =>
+              !readOnly && editingScanIdx === idx ? (
+                <TableRow
+                  key={idx}
+                  hover
+                  selected={idx === selectedWeekIdx}
+                  sx={{ height: 44 }}
+                >
+                  <TableCell sx={{ width: "50%" }}>{scan.week}</TableCell>
+                  <TableCell sx={{ width: "50%" }}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      sx={{ width: "100%" }}
+                      value={editingScanAmountStr}
+                      onChange={(e) => setEditingScanAmountStr(e.target.value)}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ width: "10%" }} align="right">
+                    {!readOnly && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 0.5,
+                          justifyContent: "flex-end",
                         }}
                       >
-                        <CheckIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => setEditingScanIdx(null)}
-                      >
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  )}
-                </TableCell>
-              </TableRow>
-            ) : (
-              <TableRow
-                key={idx}
-                hover
-                selected={idx === selectedWeekIdx}
-                onClick={() => setSelectedWeekIdx(idx)}
-                sx={{ cursor: "pointer", height: 44 }}
-              >
-                <TableCell sx={{ width: "45%" }}>{scan.week}</TableCell>
-                <TableCell sx={{ width: "45%" }}>
-                  ${scan.scan.toFixed(2)}
-                </TableCell>
-                <TableCell sx={{ width: "10%" }} align="right">
-                  {!readOnly && (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        gap: 0.5,
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => {
-                          setEditingScanIdx(idx);
-                          setEditingWeek(scan.week);
-                          setEditingScanAmountStr(scan.scan.toString());
+                        <IconButton
+                          size="small"
+                          color="success"
+                          disabled={parseFloat(editingScanAmountStr) <= 0}
+                          onClick={() => {
+                            const val = parseFloat(editingScanAmountStr);
+                            if (isNaN(val) || val <= 0) {
+                              showError("Scan amount must be a valid number");
+                              return;
+                            }
+                            setProducts((prev) =>
+                              prev.map((p, pi) =>
+                                pi === selectedProductIdx
+                                  ? {
+                                      ...p,
+                                      scans: p.scans.map((s, si) =>
+                                        si === idx
+                                          ? {
+                                              ...s,
+                                              scan: val,
+                                              ...computeMetrics(p, s.week, val),
+                                            }
+                                          : s
+                                      ),
+                                    }
+                                  : p
+                              )
+                            );
+                            setEditingScanIdx(null);
+                            setEditingScanAmountStr("");
+                          }}
+                        >
+                          <CheckIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => setEditingScanIdx(null)}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow
+                  key={idx}
+                  hover
+                  selected={idx === selectedWeekIdx}
+                  onClick={() => setSelectedWeekIdx(idx)}
+                  sx={{ cursor: "pointer", height: 44 }}
+                >
+                  <TableCell sx={{ width: "50%" }}>{scan.week}</TableCell>
+                  <TableCell sx={{ width: "50%" }}>
+                    ${scan.scan.toFixed(2)}
+                  </TableCell>
+                  <TableCell sx={{ width: "10%" }} align="right">
+                    {!readOnly && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 0.5,
+                          justifyContent: "flex-end",
                         }}
                       >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setProducts((prev) =>
-                            prev.map((p, pi) =>
-                              pi === selectedProductIdx
-                                ? {
-                                    ...p,
-                                    scans: p.scans.filter(
-                                      (_, si) => si !== idx
-                                    ),
-                                  }
-                                : p
-                            )
-                          );
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  )}
-                </TableCell>
-              </TableRow>
-            )
-          )}
-        </TableBody>
-      </Table>
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => {
+                            setEditingScanIdx(idx);
+                            setEditingScanAmountStr(scan.scan.toString());
+                          }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProducts((prev) =>
+                              prev.map((p, pi) =>
+                                pi === selectedProductIdx
+                                  ? {
+                                      ...p,
+                                      scans: p.scans.filter(
+                                        (_, si) => si !== idx
+                                      ),
+                                    }
+                                  : p
+                              )
+                            );
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            )}
+          </TableBody>
+        </Table>
+      </Box>
     </Paper>
   );
 };

@@ -6,13 +6,11 @@ import QualSidebar from "../../reusableComponents/qualSidebar";
 import { LoadingProgress } from "../../reusableComponents/loadingProgress";
 
 interface RateData {
-  hp_market: string;
-  market_code: string;
+  market: string;
   planning_member: string;
-  customer_id: string;
-  hp_size_pack: string;
-  variant_size_pack_id: string;
-  gsv_rate: string | number;
+  size_pack: string;
+  direct_import: number;
+  warehouse: number;
   [key: string]: any; // Add this to handle any additional fields
 }
 
@@ -39,7 +37,7 @@ export const RateMaster = () => {
         const dataWithIds = response.data.map(
           (row: RateData, index: number) => ({
             ...row,
-            id: `${row.market_code}-${row.customer_id}-${row.variant_size_pack_id}-${index}`,
+            id: `${row.market}-${row.planning_member}-${row.size_pack}-${index}`,
           })
         );
 
@@ -66,50 +64,45 @@ export const RateMaster = () => {
 
   const columns: Column[] = [
     {
-      key: "hp_market",
+      key: "market",
       header: "Market",
-      width: 250,
-      render: (value) =>
-        value !== null && value !== undefined ? String(value) : "",
+      width: 220,
       sortable: true,
       filterable: true,
     },
     {
-      key: "hp_size_pack",
+      key: "planning_member",
+      header: "Planning Member",
+      width: 220,
+      sortable: true,
+      filterable: true,
+    },
+    {
+      key: "size_pack",
       header: "Size Pack",
-      width: 300,
-      render: (value) =>
-        value !== null && value !== undefined ? String(value) : "",
+      width: 220,
       sortable: true,
       filterable: true,
     },
     {
-      key: "variant_size_pack_id",
-      header: "Size Pack ID",
-      width: 180,
-      render: (value) =>
-        value !== null && value !== undefined ? String(value) : "",
+      key: "direct_import",
+      header: "Direct Import",
+      width: 120,
+      align: "right",
+      render: (v) =>
+        v === null || v === undefined ? "" : Number(v).toFixed(1),
       sortable: true,
+      sortAccessor: (row) => row.direct_import ?? null,
     },
     {
-      key: "gsv_rate",
-      header: "GSV",
-      width: 100,
+      key: "warehouse",
+      header: "Warehouse",
+      width: 120,
       align: "right",
-      render: (value) => {
-        if (value === null || value === undefined) return "";
-        try {
-          return Number(value).toFixed(2);
-        } catch (error) {
-          console.error("Error converting gsv_rate to number:", error);
-          return value;
-        }
-      },
+      render: (v) =>
+        v === null || v === undefined ? "" : Number(v).toFixed(1),
       sortable: true,
-      sortAccessor: (row) =>
-        row.gsv_rate === null || row.gsv_rate === undefined
-          ? null
-          : Number(row.gsv_rate),
+      sortAccessor: (row) => row.warehouse ?? null,
     },
   ];
 
@@ -149,42 +142,16 @@ export const RateMaster = () => {
                       Market
                     </Typography>
                     <Typography variant="body1" fontWeight="medium">
-                      {selectedRate.hp_market}
+                      {selectedRate.market}
                     </Typography>
                   </Box>
 
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Market Code
-                    </Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {selectedRate.market_code}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Box>
-
-              {/* Customer Information Section */}
-              <Box>
-                <Typography variant="subtitle2" color="primary" sx={{ mb: 2 }}>
-                  Customer Information
-                </Typography>
-                <Stack spacing={2}>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
                       Planning Member
                     </Typography>
                     <Typography variant="body1" fontWeight="medium">
                       {selectedRate.planning_member}
-                    </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Customer ID
-                    </Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {selectedRate.customer_id}
                     </Typography>
                   </Box>
                 </Stack>
@@ -201,42 +168,37 @@ export const RateMaster = () => {
                       Size Pack
                     </Typography>
                     <Typography variant="body1" fontWeight="medium">
-                      {selectedRate.hp_size_pack}
+                      {selectedRate.size_pack}
                     </Typography>
                   </Box>
 
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Size Pack ID
-                    </Typography>
-                    <Typography variant="body1" fontWeight="medium">
-                      {selectedRate.variant_size_pack_id}
-                    </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      GSV Rate
+                      Direct Import
                     </Typography>
                     <Typography
                       variant="body1"
                       fontWeight="medium"
                       color="primary.main"
                     >
-                      $
-                      {(() => {
-                        const value = selectedRate.gsv_rate;
-                        if (value === null || value === undefined) return "";
-                        try {
-                          return Number(value).toFixed(2);
-                        } catch (error) {
-                          console.error(
-                            "Error converting gsv_rate to number:",
-                            error
-                          );
-                          return value;
-                        }
-                      })()}
+                      {selectedRate.direct_import
+                        ? Number(selectedRate.direct_import).toFixed(1)
+                        : ""}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Warehouse
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      fontWeight="medium"
+                      color="primary.main"
+                    >
+                      {selectedRate.warehouse
+                        ? Number(selectedRate.warehouse).toFixed(1)
+                        : ""}
                     </Typography>
                   </Box>
                 </Stack>

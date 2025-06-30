@@ -19,6 +19,9 @@ import {
   TextField,
   InputAdornment,
   Tooltip,
+  Autocomplete,
+  Chip,
+  Divider,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
@@ -48,6 +51,9 @@ export interface Column {
   columnGroup?: boolean;
   columns?: Column[];
   filterable?: boolean;
+  tagFilterable?: boolean;
+  getTagOptions?: () => string[];
+  getRowTags?: (row: any) => string[];
 }
 
 export interface DynamicTableProps {
@@ -140,6 +146,9 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     useState(defaultRowsPerPage);
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [tagFilterValues, setTagFilterValues] = useState<
+    Record<string, string[]>
+  >({});
   const [filterAnchorEl, setFilterAnchorEl] =
     useState<HTMLButtonElement | null>(null);
   const [currentFilterColumn, setCurrentFilterColumn] = useState<string | null>(
@@ -243,6 +252,18 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
       setInternalPage(0);
     }
     handleFilterClose();
+  };
+
+  const handleTagFilterChange = (columnKey: string, newValue: string[]) => {
+    setTagFilterValues((prev) => ({
+      ...prev,
+      [columnKey]: newValue,
+    }));
+    if (controlledPageChange) {
+      controlledPageChange(null, 0);
+    } else {
+      setInternalPage(0);
+    }
   };
 
   const flatColumns = useMemo(() => {
@@ -350,6 +371,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
   const displayData = useMemo(() => {
     let processedData = [...data];
 
+    // Apply regular column filters
     const activeFilters = Object.entries(filterValues).filter(
       ([, value]) => value && value.trim() !== ""
     );
@@ -377,6 +399,87 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
             .toLowerCase()
             .includes(filterValue.toLowerCase());
         });
+      });
+    }
+
+    // Apply tag filters (hierarchical-aware)
+    const activeTagFilters = Object.entries(tagFilterValues).filter(
+      ([, tags]) => tags && tags.length > 0
+    );
+
+    if (activeTagFilters.length > 0) {
+      // For hierarchical data, we need to identify parent rows that match tag filters
+      // and include their children regardless of whether children have tags
+      const matchingParentIds = new Set<string>();
+
+      // First pass: identify which parent rows match the tag filters
+      processedData.forEach((row) => {
+        const matchesTagFilter = activeTagFilters.every(
+          ([columnKey, selectedTags]) => {
+            const column = flatColumns.find((col) => col.key === columnKey);
+            if (!column?.getRowTags) return true;
+
+            const rowTags = column.getRowTags(row);
+            // Check if row has at least one of the selected tags
+            return selectedTags.some((tag) => rowTags.includes(tag));
+          }
+        );
+
+        if (matchesTagFilter) {
+          // If this row matches, include it and identify it as a potential parent
+          const rowId = typeof getRowId === "function" ? getRowId(row) : row.id;
+          if (row.isSizePack || !row.parentId) {
+            // This is a parent row that matches
+            matchingParentIds.add(rowId);
+          }
+          if (row.parentId) {
+            // This is a child row that matches, include its parent too
+            matchingParentIds.add(row.parentId);
+          }
+        }
+      });
+
+      // Second pass: filter to include matching parents and their children
+      processedData = processedData.filter((row) => {
+        // Include if this row itself matches tag filters
+        const matchesTagFilter = activeTagFilters.every(
+          ([columnKey, selectedTags]) => {
+            const column = flatColumns.find((col) => col.key === columnKey);
+            if (!column?.getRowTags) return true;
+
+            const rowTags = column.getRowTags(row);
+            return selectedTags.some((tag) => rowTags.includes(tag));
+          }
+        );
+
+        // Include if this is a parent that matches
+        if (matchesTagFilter) return true;
+
+        // Include if this is a child of a matching parent
+        if (row.parentId && matchingParentIds.has(row.parentId)) return true;
+
+        // For size pack structure, also check if this is a child SKU of a matching size pack
+        if (!row.isSizePack && row.variant_size_pack_id) {
+          // Find the parent size pack
+          const parentSizePack = processedData.find(
+            (r) =>
+              r.isSizePack &&
+              r.variant_size_pack_id === row.variant_size_pack_id
+          );
+          if (parentSizePack) {
+            const parentMatches = activeTagFilters.every(
+              ([columnKey, selectedTags]) => {
+                const column = flatColumns.find((col) => col.key === columnKey);
+                if (!column?.getRowTags) return true;
+                const parentTags = column.getRowTags(parentSizePack);
+                return selectedTags.some((tag) => parentTags.includes(tag));
+              }
+            );
+            if (parentMatches) return true;
+          }
+        }
+
+        return false;
       });
     }
 
@@ -433,6 +536,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
     sortConfig,
     flatColumns,
     filterValues,
+    tagFilterValues,
     isNested,
   ]);
 
@@ -444,6 +548,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
 
   const totalFilteredCount = useMemo(() => {
     let processedData = [...data];
+
+    // Apply regular column filters
     const activeFilters = Object.entries(filterValues).filter(
       ([, value]) => value && value.trim() !== ""
     );
@@ -470,8 +576,76 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
         });
       });
     }
+
+    // Apply tag filters (hierarchical-aware)
+    const activeTagFilters = Object.entries(tagFilterValues).filter(
+      ([, tags]) => tags && tags.length > 0
+    );
+    if (activeTagFilters.length > 0) {
+      const matchingParentIds = new Set<string>();
+
+      // First pass: identify which parent rows match the tag filters
+      processedData.forEach((row) => {
+        const matchesTagFilter = activeTagFilters.every(
+          ([columnKey, selectedTags]) => {
+            const column = flatColumns.find((col) => col.key === columnKey);
+            if (!column?.getRowTags) return true;
+            const rowTags = column.getRowTags(row);
+            return selectedTags.some((tag) => rowTags.includes(tag));
+          }
+        );
+
+        if (matchesTagFilter) {
+          const rowId = typeof getRowId === "function" ? getRowId(row) : row.id;
+          if (row.isSizePack || !row.parentId) {
+            matchingParentIds.add(rowId);
+          }
+          if (row.parentId) {
+            matchingParentIds.add(row.parentId);
+          }
+        }
+      });
+
+      // Second pass: filter to include matching parents and their children
+      processedData = processedData.filter((row) => {
+        const matchesTagFilter = activeTagFilters.every(
+          ([columnKey, selectedTags]) => {
+            const column = flatColumns.find((col) => col.key === columnKey);
+            if (!column?.getRowTags) return true;
+            const rowTags = column.getRowTags(row);
+            return selectedTags.some((tag) => rowTags.includes(tag));
+          }
+        );
+
+        if (matchesTagFilter) return true;
+        if (row.parentId && matchingParentIds.has(row.parentId)) return true;
+
+        // For size pack structure
+        if (!row.isSizePack && row.variant_size_pack_id) {
+          const parentSizePack = processedData.find(
+            (r) =>
+              r.isSizePack &&
+              r.variant_size_pack_id === row.variant_size_pack_id
+          );
+          if (parentSizePack) {
+            const parentMatches = activeTagFilters.every(
+              ([columnKey, selectedTags]) => {
+                const column = flatColumns.find((col) => col.key === columnKey);
+                if (!column?.getRowTags) return true;
+                const parentTags = column.getRowTags(parentSizePack);
+                return selectedTags.some((tag) => parentTags.includes(tag));
+              }
+            );
+            if (parentMatches) return true;
+          }
+        }
+
+        return false;
+      });
+    }
+
     return processedData.length;
-  }, [data, filterValues, flatColumns]);
+  }, [data, filterValues, tagFilterValues, flatColumns]);
 
   return (
     <Box sx={{ width: "100%" }}>
@@ -582,12 +756,14 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                     const sectionInfo = getSectionInfo(columns, index);
                     const minW = getMinWidth(column);
                     const isFiltered =
-                      filterValues[column.key] &&
-                      filterValues[column.key].trim() !== "";
+                      (filterValues[column.key] &&
+                        filterValues[column.key].trim() !== "") ||
+                      (tagFilterValues[column.key] &&
+                        tagFilterValues[column.key].length > 0);
                     return (
                       <TableCell
                         key={column.key}
-                        align="center"
+                        align={column.align === "left" ? "left" : "center"}
                         data-section={sectionInfo.name.toLowerCase()}
                         data-first-in-section={sectionInfo.isFirst}
                         sx={{
@@ -617,7 +793,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                           sx={{
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
+                            justifyContent:
+                              column.align === "left" ? "flex-start" : "center",
                             width: "100%",
                             height: "100%",
                           }}
@@ -626,7 +803,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                             variant="body2"
                             component="span"
                             sx={{
-                              textAlign: "center",
+                              textAlign:
+                                column.align === "left" ? "left" : "center",
                               fontWeight:
                                 sortConfig?.key === column.key
                                   ? "bold"
@@ -634,7 +812,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                               color:
                                 sortConfig?.key === column.key
                                   ? sortConfig.direction === "desc"
-                                    ? theme.palette.error.main // Descending = Error (Red)
+                                    ? theme.palette.secondary.main // Descending = Secondary
                                     : theme.palette.primary.main // Ascending = Primary
                                   : "inherit", // Default color
                               mr:
@@ -715,7 +893,8 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                             sx={{
                               fontStyle: "italic",
                               marginTop: "2px",
-                              textAlign: "center",
+                              textAlign:
+                                column.align === "left" ? "left" : "center",
                               width: "100%",
                             }}
                           >
@@ -769,6 +948,10 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                                 ?.styleOverrides?.dataCell || {}),
                               width: column.width,
                               minWidth: minW,
+                              // Reduce left padding for true left alignment
+                              ...(column.align === "left" && {
+                                paddingLeft: "8px",
+                              }),
                               ...column.sx,
                             }}
                           >
@@ -831,7 +1014,7 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                 horizontal: "center",
               }}
               PaperProps={{
-                sx: { p: 1.5, minWidth: 220, borderRadius: 1 },
+                sx: { p: 1.5, minWidth: 280, borderRadius: 1 },
               }}
             >
               <Typography
@@ -871,6 +1054,69 @@ export const DynamicTable: React.FC<DynamicTableProps> = ({
                   sx: { fontSize: "0.875rem" },
                 }}
               />
+
+              {/* Tag Filter Section */}
+              {(() => {
+                const currentColumn = flatColumns.find(
+                  (c) => c.key === currentFilterColumn
+                );
+                if (
+                  currentColumn?.tagFilterable &&
+                  currentColumn?.getTagOptions
+                ) {
+                  const tagOptions = currentColumn.getTagOptions();
+                  const selectedTags =
+                    tagFilterValues[currentFilterColumn] || [];
+
+                  return (
+                    <>
+                      <Divider sx={{ my: 1.5 }} />
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ mb: 1, fontWeight: "medium" }}
+                      >
+                        Tags
+                      </Typography>
+                      <Autocomplete
+                        multiple
+                        size="small"
+                        options={tagOptions}
+                        value={selectedTags}
+                        onChange={(_, newValue) => {
+                          handleTagFilterChange(currentFilterColumn, newValue);
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            variant="outlined"
+                            placeholder={
+                              selectedTags.length > 0 ? "" : "Select tags..."
+                            }
+                            sx={{ fontSize: "0.875rem" }}
+                          />
+                        )}
+                        renderTags={(value, getTagProps) =>
+                          value.map((option, index) => (
+                            <Chip
+                              {...getTagProps({ index })}
+                              key={option}
+                              label={option}
+                              size="small"
+                              color="primary"
+                              variant="outlined"
+                            />
+                          ))
+                        }
+                        ChipProps={{
+                          size: "small",
+                        }}
+                      />
+                    </>
+                  );
+                }
+                return null;
+              })()}
             </Popover>
           )}
 

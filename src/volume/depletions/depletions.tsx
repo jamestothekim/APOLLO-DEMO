@@ -292,6 +292,15 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setSnackbarOpen(true);
   };
 
+  // Check if the current user can edit data
+  const canEdit = useMemo(() => {
+    return (
+      user?.role === "Market Manager" ||
+      user?.role === "Finance" ||
+      user?.role === "Executive"
+    );
+  }, [user?.role]);
+
   // Update useEffect to reset comment when selectedComment changes
   useEffect(() => {
     setComment(selectedComment || "");
@@ -444,6 +453,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const handleSidebarSelect = (row: ExtendedForecastData) => {
     if (row.forecast_status === "review" || row.forecast_status === "consensus")
       return;
+
+    // Check if user has permission to edit data
+    if (!canEdit) {
+      return; // Don't open sidebar for users without edit permissions
+    }
 
     setSelectedRowForSidebar(row.id);
     const selectedData = filteredData.find((r) => r.id === row.id);
@@ -777,7 +791,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   };
 
   const handleCommentaryChange = (value: string) => {
-    if (!selectedDataState) return;
+    if (!selectedDataState || !canEdit) return;
 
     setSelectedDataState((prev) =>
       prev ? { ...prev, commentary: value } : prev
@@ -972,6 +986,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             const isLocked =
               row.forecast_status === "review" ||
               row.forecast_status === "consensus";
+            const canClickRow = canEdit && !isLocked;
             const marketName = row.market_name;
             return (
               <Box
@@ -979,7 +994,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  cursor: isLocked ? "default" : "pointer",
+                  cursor: canClickRow ? "pointer" : "default",
                   position: "relative",
                   pl: isLocked ? "24px" : "0px",
                 }}
@@ -1038,15 +1053,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             if (!row.product) return "-";
             const parts = row.product.split(" - ");
             const productName = parts.length > 1 ? parts[1] : row.product;
-            // Apply default cursor if locked
+            const isLocked =
+              row.forecast_status === "review" ||
+              row.forecast_status === "consensus";
+            const canClickRow = canEdit && !isLocked;
             return (
               <Box
                 sx={{
-                  cursor:
-                    row.forecast_status === "review" ||
-                    row.forecast_status === "consensus"
-                      ? "default"
-                      : "pointer",
+                  cursor: canClickRow ? "pointer" : "default",
                 }}
               >
                 {productName}
@@ -1075,7 +1089,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 onClick={(e) => e.stopPropagation()}
                 size="small"
                 sx={{ fontSize: "inherit", minWidth: 130 }}
-                disabled={isLocked || row.isLoading}
+                disabled={isLocked || row.isLoading || !canEdit}
               >
                 {FORECAST_OPTIONS.map((option) => (
                   <MenuItem key={option.id} value={option.value}>
@@ -1717,7 +1731,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Add handlers for QuantSidebar
   const handleSidebarForecastChange = async (newLogic: string) => {
-    if (!selectedDataState) return;
+    if (!selectedDataState || !canEdit) return;
 
     try {
       // Don't update the table immediately, only update the sidebar state
@@ -1738,7 +1752,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Update handleMonthValueChange to use recalculateGuidance
   const handleMonthValueChange = (month: string, value: string) => {
-    if (!selectedDataState) return;
+    if (!selectedDataState || !canEdit) return;
 
     const numValue = value === "" ? 0 : Number(value);
     if (isNaN(numValue)) return;
@@ -1995,7 +2009,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         productName={selectedDataState?.product}
         forecastLogic={selectedDataState?.forecastLogic}
         forecastOptions={FORECAST_OPTIONS}
-        onForecastLogicChange={handleSidebarForecastChange}
+        onForecastLogicChange={
+          canEdit ? handleSidebarForecastChange : undefined
+        }
         pyTotalVolume={selectedDataState?.py_case_equivalent_volume}
         graphData={
           selectedDataState
@@ -2021,7 +2037,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         guidanceForecasts={SIDEBAR_GUIDANCE_OPTIONS}
         availableGuidanceData={sidebarGuidanceValues}
         months={selectedDataState?.months || {}}
-        onMonthValueChange={handleMonthValueChange}
+        onMonthValueChange={canEdit ? handleMonthValueChange : () => {}}
         gsvRate={
           selectedDataState?.gross_sales_value
             ? selectedDataState.gross_sales_value /
@@ -2029,7 +2045,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             : undefined
         }
         commentary={selectedDataState?.commentary}
-        onCommentaryChange={handleCommentaryChange}
+        onCommentaryChange={canEdit ? handleCommentaryChange : undefined}
         footerButtons={[
           {
             label: "Close",
@@ -2039,12 +2055,16 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
             },
             variant: "outlined",
           },
-          {
-            label: "Apply Changes",
-            onClick: handleSidebarSaveChanges,
-            variant: "contained",
-            disabled: !hasChanges,
-          },
+          ...(canEdit
+            ? [
+                {
+                  label: "Apply Changes",
+                  onClick: handleSidebarSaveChanges,
+                  variant: "contained" as const,
+                  disabled: !hasChanges,
+                },
+              ]
+            : []),
         ]}
       />
 

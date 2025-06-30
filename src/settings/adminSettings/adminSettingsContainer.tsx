@@ -1,11 +1,11 @@
 import { useState, useRef } from "react";
-import { Box, Tabs, Tab, Typography, Paper, Button } from "@mui/material";
+import { Box, Tabs, Tab, Typography, Paper, Button, Chip } from "@mui/material";
 import UserMaster, { UserMasterHandle } from "./userMaster";
 import { MarketMaster } from "./marketMaster";
-import { SKUMaster } from "./skuMaster";
 import { RateMaster } from "./rateMaster";
 import { AuditLogs } from "./auditLogs";
 import { PersonAdd as PersonAddIcon } from "@mui/icons-material";
+import { ProductMaster } from "./productMaster/productMaster";
 
 export const AdminSettingsContainer = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -59,8 +59,20 @@ export const AdminSettingsContainer = () => {
         <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tabs value={activeTab} onChange={handleTabChange}>
             <Tab label="Users" />
-            <Tab label="Market" />
-            <Tab label="SKU" />
+            <Tab label="Markets" />
+            <Tab
+              label={
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  Products
+                  <Chip
+                    label="PROTO"
+                    color="secondary"
+                    size="small"
+                    sx={{ borderRadius: 4, ml: 1, fontSize: "0.65em" }}
+                  />
+                </Box>
+              }
+            />
             <Tab label="Rates" />
             <Tab label="Logs" />
           </Tabs>
@@ -68,7 +80,7 @@ export const AdminSettingsContainer = () => {
         <Box sx={{ pt: 3 }}>
           {activeTab === 0 && <UserMaster ref={userMasterRef} />}
           {activeTab === 1 && <MarketMaster />}
-          {activeTab === 2 && <SKUMaster />}
+          {activeTab === 2 && <ProductMaster />}
           {activeTab === 3 && <RateMaster />}
           {activeTab === 4 && <AuditLogs />}
         </Box>

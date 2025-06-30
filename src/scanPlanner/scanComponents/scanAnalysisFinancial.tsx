@@ -8,6 +8,8 @@ import {
   TableBody,
   TableCell,
   TableRow,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   generateQD,
@@ -63,6 +65,41 @@ const ScanAnalysisFinancial: React.FC<Props> = ({
     ? scan.projectedScan ?? computeProjected(product, scan.week, scan.scan)
     : 0;
 
+  // --- Volume calculations ---
+  const computeVolumeMetrics = (
+    prod: ProductEntry,
+    wk: string,
+    amt: number
+  ) => {
+    const dateObj = new Date(wk);
+    if (isNaN(dateObj.getTime()))
+      return { projectedVolume: 0, volumeLift: 0, volumeLiftPct: 0 };
+    const monthIdx = dateObj.getMonth();
+    const trendVal = prod.nielsenTrend?.[monthIdx]?.value ?? 0;
+    const baselineWeekly = trendVal / 4;
+    const liftPct = Math.min(0.1, amt / 10);
+    const projectedVolume = Math.round(baselineWeekly * (1 + liftPct));
+    const volumeLift = Math.round(projectedVolume - baselineWeekly);
+    const volumeLiftPct = baselineWeekly
+      ? Math.round((volumeLift / baselineWeekly) * 1000) / 10
+      : 0;
+    return { projectedVolume, volumeLift, volumeLiftPct };
+  };
+
+  const volumeMetrics = scan
+    ? {
+        projectedVolume:
+          scan.projectedVolume ??
+          computeVolumeMetrics(product, scan.week, scan.scan).projectedVolume,
+        volumeLift:
+          scan.volumeLift ??
+          computeVolumeMetrics(product, scan.week, scan.scan).volumeLift,
+        volumeLiftPct:
+          scan.volumeLiftPct ??
+          computeVolumeMetrics(product, scan.week, scan.scan).volumeLiftPct,
+      }
+    : { projectedVolume: 0, volumeLift: 0, volumeLiftPct: 0 };
+
   // Aggregations over account and brand
   let accountProjected = 0;
   let brandProjected = 0;
@@ -79,6 +116,24 @@ const ScanAnalysisFinancial: React.FC<Props> = ({
     });
   });
 
+  // Aggregations for account level
+  let accountProjectedVol = 0;
+  let accountBaselineVol = 0;
+  products.forEach((p) => {
+    p.scans.forEach((s) => {
+      const { projectedVolume, volumeLift } =
+        s.projectedVolume !== undefined && s.volumeLift !== undefined
+          ? { projectedVolume: s.projectedVolume, volumeLift: s.volumeLift }
+          : computeVolumeMetrics(p, s.week, s.scan);
+      accountProjectedVol += projectedVolume;
+      accountBaselineVol += projectedVolume - volumeLift;
+    });
+  });
+  const accountVolumeLift = accountProjectedVol - accountBaselineVol;
+  const accountVolumeLiftPct = accountBaselineVol
+    ? (accountVolumeLift / accountBaselineVol) * 100
+    : 0;
+
   const qdValue = scan ? generateQD() : 0;
   const projectedRetail = scan ? generateRetailPrice() : 0;
   const retailerMargin = scan ? generateRetailerMargin() : 0;
@@ -88,6 +143,8 @@ const ScanAnalysisFinancial: React.FC<Props> = ({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+
+  const [tabIdx, setTabIdx] = React.useState(0);
 
   return (
     <Paper
@@ -109,56 +166,99 @@ const ScanAnalysisFinancial: React.FC<Props> = ({
         </Typography>
       </Box>
       <Divider />
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Tabs
+          value={tabIdx}
+          onChange={(_e, v) => setTabIdx(v)}
+          variant="fullWidth"
+        >
+          <Tab label="Account" />
+          <Tab label="Scan" />
+        </Tabs>
+      </Box>
       <Box sx={{ flex: 1, overflow: "auto" }}>
         {scan ? (
-          <Table size="small">
-            <TableBody>
-              <TableRow>
-                <TableCell colSpan={2}>
-                  <Typography variant="subtitle2">Account Level</Typography>
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Account Projected Scan ($)</TableCell>
-                <TableCell align="right">
-                  {formatCurrency(accountProjected)}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>{brandName} Projected Scan ($)</TableCell>
-                <TableCell align="right">
-                  {formatCurrency(brandProjected)}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={2}>
-                  <Typography variant="subtitle2">Scan Analytics</Typography>
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Projected Scan ($)</TableCell>
-                <TableCell align="right">
-                  {formatCurrency(projectedScanValue)}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>QD ($)</TableCell>
-                <TableCell align="right">{formatCurrency(qdValue)}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Projected Retail</TableCell>
-                <TableCell align="right">
-                  {formatCurrency(projectedRetail)}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Retailer Margin %</TableCell>
-                <TableCell align="right">
-                  {retailerMargin.toFixed(1)}%
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+          tabIdx === 0 ? (
+            <Table size="small">
+              <TableBody>
+                <TableRow>
+                  <TableCell>Account Projected Scan ($)</TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(accountProjected)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Account Projected Vol (cases)</TableCell>
+                  <TableCell align="right">
+                    {accountProjectedVol.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Vol. Lift (cases)</TableCell>
+                  <TableCell align="right">
+                    {accountVolumeLift.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Vol. Lift (%)</TableCell>
+                  <TableCell align="right">
+                    {accountVolumeLiftPct.toFixed(1)}%
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>{brandName} Projected Scan ($)</TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(brandProjected)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          ) : (
+            <Table size="small">
+              <TableBody>
+                <TableRow>
+                  <TableCell>Projected Scan ($)</TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(projectedScanValue)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Projected Vol (cases)</TableCell>
+                  <TableCell align="right">
+                    {volumeMetrics.projectedVolume.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Vol. Lift (cases)</TableCell>
+                  <TableCell align="right">
+                    {volumeMetrics.volumeLift.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Vol. Lift (%)</TableCell>
+                  <TableCell align="right">
+                    {volumeMetrics.volumeLiftPct.toFixed(1)}%
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>QD ($)</TableCell>
+                  <TableCell align="right">{formatCurrency(qdValue)}</TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Projected Retail</TableCell>
+                  <TableCell align="right">
+                    {formatCurrency(projectedRetail)}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Retailer Margin %</TableCell>
+                  <TableCell align="right">
+                    {retailerMargin.toFixed(1)}%
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          )
         ) : (
           <Box
             sx={{

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Box,
   TextField,
@@ -13,24 +13,24 @@ import {
   Button,
   Typography,
   Divider,
-} from '@mui/material';
+} from "@mui/material";
 
-import QualSidebar from '../../reusableComponents/qualSidebar';
+import QualSidebar from "../../reusableComponents/qualSidebar";
 import {
   SCAN_ACCOUNTS,
   SCAN_PRODUCTS,
   SCAN_MARKETS,
-} from '../scanPlayData/scanData';
-import ScanSidebarProducts, { ProductEntry } from './scanSidebarProducts';
-import ScanSidebarScans from './scanSidebarScans';
-import ScanAnalysisGraph from './scanAnalysisGraph';
-import ScanAnalysisFinancial from './scanAnalysisFinancial';
-import { generateNielsenTrend } from '../scanPlayData/scanDataFn';
-import { buildPlannerRows } from '../scanCalculations/scanPlannerCalculations';
-import { useAppDispatch, useAppSelector } from '../../redux/store';
-import { saveClusterRows } from '../../redux/slices/scanSlice';
-import { ScanExcelExportDialog } from '../scanUtil/scanExcelExportDialog';
-import { exportScanPlanToExcel } from '../scanUtil/scanExcelExportUtil';
+} from "../scanPlayData/scanData";
+import ScanSidebarProducts, { ProductEntry } from "./scanSidebarProducts";
+import ScanSidebarScans from "./scanSidebarScans";
+import ScanAnalysisGraph from "./scanAnalysisGraph";
+import ScanAnalysisFinancial from "./scanAnalysisFinancial";
+import { generateNielsenTrend } from "../scanPlayData/scanDataFn";
+import { buildPlannerRows } from "../scanCalculations/scanPlannerCalculations";
+import { useAppDispatch, useAppSelector } from "../../redux/store";
+import { saveClusterRows } from "../../redux/slices/scanSlice";
+import { ScanExcelExportDialog } from "../scanUtil/scanExcelExportDialog";
+import { exportScanPlanToExcel } from "../scanUtil/scanExcelExportUtil";
 
 interface ClusterPayload {
   market: string;
@@ -46,8 +46,8 @@ interface ScanSidebarProps {
   initialData?: ClusterPayload;
   clusterId?: string;
   readOnly?: boolean;
-  status?: 'draft' | 'review' | 'approved';
-  role?: 'commercial' | 'finance';
+  status?: "draft" | "review" | "approved";
+  role?: "commercial" | "finance";
 }
 
 const ScanSidebar: React.FC<ScanSidebarProps> = ({
@@ -58,20 +58,20 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
   initialData,
   clusterId,
   readOnly = false,
-  status = 'draft',
-  role = 'commercial',
+  status = "draft",
+  role = "commercial",
 }) => {
   const [values, setValues] = useState<{ market: string; account: string }>({
-    market: initialData?.market || '',
-    account: initialData?.account || '',
+    market: initialData?.market || "",
+    account: initialData?.account || "",
   });
 
-  const handleChange = (field: 'market' | 'account', value: any) => {
+  const handleChange = (field: "market" | "account", value: any) => {
     setValues((prev) => ({ ...prev, [field]: value }));
   };
 
   const [products, setProducts] = React.useState<ProductEntry[]>(
-    initialData?.products || [],
+    initialData?.products || []
   );
 
   const isAddEnabled =
@@ -88,7 +88,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
         setProducts(initialData.products);
       } else {
         // fresh creation
-        setValues({ market: '', account: '' });
+        setValues({ market: "", account: "" });
         setProducts([]);
       }
     }
@@ -97,7 +97,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
   // Track selected indices for interaction between panes
   const [selectedProductIdx, setSelectedProductIdx] = React.useState<number>(0);
   const [selectedWeekIdx, setSelectedWeekIdx] = React.useState<number | null>(
-    null,
+    null
   );
 
   // Ensure selected product has nielsenTrend generated
@@ -107,8 +107,8 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
       const trend = generateNielsenTrend();
       setProducts((prev) =>
         prev.map((p, idx) =>
-          idx === selectedProductIdx ? { ...p, nielsenTrend: trend } : p,
-        ),
+          idx === selectedProductIdx ? { ...p, nielsenTrend: trend } : p
+        )
       );
     }
   }, [selectedProductIdx, products]);
@@ -116,7 +116,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
   const PRODUCT_NAMES: string[] = React.useMemo(() => {
     const names = new Set<string>();
     const addName = (obj: any) => {
-      if (obj && typeof obj === 'object' && obj.variant_size_desc) {
+      if (obj && typeof obj === "object" && obj.variant_size_desc) {
         names.add(obj.variant_size_desc);
       }
     };
@@ -139,7 +139,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
   // Snackbar for error messages
   const [snack, setSnack] = React.useState<{ open: boolean; msg: string }>({
     open: false,
-    msg: '',
+    msg: "",
   });
 
   const showError = (msg: string) => setSnack({ open: true, msg });
@@ -153,31 +153,31 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
   const plannerRows = useAppSelector((s) => s.scan.plannerRows as any[]);
 
   const content = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', my: 1 }}>
-        <Divider sx={{ flex: 1, bgcolor: 'grey.200', height: 1 }} />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", my: 1 }}>
+        <Divider sx={{ flex: 1, bgcolor: "grey.200", height: 1 }} />
         <Typography
-          variant='subtitle2'
+          variant="subtitle2"
           sx={{
-            color: 'primary.main',
+            color: "primary.main",
             fontWeight: 700,
             mx: 2,
-            whiteSpace: 'nowrap',
+            whiteSpace: "nowrap",
           }}
         >
           STEP 1: PROVIDE BASIC INFO
         </Typography>
-        <Divider sx={{ flex: 1, bgcolor: 'grey.200', height: 1 }} />
+        <Divider sx={{ flex: 1, bgcolor: "grey.200", height: 1 }} />
       </Box>
       {/* Market & Account Row */}
-      <Box sx={{ display: 'flex', gap: 2 }}>
+      <Box sx={{ display: "flex", gap: 2 }}>
         <Autocomplete
           options={SCAN_MARKETS.map((m: any) => m.name) as readonly string[]}
           value={values.market || null}
-          onChange={(_e, newVal) => handleChange('market', newVal || '')}
+          onChange={(_e, newVal) => handleChange("market", newVal || "")}
           disabled={readOnly}
           renderInput={(params) => (
-            <TextField {...params} label='Market' fullWidth />
+            <TextField {...params} label="Market" fullWidth />
           )}
           autoHighlight
           sx={{ flex: 1 }}
@@ -185,10 +185,10 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
         <Autocomplete
           options={SCAN_ACCOUNTS as readonly string[]}
           value={values.account || null}
-          onChange={(_e, newVal) => handleChange('account', newVal || '')}
+          onChange={(_e, newVal) => handleChange("account", newVal || "")}
           disabled={readOnly}
           renderInput={(params) => (
-            <TextField {...params} label='Account' fullWidth />
+            <TextField {...params} label="Account" fullWidth />
           )}
           autoHighlight
           freeSolo
@@ -197,26 +197,26 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
       </Box>
 
       {/* Section: PRODUCT & SCANS / ANALYTICS */}
-      <Box sx={{ display: 'flex', alignItems: 'center', my: 1 }}>
-        <Divider sx={{ flex: 1, bgcolor: 'grey.200', height: 1 }} />
+      <Box sx={{ display: "flex", alignItems: "center", my: 1 }}>
+        <Divider sx={{ flex: 1, bgcolor: "grey.200", height: 1 }} />
         <Typography
-          variant='subtitle2'
+          variant="subtitle2"
           sx={{
-            color: 'primary.main',
+            color: "primary.main",
             fontWeight: 700,
             mx: 2,
-            whiteSpace: 'nowrap',
+            whiteSpace: "nowrap",
           }}
         >
           STEP 2: PROVIDE PRODUCT & SCAN AMOUNT
         </Typography>
-        <Divider sx={{ flex: 1, bgcolor: 'grey.200', height: 1 }} />
+        <Divider sx={{ flex: 1, bgcolor: "grey.200", height: 1 }} />
       </Box>
       {/* PRODUCT & SCANS grid */}
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
           gap: 2,
         }}
       >
@@ -240,27 +240,27 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
       </Box>
 
       {/* Analytics label */}
-      <Box sx={{ display: 'flex', alignItems: 'center', my: 1 }}>
-        <Divider sx={{ flex: 1, bgcolor: 'grey.200', height: 1 }} />
+      <Box sx={{ display: "flex", alignItems: "center", my: 1 }}>
+        <Divider sx={{ flex: 1, bgcolor: "grey.200", height: 1 }} />
         <Typography
-          variant='subtitle2'
+          variant="subtitle2"
           sx={{
-            color: 'primary.main',
+            color: "primary.main",
             fontWeight: 700,
             mx: 2,
-            whiteSpace: 'nowrap',
+            whiteSpace: "nowrap",
           }}
         >
           STEP 3: ASSESS PROJECTED IMPACT
         </Typography>
-        <Divider sx={{ flex: 1, bgcolor: 'grey.200', height: 1 }} />
+        <Divider sx={{ flex: 1, bgcolor: "grey.200", height: 1 }} />
       </Box>
 
       {/* ANALYTICS grid */}
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
           gap: 2,
         }}
       >
@@ -270,8 +270,8 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
           onGrowthRateChange={(rate) => {
             setProducts((prev) =>
               prev.map((p, idx) =>
-                idx === selectedProductIdx ? { ...p, growthRate: rate } : p,
-              ),
+                idx === selectedProductIdx ? { ...p, growthRate: rate } : p
+              )
             );
           }}
           readOnly={readOnly}
@@ -290,13 +290,13 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
     if (!isAddEnabled) return;
     // Ensure every product has a persisted Nielsen trend before saving
     const ensuredProducts: ProductEntry[] = products.map((p) =>
-      p.nielsenTrend ? p : { ...p, nielsenTrend: generateNielsenTrend() },
+      p.nielsenTrend ? p : { ...p, nielsenTrend: generateNielsenTrend() }
     );
 
     // Determine status based on mode and role
-    let nextStatus: 'draft' | 'review' | 'approved' = 'draft';
-    if (mode === 'forecast') {
-      nextStatus = role === 'commercial' ? 'review' : 'approved';
+    let nextStatus: "draft" | "review" | "approved" = "draft";
+    if (mode === "forecast") {
+      nextStatus = role === "commercial" ? "review" : "approved";
     }
 
     const payload: ClusterPayload = {
@@ -307,20 +307,20 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
     onAdd(payload, clusterId);
     onClose();
     // reset
-    setValues({ market: '', account: '' });
+    setValues({ market: "", account: "" });
     setProducts([]);
 
     // compute planner rows and dispatch
     const rows = buildPlannerRows(
       payload,
-      clusterId || 'cluster' + Date.now(),
-      nextStatus,
+      clusterId || "cluster" + Date.now(),
+      nextStatus
     );
     dispatch(
       saveClusterRows({
-        clusterId: (clusterId || rows[0]?.clusterId) ?? 'tmp',
+        clusterId: (clusterId || rows[0]?.clusterId) ?? "tmp",
         rows,
-      }),
+      })
     );
   };
 
@@ -334,7 +334,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
         products,
       },
       clusterId,
-      'approved',
+      "approved"
     );
     dispatch(saveClusterRows({ clusterId, rows }));
     onClose();
@@ -345,7 +345,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
     if (!clusterId) return;
     const updatedRows = plannerRows
       .filter((r: any) => r.clusterId === clusterId)
-      .map((r: any) => ({ ...r, status: 'draft' }));
+      .map((r: any) => ({ ...r, status: "draft" }));
     dispatch(saveClusterRows({ clusterId, rows: updatedRows }));
     onClose();
   };
@@ -355,86 +355,71 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
     <Snackbar
       open={snack.open}
       autoHideDuration={3000}
-      onClose={() => setSnack({ open: false, msg: '' })}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      onClose={() => setSnack({ open: false, msg: "" })}
+      anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
     >
       <Alert
-        onClose={() => setSnack({ open: false, msg: '' })}
-        severity='error'
-        sx={{ width: '100%' }}
+        onClose={() => setSnack({ open: false, msg: "" })}
+        severity="error"
+        sx={{ width: "100%" }}
       >
         {snack.msg}
       </Alert>
     </Snackbar>
   );
 
-  const footerButtons: import('../../reusableComponents/qualSidebar').FooterButton[] =
+  const footerButtons: import("../../reusableComponents/qualSidebar").FooterButton[] =
     [
       {
-        label: 'Close',
-        variant: 'outlined',
+        label: "Close",
+        variant: "outlined",
         onClick: onClose,
       },
     ];
 
-  if (!readOnly && role !== 'finance' && clusterId && onDeleteCluster) {
+  if (!readOnly && role !== "finance" && clusterId && onDeleteCluster) {
     footerButtons.push({
-      label: 'Delete',
-      variant: 'outlined',
-      color: 'error',
+      label: "Delete",
+      variant: "outlined",
+      color: "error",
       onClick: () => setConfirmOpen(true),
     });
   }
 
   // Finance approve & reject buttons when status is review
-  if (role === 'finance' && status === 'review') {
+  if (role === "finance" && status === "review") {
     footerButtons.push({
-      label: 'Approve',
-      variant: 'contained',
-      color: 'primary',
+      label: "Approve",
+      variant: "contained",
+      color: "primary",
       onClick: handleApprove,
     });
     footerButtons.push({
-      label: 'Reject',
-      variant: 'contained',
-      color: 'error',
+      label: "Reject",
+      variant: "contained",
+      color: "error",
       onClick: handleReject,
     });
   }
 
-  if (!readOnly && role !== 'finance') {
+  if (!readOnly && role !== "finance") {
     footerButtons.push({
-      label: initialData ? 'Save Changes' : 'Add Scan',
-      variant: 'contained',
+      label: initialData ? "Save Changes" : "Add Scan",
+      variant: "contained",
       onClick: handleAdd,
       disabled: !isAddEnabled,
     });
   }
 
   // Export to Excel always available for approved clusters
-  if (status === 'approved') {
+  if (status === "approved") {
     footerButtons.push({
-      label: 'Export to Excel',
-      variant: 'contained',
-      align: 'left',
+      label: "Export to Excel",
+      variant: "contained",
+      align: "left",
       onClick: () => setIsExportDialogOpen(true),
     });
   }
-
-  // Update the export handler
-  const handleExport = () => {
-    if (!initialData) return;
-    const rows = buildPlannerRows(
-      {
-        market: initialData.market,
-        account: initialData.account,
-        products,
-      },
-      clusterId || 'export',
-      'approved',
-    );
-    setIsExportDialogOpen(true);
-  };
 
   const handleExportConfirm = (selectedFields: string[]) => {
     if (!initialData) return;
@@ -444,12 +429,12 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
         account: initialData.account,
         products,
       },
-      clusterId || 'export',
-      'approved',
+      clusterId || "export",
+      "approved"
     );
     exportScanPlanToExcel(rows as any, {
       selectedFields,
-      fileName: `scan_plan_${clusterId || 'export'}.xlsx`,
+      fileName: `scan_plan_${clusterId || "export"}.xlsx`,
     });
   };
 
@@ -457,8 +442,8 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
     <QualSidebar
       open={open}
       onClose={onClose}
-      title='Add Scan'
-      width='1100px'
+      title="Add Scan"
+      width="1100px"
       footerButtons={footerButtons}
     >
       {content}
@@ -473,7 +458,7 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)} variant='outlined'>
+          <Button onClick={() => setConfirmOpen(false)} variant="outlined">
             Cancel
           </Button>
           <Button
@@ -484,8 +469,8 @@ const ScanSidebar: React.FC<ScanSidebarProps> = ({
               setConfirmOpen(false);
               onClose();
             }}
-            color='error'
-            variant='contained'
+            color="error"
+            variant="contained"
           >
             Delete
           </Button>
