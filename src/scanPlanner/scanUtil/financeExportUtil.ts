@@ -10,7 +10,7 @@ interface ScanRow {
   product: string;
   week: string;
   scanAmount: number;
-  totalScan: number;
+  totalScan?: number;
   projectedScan: number;
   projectedRetail: number;
   qd: number;
@@ -78,8 +78,8 @@ export async function exportFinanceExcel(
   rows: ScanRow[],
   config: ExportFieldConfig,
   fileName: string,
-  markets: Market[],
-  retailers: string[],
+  _markets: Market[],
+  _retailers: string[],
   selectedMarkets: string[],
   selectedRetailers: string[],
 ): Promise<void> {
