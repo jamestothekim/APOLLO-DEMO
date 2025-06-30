@@ -1,19 +1,16 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useCallback } from "react";
 import {
   Box,
   TextField,
   CircularProgress,
-  IconButton,
-  Tooltip,
   Typography,
+  MenuItem,
 } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import SaveIcon from "@mui/icons-material/Save";
-import CancelIcon from "@mui/icons-material/Cancel";
 import {
   DynamicTable,
   type Column,
 } from "../../../reusableComponents/dynamicTable";
+import { MarketDefaultConfiguration } from "./defaultConfig";
 
 interface SKU {
   id: string;
@@ -23,78 +20,50 @@ interface SKU {
 }
 
 interface SKUConfiguration {
-  leadTimeEdison: string;
-  leadTimeScotland: string;
-  leadTimeIreland: string;
-  leadTimeMexico: string;
-}
-
-interface DefaultConfiguration {
-  leadTimeEdison: string;
-  leadTimeScotland: string;
-  leadTimeIreland: string;
-  leadTimeMexico: string;
-  targetDOI: string;
+  location: string; // Stores selected location key (e.g., "edisonDomestic")
 }
 
 interface LeadTimesProps {
   skus: SKU[];
   selectedMarket: string;
-  defaultConfigurations: Record<string, DefaultConfiguration>;
-  configurations: Record<string, SKUConfiguration>;
+  defaultConfigurations: Record<string, MarketDefaultConfiguration>;
+  configurations: Record<string, SKUConfiguration>; // key: `${marketId}-${skuId}`
   onConfigurationChange: (
     skuId: string,
-    field: keyof SKUConfiguration,
     value: string,
     selectedMarket: string
   ) => void;
   loading?: boolean;
 }
 
-const LEAD_TIME_FIELDS = [
-  { key: "leadTimeEdison" as keyof SKUConfiguration, label: "Edison" },
-  { key: "leadTimeScotland" as keyof SKUConfiguration, label: "Scotland" },
-  { key: "leadTimeIreland" as keyof SKUConfiguration, label: "Ireland" },
-  { key: "leadTimeMexico" as keyof SKUConfiguration, label: "Mexico" },
+const LOCATION_OPTIONS = [
+  { key: "edisonDomestic", label: "Edison - Domestic" },
+  { key: "scotlandDI", label: "Scotland - DI" },
+  { key: "irelandDI", label: "Ireland - DI" },
+  { key: "mexicoDI", label: "Mexico - DI" },
 ];
 
-// Memoized Material-UI TextField component for lead time inputs
-const LeadTimeInput: React.FC<{
+// Memoized Select component for location selection
+const LocationSelect: React.FC<{
   value: string;
   onChange: (value: string) => void;
-  placeholder?: string;
-}> = React.memo(({ value, onChange, placeholder }) => {
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const inputValue = e.target.value;
-      // Only allow digits
-      if (inputValue === "" || /^\d+$/.test(inputValue)) {
-        onChange(inputValue);
-      }
-    },
-    [onChange]
-  );
-
+}> = React.memo(({ value, onChange }) => {
   return (
     <TextField
+      select
       size="small"
-      type="text"
       value={value}
-      onChange={handleChange}
-      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
       sx={{
-        width: 60,
-        "& .MuiInputBase-input": {
-          fontSize: "0.875rem",
-          textAlign: "center",
-          px: 1,
-          py: 0.5,
-        },
-        "& .MuiOutlinedInput-root": {
-          minHeight: "auto",
-        },
+        minWidth: 180,
       }}
-    />
+    >
+      {LOCATION_OPTIONS.map((opt) => (
+        <MenuItem key={opt.key} value={opt.key}>
+          {opt.label}
+        </MenuItem>
+      ))}
+    </TextField>
   );
 });
 
@@ -106,13 +75,7 @@ export const LeadTimes: React.FC<LeadTimesProps> = ({
   onConfigurationChange,
   loading = false,
 }) => {
-  // Track which rows are in edit mode
-  const [editingRows, setEditingRows] = useState<Set<string>>(new Set());
-
-  // Track temporary values for rows being edited
-  const [tempValues, setTempValues] = useState<
-    Record<string, SKUConfiguration>
-  >({});
+  // No edit mode needed; configuration updates immediately on selection
 
   // Transform SKU data for DynamicTable
   const tableData = useMemo(() => {
@@ -121,94 +84,12 @@ export const LeadTimes: React.FC<LeadTimesProps> = ({
     }));
   }, [skus]);
 
-  // Handle entering edit mode
-  const handleEditRow = useCallback(
-    (skuId: string) => {
+  const handleLocationChange = useCallback(
+    (skuId: string, value: string) => {
       if (!selectedMarket) return;
-
-      const configKey = `${selectedMarket}-${skuId}`;
-      const config = configurations[configKey];
-      const defaults = defaultConfigurations[skuId];
-
-      // Use existing config or default to the defaults from DefaultConfig
-      const currentConfig = config || {
-        leadTimeEdison: defaults?.leadTimeEdison || "30",
-        leadTimeScotland: defaults?.leadTimeScotland || "30",
-        leadTimeIreland: defaults?.leadTimeIreland || "30",
-        leadTimeMexico: defaults?.leadTimeMexico || "30",
-      };
-
-      // Initialize temp values with current config
-      setTempValues((prev) => ({
-        ...prev,
-        [skuId]: { ...currentConfig },
-      }));
-
-      setEditingRows((prev) => new Set([...prev, skuId]));
+      onConfigurationChange(skuId, value, selectedMarket);
     },
-    [selectedMarket, configurations, defaultConfigurations]
-  );
-
-  // Handle saving edited row
-  const handleSaveRow = useCallback(
-    (skuId: string) => {
-      if (!selectedMarket) return;
-
-      const temp = tempValues[skuId];
-      if (temp && onConfigurationChange) {
-        // Save all field values
-        Object.entries(temp).forEach(([field, value]) => {
-          onConfigurationChange(
-            skuId,
-            field as keyof SKUConfiguration,
-            value,
-            selectedMarket
-          );
-        });
-      }
-
-      // Exit edit mode
-      setEditingRows((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(skuId);
-        return newSet;
-      });
-
-      // Clear temp values
-      setTempValues((prev) => {
-        const { [skuId]: removed, ...rest } = prev;
-        return rest;
-      });
-    },
-    [selectedMarket, tempValues, onConfigurationChange]
-  );
-
-  // Handle canceling edit
-  const handleCancelEdit = useCallback((skuId: string) => {
-    setEditingRows((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(skuId);
-      return newSet;
-    });
-
-    setTempValues((prev) => {
-      const { [skuId]: removed, ...rest } = prev;
-      return rest;
-    });
-  }, []);
-
-  // Handle temp value changes
-  const handleTempValueChange = useCallback(
-    (skuId: string, field: keyof SKUConfiguration, value: string) => {
-      setTempValues((prev) => ({
-        ...prev,
-        [skuId]: {
-          ...prev[skuId],
-          [field]: value,
-        },
-      }));
-    },
-    []
+    [onConfigurationChange, selectedMarket]
   );
 
   // Define columns with edit-on-demand functionality
@@ -248,118 +129,71 @@ export const LeadTimes: React.FC<LeadTimesProps> = ({
       },
     ];
 
-    // Lead time columns with edit-on-demand
-    const leadTimeColumns: Column[] = LEAD_TIME_FIELDS.map(
-      ({ key, label }) => ({
-        key,
-        header: label,
-        subHeader: "Days",
-        align: "center" as const,
-        sortable: true,
-        filterable: true,
-        width: 90,
-        sx: cellPaddingSx,
-        render: (_value: string, row: any) => {
-          const isEditing = editingRows.has(row.id);
-
-          if (isEditing) {
-            // Show Material-UI TextField in edit mode
-            const tempValue = tempValues[row.id]?.[key] || "";
-            return (
-              <LeadTimeInput
-                value={tempValue}
-                onChange={(value) => handleTempValueChange(row.id, key, value)}
-                placeholder="0"
-              />
-            );
-          } else {
-            // Show static Typography in view mode
-            if (!selectedMarket) return "-";
-
-            const configKey = `${selectedMarket}-${row.id}`;
-            const config = configurations[configKey] || {};
-            const defaults = defaultConfigurations[row.id] || {};
-            const currentValue = config[key] || defaults[key] || "30";
-
-            return (
-              <Typography
-                variant="body2"
-                sx={{
-                  textAlign: "center",
-                  color: "text.secondary",
-                  fontSize: "0.875rem",
-                  fontWeight: "300",
-                }}
-              >
-                {currentValue}
-              </Typography>
-            );
-          }
-        },
-      })
-    );
-
-    // Actions column with edit/save/cancel
-    const actionsColumn: Column = {
-      key: "actions",
-      header: "Actions",
+    // Location column (editable) and Days column (read-only)
+    const locationColumn: Column = {
+      key: "location",
+      header: "Location",
       align: "center" as const,
-      width: 120,
+      filterable: true,
+      width: 200,
       sx: cellPaddingSx,
-      render: (_value: string, row: any) => {
-        const isEditing = editingRows.has(row.id);
+      render: (_: string, row: any) => {
+        const configKey = `${selectedMarket}-${row.id}`;
+        const config = configurations[configKey] || {
+          location: "edisonDomestic",
+        };
+        const currentLocation = config.location;
 
-        if (isEditing) {
-          return (
-            <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}>
-              <Tooltip title="Save">
-                <IconButton
-                  size="small"
-                  onClick={() => handleSaveRow(row.id)}
-                  sx={{ color: "primary.main" }}
-                >
-                  <SaveIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Cancel">
-                <IconButton
-                  size="small"
-                  onClick={() => handleCancelEdit(row.id)}
-                  sx={{ color: "text.secondary" }}
-                >
-                  <CancelIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          );
-        } else {
-          return (
-            <Tooltip title="Edit Lead Times">
-              <IconButton
-                size="small"
-                onClick={() => handleEditRow(row.id)}
-                sx={{ color: "primary.main" }}
-                disabled={!selectedMarket}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          );
-        }
+        return (
+          <LocationSelect
+            value={currentLocation}
+            onChange={(val) => handleLocationChange(row.id, val)}
+          />
+        );
       },
     };
 
-    return [...baseColumns, ...leadTimeColumns, actionsColumn];
+    const daysColumn: Column = {
+      key: "days",
+      header: "Lead Time (Days)",
+      align: "center" as const,
+      sortable: true,
+      width: 120,
+      sx: cellPaddingSx,
+      render: (_: any, row: any) => {
+        if (!selectedMarket) return "-";
+
+        const configKey = `${selectedMarket}-${row.id}`;
+        const config = configurations[configKey] || {
+          location: "edisonDomestic",
+        };
+        const marketDefaults =
+          defaultConfigurations[selectedMarket] ||
+          ({} as MarketDefaultConfiguration);
+
+        const days = (marketDefaults as any)[config.location] || "-";
+        return (
+          <Typography
+            variant="body2"
+            sx={{
+              textAlign: "center",
+              color: "text.secondary",
+              fontSize: "0.875rem",
+              fontWeight: "300",
+            }}
+          >
+            {days}
+          </Typography>
+        );
+      },
+    };
+
+    return [...baseColumns, locationColumn, daysColumn];
   }, [
     selectedMarket,
     configurations,
     defaultConfigurations,
-    editingRows,
-    tempValues,
-    handleEditRow,
-    handleSaveRow,
-    handleCancelEdit,
-    handleTempValueChange,
+    handleLocationChange,
   ]);
 
   return (

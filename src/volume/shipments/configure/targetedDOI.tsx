@@ -14,19 +14,12 @@ import {
   DynamicTable,
   type Column,
 } from "../../../reusableComponents/dynamicTable";
-
-interface DefaultConfiguration {
-  leadTimeEdison: string;
-  leadTimeScotland: string;
-  leadTimeIreland: string;
-  leadTimeMexico: string;
-  targetDOI: string;
-}
+import { MarketDefaultConfiguration } from "./defaultConfig";
 
 interface TargetedDOIProps {
   skus: any[];
   selectedMarket: string;
-  defaultConfigurations: Record<string, DefaultConfiguration>;
+  defaultConfigurations: Record<string, MarketDefaultConfiguration>;
   doiConfigurations: Record<string, any>;
   onDOIConfigurationChange: (
     skuId: string,
@@ -122,12 +115,12 @@ export const TargetedDOI: React.FC<TargetedDOIProps> = ({
 
       const configKey = `${selectedMarket}-${skuId}`;
       const config = doiConfigurations[configKey] || {};
-      const defaults = defaultConfigurations[skuId];
+      const defaults = defaultConfigurations[selectedMarket];
 
       // Initialize temp values with current config or defaults
       const currentValues: Record<string, string> = {};
       ALL_MONTHS.forEach(({ key }) => {
-        currentValues[key] = config[key] || defaults?.targetDOI || "30";
+        currentValues[key] = config[key] || defaults?.tdoiDomestic || "30";
       });
 
       setTempValues((prev) => ({
@@ -263,8 +256,8 @@ export const TargetedDOI: React.FC<TargetedDOIProps> = ({
 
           const configKey = `${selectedMarket}-${row.id}`;
           const config = doiConfigurations[configKey] || {};
-          const defaults = defaultConfigurations[row.id] || {};
-          const currentValue = config[key] || defaults.targetDOI || "30";
+          const defaults = defaultConfigurations[selectedMarket] || {};
+          const currentValue = config[key] || defaults.tdoiDomestic || "30";
 
           return (
             <Typography

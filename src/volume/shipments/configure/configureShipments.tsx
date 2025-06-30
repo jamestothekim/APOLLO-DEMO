@@ -21,7 +21,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import { LeadTimes } from "./leadTimes";
 import { TargetedDOI } from "./targetedDOI";
-import { DefaultConfig } from "./defaultConfig";
+import { DefaultConfig, MarketDefaultConfiguration } from "./defaultConfig";
 import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
 
 interface Market {
@@ -38,22 +38,11 @@ interface SKU {
 }
 
 interface LeadTimeConfiguration {
-  leadTimeEdison: string;
-  leadTimeScotland: string;
-  leadTimeIreland: string;
-  leadTimeMexico: string;
+  location: string; // Stores selected location key (e.g., "edisonDomestic")
 }
 
 interface DOIConfiguration {
   [month: string]: string; // e.g., "jan": "30", "feb": "28", etc.
-}
-
-interface DefaultConfiguration {
-  leadTimeEdison: string;
-  leadTimeScotland: string;
-  leadTimeIreland: string;
-  leadTimeMexico: string;
-  targetDOI: string;
 }
 
 interface ConfigureContainerProps {
@@ -75,9 +64,9 @@ export const ConfigureContainer: React.FC<ConfigureContainerProps> = ({
   const [selectedMarket, setSelectedMarket] = useState<string>("");
   const [loadingComplete, setLoadingComplete] = useState(false);
 
-  // Default configurations by SKU ID
+  // Market default configurations
   const [defaultConfigurations, setDefaultConfigurations] = useState<
-    Record<string, DefaultConfiguration>
+    Record<string, MarketDefaultConfiguration>
   >({});
 
   // Market-specific configurations for lead times and DOI
@@ -129,6 +118,10 @@ export const ConfigureContainer: React.FC<ConfigureContainerProps> = ({
       });
 
       setMarkets(allMarkets);
+
+      // Initialize defaults for markets
+      initializeDefaultConfigurationsForMarkets(allMarkets);
+
       // Auto-select first market when markets load
       if (allMarkets.length > 0 && !selectedMarket) {
         setSelectedMarket(allMarkets[0].id);
@@ -164,8 +157,7 @@ export const ConfigureContainer: React.FC<ConfigureContainerProps> = ({
       setSKUs(transformedSKUs);
       setInitialDataLoaded(true);
 
-      // Initialize default configurations with 30 days for all SKUs
-      initializeDefaultConfigurations(transformedSKUs);
+      // No longer initializing SKU-based defaults
     } catch (error) {
       console.error("Error fetching SKUs:", error);
     } finally {
@@ -173,31 +165,38 @@ export const ConfigureContainer: React.FC<ConfigureContainerProps> = ({
     }
   };
 
-  const initializeDefaultConfigurations = (skuList: SKU[]) => {
-    const newDefaultConfigs = { ...defaultConfigurations };
+  // Initialize market default configurations to 30 days for all fields
+  const initializeDefaultConfigurationsForMarkets = (marketList: Market[]) => {
+    const newDefaults: Record<string, MarketDefaultConfiguration> = {
+      ...defaultConfigurations,
+    };
 
-    skuList.forEach((sku) => {
-      // Initialize default configuration only if it doesn't exist
-      if (!newDefaultConfigs[sku.id]) {
-        newDefaultConfigs[sku.id] = {
-          leadTimeEdison: "30",
-          leadTimeScotland: "30",
-          leadTimeIreland: "30",
-          leadTimeMexico: "30",
-          targetDOI: "30",
+    marketList.forEach((mkt) => {
+      if (!newDefaults[mkt.id]) {
+        newDefaults[mkt.id] = {
+          edisonDomestic: "30",
+          scotlandDI: "30",
+          irelandDI: "30",
+          mexicoDI: "30",
+          tdoiDomestic: "30",
+          tdoiDI: "30",
         };
       }
     });
 
-    setDefaultConfigurations(newDefaultConfigs);
+    setDefaultConfigurations(newDefaults);
   };
 
   const handleDefaultConfigurationChange = useCallback(
-    (skuId: string, field: keyof DefaultConfiguration, value: string) => {
+    (
+      marketId: string,
+      field: keyof MarketDefaultConfiguration,
+      value: string
+    ) => {
       setDefaultConfigurations((prev) => ({
         ...prev,
-        [skuId]: {
-          ...prev[skuId],
+        [marketId]: {
+          ...prev[marketId],
           [field]: value,
         },
       }));
@@ -206,18 +205,12 @@ export const ConfigureContainer: React.FC<ConfigureContainerProps> = ({
   );
 
   const handleLeadTimeConfigurationChange = useCallback(
-    (
-      skuId: string,
-      field: keyof LeadTimeConfiguration,
-      value: string,
-      selectedMarket: string
-    ) => {
+    (skuId: string, value: string, selectedMarket: string) => {
       const key = `${selectedMarket}-${skuId}`;
       setLeadTimeConfigurations((prev) => ({
         ...prev,
         [key]: {
-          ...prev[key],
-          [field]: value,
+          location: value,
         },
       }));
     },
@@ -485,10 +478,10 @@ export const ConfigureContainer: React.FC<ConfigureContainerProps> = ({
               </Box>
 
               <DefaultConfig
-                skus={skus}
+                markets={markets}
                 defaultConfigurations={defaultConfigurations}
                 onDefaultConfigurationChange={handleDefaultConfigurationChange}
-                loading={loadingSKUs}
+                loading={loadingMarkets}
               />
             </CardContent>
           </Card>

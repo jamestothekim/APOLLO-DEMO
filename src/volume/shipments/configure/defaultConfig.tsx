@@ -15,27 +15,27 @@ import {
   type Column,
 } from "../../../reusableComponents/dynamicTable";
 
-interface SKU {
+interface Market {
   id: string;
-  desc: string;
-  brand?: string;
-  [key: string]: any;
+  name: string;
 }
 
-interface DefaultConfiguration {
-  leadTimeEdison: string;
-  leadTimeScotland: string;
-  leadTimeIreland: string;
-  leadTimeMexico: string;
-  targetDOI: string;
+// New default configuration structure (per market)
+export interface MarketDefaultConfiguration {
+  edisonDomestic: string;
+  scotlandDI: string;
+  irelandDI: string;
+  mexicoDI: string;
+  tdoiDomestic: string;
+  tdoiDI: string;
 }
 
 interface DefaultConfigProps {
-  skus: SKU[];
-  defaultConfigurations: Record<string, DefaultConfiguration>;
+  markets: Market[];
+  defaultConfigurations: Record<string, MarketDefaultConfiguration>;
   onDefaultConfigurationChange: (
-    skuId: string,
-    field: keyof DefaultConfiguration,
+    marketId: string,
+    field: keyof MarketDefaultConfiguration,
     value: string
   ) => void;
   loading?: boolean;
@@ -43,29 +43,34 @@ interface DefaultConfigProps {
 
 const DEFAULT_FIELDS = [
   {
-    key: "leadTimeEdison" as keyof DefaultConfiguration,
+    key: "edisonDomestic" as keyof MarketDefaultConfiguration,
     label: "Edison",
-    subLabel: "Days",
+    subLabel: "Domestic",
   },
   {
-    key: "leadTimeScotland" as keyof DefaultConfiguration,
+    key: "scotlandDI" as keyof MarketDefaultConfiguration,
     label: "Scotland",
-    subLabel: "Days",
+    subLabel: "DI",
   },
   {
-    key: "leadTimeIreland" as keyof DefaultConfiguration,
+    key: "irelandDI" as keyof MarketDefaultConfiguration,
     label: "Ireland",
-    subLabel: "Days",
+    subLabel: "DI",
   },
   {
-    key: "leadTimeMexico" as keyof DefaultConfiguration,
+    key: "mexicoDI" as keyof MarketDefaultConfiguration,
     label: "Mexico",
-    subLabel: "Days",
+    subLabel: "DI",
   },
   {
-    key: "targetDOI" as keyof DefaultConfiguration,
+    key: "tdoiDomestic" as keyof MarketDefaultConfiguration,
     label: "TDOI",
-    subLabel: "Days",
+    subLabel: "Domestic",
+  },
+  {
+    key: "tdoiDI" as keyof MarketDefaultConfiguration,
+    label: "TDOI",
+    subLabel: "DI",
   },
 ];
 
@@ -110,7 +115,7 @@ const DefaultInput: React.FC<{
 });
 
 export const DefaultConfig: React.FC<DefaultConfigProps> = ({
-  skus,
+  markets,
   defaultConfigurations,
   onDefaultConfigurationChange,
   loading = false,
@@ -120,48 +125,49 @@ export const DefaultConfig: React.FC<DefaultConfigProps> = ({
 
   // Track temporary values for rows being edited
   const [tempValues, setTempValues] = useState<
-    Record<string, DefaultConfiguration>
+    Record<string, MarketDefaultConfiguration>
   >({});
 
   // Transform SKU data for DynamicTable
   const tableData = useMemo(() => {
-    return skus.map((sku) => ({
-      ...sku,
+    return markets.map((mkt) => ({
+      ...mkt,
     }));
-  }, [skus]);
+  }, [markets]);
 
   // Handle entering edit mode
   const handleEditRow = useCallback(
-    (skuId: string) => {
-      const config = defaultConfigurations[skuId] || {
-        leadTimeEdison: "30",
-        leadTimeScotland: "30",
-        leadTimeIreland: "30",
-        leadTimeMexico: "30",
-        targetDOI: "30",
+    (marketId: string) => {
+      const config = defaultConfigurations[marketId] || {
+        edisonDomestic: "30",
+        scotlandDI: "30",
+        irelandDI: "30",
+        mexicoDI: "30",
+        tdoiDomestic: "30",
+        tdoiDI: "30",
       };
 
       // Initialize temp values with current config
       setTempValues((prev) => ({
         ...prev,
-        [skuId]: { ...config },
+        [marketId]: { ...config },
       }));
 
-      setEditingRows((prev) => new Set([...prev, skuId]));
+      setEditingRows((prev) => new Set([...prev, marketId]));
     },
     [defaultConfigurations]
   );
 
   // Handle saving edited row
   const handleSaveRow = useCallback(
-    (skuId: string) => {
-      const temp = tempValues[skuId];
+    (marketId: string) => {
+      const temp = tempValues[marketId];
       if (temp && onDefaultConfigurationChange) {
         // Save all field values
         Object.entries(temp).forEach(([field, value]) => {
           onDefaultConfigurationChange(
-            skuId,
-            field as keyof DefaultConfiguration,
+            marketId,
+            field as keyof MarketDefaultConfiguration,
             value
           );
         });
@@ -170,13 +176,13 @@ export const DefaultConfig: React.FC<DefaultConfigProps> = ({
       // Exit edit mode
       setEditingRows((prev) => {
         const newSet = new Set(prev);
-        newSet.delete(skuId);
+        newSet.delete(marketId);
         return newSet;
       });
 
       // Clear temp values
       setTempValues((prev) => {
-        const { [skuId]: removed, ...rest } = prev;
+        const { [marketId]: removed, ...rest } = prev;
         return rest;
       });
     },
@@ -184,26 +190,30 @@ export const DefaultConfig: React.FC<DefaultConfigProps> = ({
   );
 
   // Handle canceling edit
-  const handleCancelEdit = useCallback((skuId: string) => {
+  const handleCancelEdit = useCallback((marketId: string) => {
     setEditingRows((prev) => {
       const newSet = new Set(prev);
-      newSet.delete(skuId);
+      newSet.delete(marketId);
       return newSet;
     });
 
     setTempValues((prev) => {
-      const { [skuId]: removed, ...rest } = prev;
+      const { [marketId]: removed, ...rest } = prev;
       return rest;
     });
   }, []);
 
   // Handle temp value changes
   const handleTempValueChange = useCallback(
-    (skuId: string, field: keyof DefaultConfiguration, value: string) => {
+    (
+      marketId: string,
+      field: keyof MarketDefaultConfiguration,
+      value: string
+    ) => {
       setTempValues((prev) => ({
         ...prev,
-        [skuId]: {
-          ...prev[skuId],
+        [marketId]: {
+          ...prev[marketId],
           [field]: value,
         },
       }));
@@ -218,27 +228,17 @@ export const DefaultConfig: React.FC<DefaultConfigProps> = ({
     const baseColumns: Column[] = [
       {
         key: "id",
-        header: "SKU ID",
+        header: "Market ID",
         align: "left" as const,
         sortable: true,
         filterable: true,
-        width: 100,
+        width: 120,
         sx: cellPaddingSx,
         render: (value: string) => value,
       },
       {
-        key: "brand",
-        header: "Brand",
-        align: "left" as const,
-        sortable: true,
-        filterable: true,
-        width: 130,
-        sx: cellPaddingSx,
-        render: (value: string) => value || "-",
-      },
-      {
-        key: "desc",
-        header: "SKU Description",
+        key: "name",
+        header: "Market Name",
         align: "left" as const,
         sortable: true,
         filterable: true,
@@ -257,7 +257,7 @@ export const DefaultConfig: React.FC<DefaultConfigProps> = ({
         align: "center" as const,
         sortable: true,
         filterable: true,
-        width: key === "targetDOI" ? 80 : 90,
+        width: key === "tdoiDI" ? 80 : 90,
         sx: cellPaddingSx,
         render: (_value: string, row: any) => {
           const isEditing = editingRows.has(row.id);
