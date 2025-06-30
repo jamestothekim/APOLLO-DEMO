@@ -316,9 +316,15 @@ export const ScanPlanner: React.FC = () => {
   const filteredColumns = columns.filter((c) => visibleColKeys.includes(c.key));
 
   // Build unique option lists
+  const marketNamesSet = new Set(rows.map((r) => r.market));
   const marketOptions = SCAN_MARKETS.map((m: any) => m.name);
   const retailerOptions = Array.from(new Set(rows.map((r) => r.account)));
   const productOptions = Array.from(new Set(rows.map((r) => r.product)));
+
+  // Markets existing in current plan (for Excel builder)
+  const existingMarketObjects = SCAN_MARKETS.filter((m: any) =>
+    marketNamesSet.has(m.name)
+  ).map((m: any) => ({ id: m.name, name: m.name }));
 
   // Filter rows based on selections
   const filteredRows = rows.filter((r) => {
@@ -740,7 +746,7 @@ export const ScanPlanner: React.FC = () => {
         open={exportConfigDialogOpen}
         onClose={() => setExportConfigDialogOpen(false)}
         onExport={handleExportConfig}
-        markets={SCAN_MARKETS.map((m: any) => ({ id: m.name, name: m.name }))}
+        markets={existingMarketObjects}
         retailers={retailerOptions.map((r: string) => ({ id: r, name: r }))}
       />
     </Paper>
