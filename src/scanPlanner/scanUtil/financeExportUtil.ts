@@ -16,6 +16,9 @@ interface ScanRow {
   qd: number;
   retailerMargin: number;
   loyalty: number;
+  projectedVolume: number;
+  volumeLift: number;
+  volumeLiftPct: number;
   status: 'draft' | 'pending' | 'approved' | 'rejected' | 'review';
   comments?: string;
 }
