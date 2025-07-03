@@ -103,12 +103,24 @@ export const processMonthData = (data: any[]) => {
       }
 
       const value = Math.round(Number(item.case_equivalent_volume) * 10) / 10;
+
+      const existing = months[monthName];
+
+      const safeValue = isNaN(value) ? 0 : value;
+
       months[monthName] = {
-        value: isNaN(value) ? 0 : value,
-        isActual: Boolean(item.data_type?.includes("actual")),
-        isManuallyModified: Boolean(item.is_manual_input),
+        value: (existing?.value || 0) + safeValue,
+        isActual:
+          Boolean(item.data_type?.includes("actual")) ||
+          existing?.isActual ||
+          false,
+        isManuallyModified:
+          Boolean(item.is_manual_input) ||
+          existing?.isManuallyModified ||
+          false,
         data_type:
           item.data_type ||
+          existing?.data_type ||
           (months[monthName].isActual ? "actual_complete" : "forecast"),
       };
     }
