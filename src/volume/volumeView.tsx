@@ -7,7 +7,7 @@ import { useUser } from "../userContext";
 import axios from "axios";
 
 // --- Redux Imports --- // Renamed from userSettingsSlice
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../redux/store"; // Import RootState
 import { fetchGuidance } from "../redux/slices/userSettingsSlice";
 
