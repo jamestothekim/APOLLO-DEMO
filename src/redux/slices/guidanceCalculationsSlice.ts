@@ -12,6 +12,7 @@ import type { Guidance } from '../../redux/slices/userSettingsSlice';
 export interface CalculatedGuidanceValue {
     total?: number;
     monthly?: { [month: string]: number };
+    multiCalc?: { [subId: string]: number };
 }
 
 export interface SummaryCalculationsState {

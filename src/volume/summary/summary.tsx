@@ -26,11 +26,6 @@ import { useAppSelector } from "../../redux/store";
 import { fetchPendingChanges } from "../../redux/slices/pendingChangesSlice";
 import type { RestoredState } from "../../redux/slices/pendingChangesSlice";
 import {
-  setPendingSummaryCols,
-  setPendingSummaryRows,
-  selectPendingGuidanceSummaryColumns,
-  selectPendingGuidanceSummaryRows,
-  Guidance,
   selectSelectedBrands,
   selectSelectedMarkets,
   updateSelectedBrands,
@@ -49,15 +44,25 @@ import {
   selectCustomerRawVolumeData,
   selectCustomerVolumeDataStatus,
 } from "../../redux/slices/depletionSlice";
-import { GuidanceDialog } from "../components/guidance";
+import { GuidanceDialog } from "../guidance/guidance";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 // Import guidance calculations from shared location
 import type { CalculatedGuidanceValue } from "../calculations/guidanceCalculations";
 import {
   calculateAllSummaryGuidance,
   calculateTotalGuidance,
-  formatGuidanceValue,
 } from "../calculations/guidanceCalculations";
+// Import centralized guidance renderer
+import {
+  GuidanceRenderer,
+  MonthlyGuidanceRenderer,
+} from "../guidance/guidanceRenderer";
+import {
+  // SUMMARY guidance actions/selectors (new - independent)
+  selectSummaryPendingCols as selectPendingSummaryGuidanceCols,
+  selectSummaryPendingRows as selectPendingSummaryGuidanceRows,
+} from "../../redux/guidance/guidanceSlice";
+import type { Guidance } from "../../redux/guidance/guidanceSlice";
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -113,83 +118,12 @@ export interface DisplayRow
 interface SummaryProps {
   availableBrands: string[];
   marketData: MarketData[];
-  availableGuidance: Guidance[];
 }
 
-// --- Helper Component for Rendering Guidance Cells ---
-interface GuidanceCellRendererProps {
-  aggregateKey: string;
-  guidance: Guidance; // Pass the full guidance object
-  calculationResult: CalculatedGuidanceValue | undefined;
-  calcStatus: "idle" | "calculating" | "succeeded";
-}
-
-const GuidanceCellRenderer: React.FC<GuidanceCellRendererProps> = ({
-  guidance,
-  calculationResult,
-  calcStatus,
-}) => {
-  // Show loading spinner based on prop
-  if (calcStatus === "calculating") {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <CircularProgress size={16} thickness={4} />
-      </Box>
-    );
-  }
-  // Display calculated total value from prop
-  if (calculationResult && calculationResult.total !== undefined) {
-    return (
-      <>
-        {/* Use Fragment to avoid unnecessary divs */}
-        {formatGuidanceValue(
-          calculationResult.total,
-          guidance.calculation.format,
-          guidance.label
-        )}
-      </>
-    );
-  }
-
-  return <>-</>; // Placeholder
-};
-
-interface MonthlyGuidanceCellRendererProps {
-  aggregateKey: string;
-  guidance: Guidance;
-  month: string;
-  calculationResult: CalculatedGuidanceValue | undefined;
-  calcStatus: "idle" | "calculating" | "succeeded";
-}
-
-const MonthlyGuidanceCellRenderer: React.FC<
-  MonthlyGuidanceCellRendererProps
-> = ({ guidance, month, calculationResult, calcStatus }) => {
-  const monthlyData = calculationResult?.monthly;
-  const value = monthlyData ? monthlyData[month] : undefined;
-
-  // Render based on status and value from props
-  if (calcStatus === "calculating") {
-    return <CircularProgress size={12} thickness={4} />;
-  }
-  if (calcStatus === "succeeded" && value !== undefined) {
-    return (
-      <>
-        {formatGuidanceValue(
-          value,
-          guidance.calculation.format,
-          guidance.label
-        )}
-      </>
-    );
-  }
-  return <>-</>; // Placeholder
-};
-// --- Helper Component for Rendering Monthly Guidance Cells --- END
+// --- Note: Removed local guidance renderers - now using centralized components ---
 
 // --- NEW Component for Rendering a Single Expanded Row ---
 interface ExpandedGuidanceRowProps {
-  aggregateKey: string;
   guidance: Guidance;
   rowId: string; // Pass the original row ID for keys
   flatColumns: Column[];
@@ -198,7 +132,6 @@ interface ExpandedGuidanceRowProps {
 }
 
 const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
-  aggregateKey,
   guidance,
   rowId,
   flatColumns,
@@ -238,8 +171,7 @@ const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
         } else if (col.key.startsWith("months.")) {
           const month = col.key.split(".")[1];
           cellContent = (
-            <MonthlyGuidanceCellRenderer
-              aggregateKey={aggregateKey}
+            <MonthlyGuidanceRenderer
               guidance={guidance}
               month={month}
               calculationResult={calculationResult}
@@ -262,11 +194,7 @@ const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
 };
 // --- End NEW Component ---
 
-export const Summary = ({
-  availableBrands,
-  marketData,
-  availableGuidance,
-}: SummaryProps) => {
+export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
   const dispatch: AppDispatch = useDispatch();
   const rawVolumeData = useSelector(selectRawVolumeData);
   const depletionsStatus = useSelector(selectVolumeDataStatus);
@@ -326,10 +254,10 @@ export const Summary = ({
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
 
   const selectedGuidance: Guidance[] = useSelector(
-    selectPendingGuidanceSummaryColumns
+    selectPendingSummaryGuidanceCols
   );
   const selectedRowGuidance: Guidance[] = useSelector(
-    selectPendingGuidanceSummaryRows
+    selectPendingSummaryGuidanceRows
   );
 
   const [variantAggregateData, setVariantAggregateData] = useState<
@@ -481,7 +409,8 @@ export const Summary = ({
         variantsAggArray,
         brandAggsMap,
         selectedGuidance,
-        selectedRowGuidance
+        selectedRowGuidance,
+        maxActualIndex
       );
 
       setGuidanceResults(calculatedResults);
@@ -640,9 +569,10 @@ export const Summary = ({
       });
 
       const totalGuidanceResults = calculateTotalGuidance(
-        filteredBrandAggregates, // Pass the filtered map
+        filteredBrandAggregates,
         selectedGuidance,
-        selectedRowGuidance
+        selectedRowGuidance,
+        lastActualMonthIndex
       );
 
       // Add total guidance to the guidanceResults state
@@ -840,8 +770,7 @@ export const Summary = ({
               guidanceResults[aggregateKey]?.[guidance.id];
 
             return (
-              <GuidanceCellRenderer
-                aggregateKey={aggregateKey}
+              <GuidanceRenderer
                 guidance={guidance} // Pass the full guidance definition
                 calculationResult={calculationResult}
                 calcStatus={localCalcStatus} // Pass the status
@@ -1095,7 +1024,6 @@ export const Summary = ({
       return (
         <ExpandedGuidanceRow
           key={`${row.id}-expanded-${guidance.id}`}
-          aggregateKey={aggregateKey}
           guidance={guidance}
           rowId={row.id}
           flatColumns={flatColumns}
@@ -1107,17 +1035,6 @@ export const Summary = ({
   };
 
   const handleColumns = () => setColumnsDialogOpen(true);
-
-  const handleApplyColumns = (columns: Guidance[]) => {
-    const columnIds = columns.map((col) => col.id);
-    dispatch(setPendingSummaryCols(columnIds));
-    setColumnsDialogOpen(false);
-  };
-
-  const handleApplyRows = (rows: Guidance[]) => {
-    const rowIds = rows.map((row) => row.id);
-    dispatch(setPendingSummaryRows(rowIds));
-  };
 
   // Update the brands change handler to only update local state
   const handleBrandsChange = (_: any, newValue: string[]) => {
@@ -1359,11 +1276,6 @@ export const Summary = ({
           open={columnsDialogOpen}
           onClose={() => setColumnsDialogOpen(false)}
           title="Select Summary Guidance"
-          availableGuidance={availableGuidance}
-          initialSelectedColumns={selectedGuidance}
-          initialSelectedRows={selectedRowGuidance}
-          onApplyColumns={handleApplyColumns}
-          onApplyRows={handleApplyRows}
           viewContext="summary"
         />
       </Box>

@@ -10,6 +10,7 @@ import PublishIcon from "@mui/icons-material/Publish";
 import PieChartIcon from "@mui/icons-material/PieChart";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import BuildIcon from "@mui/icons-material/Build";
 
 export type ToolType =
   | "undo"
@@ -20,7 +21,8 @@ export type ToolType =
   | "publish"
   | "pieChart"
   | "lineChart"
-  | "configure";
+  | "configure"
+  | "builder";
 
 interface ToolboxProps {
   tools?: ToolType[];
@@ -40,6 +42,7 @@ interface ToolboxProps {
   canLineChart?: boolean;
   onLineChart?: () => void;
   onConfigure?: () => void;
+  onBuilder?: () => void;
 }
 
 export const Toolbox: React.FC<ToolboxProps> = ({
@@ -59,6 +62,7 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   canLineChart = false,
   onLineChart,
   onConfigure,
+  onBuilder,
 }) => {
   const handleUndo = async () => {
     if (onUndo) {
@@ -103,6 +107,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({
   const handleConfigure = () => {
     if (onConfigure) {
       onConfigure();
+    }
+  };
+
+  const handleBuilder = () => {
+    if (onBuilder) {
+      onBuilder();
     }
   };
 
@@ -214,6 +224,21 @@ export const Toolbox: React.FC<ToolboxProps> = ({
             }}
           >
             Shipment Logic
+          </Button>
+        )}
+
+        {tools.includes("builder") && (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<BuildIcon />}
+            onClick={handleBuilder}
+            sx={{
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            G. Builder
           </Button>
         )}
       </Box>

@@ -17,24 +17,31 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { Toolbox } from "./components/toolbox";
 import type { ToolType } from "./components/toolbox";
-import { GuidanceDialog } from "./components/guidance";
+import { GuidanceDialog } from "./guidance/guidance";
 import { ShipmentGuidanceDialog } from "./shipments/shipmentGuidanceDialog";
 import { useSelector, useDispatch } from "react-redux";
 import type { AppDispatch } from "../redux/store";
 import {
-  setPendingForecastCols,
-  setPendingForecastRows,
-  selectPendingGuidanceForecastColumns,
-  selectPendingGuidanceForecastRows,
-  selectAvailableGuidance,
-  selectVolumeForecastMarkets,
-  selectVolumeForecastBrands,
-  selectVolumeForecastTags,
   setVolumeForecastMarkets,
   setVolumeForecastBrands,
   setVolumeForecastTags,
+  selectVolumeForecastMarkets,
+  selectVolumeForecastBrands,
+  selectVolumeForecastTags,
 } from "../redux/slices/userSettingsSlice";
-import type { Guidance } from "../redux/slices/userSettingsSlice";
+import {
+  // DEPLETION guidance actions/selectors (using new independent system)
+  setPendingForecastCols,
+  setPendingForecastRows,
+  selectPendingForecastCols as selectPendingGuidanceForecastColumns,
+  selectPendingForecastRows as selectPendingGuidanceForecastRows,
+  // SHIPMENT guidance actions/selectors (independent system)
+  setShipmentPendingCols,
+  setShipmentPendingRows,
+  selectShipmentPendingCols as selectPendingShipmentGuidanceCols,
+  selectShipmentPendingRows as selectPendingShipmentGuidanceRows,
+} from "../redux/guidance/guidanceSlice";
+import type { Guidance } from "../redux/guidance/guidanceSlice";
 import { useUser } from "../userContext";
 import axios from "axios";
 
@@ -98,7 +105,6 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
 }) => {
   const dispatch: AppDispatch = useDispatch();
   const { user } = useUser();
-  const availableGuidance = useSelector(selectAvailableGuidance);
   const volumeForecastMarkets = useSelector(selectVolumeForecastMarkets);
   const volumeForecastBrands = useSelector(selectVolumeForecastBrands);
   const volumeForecastTags = useSelector(selectVolumeForecastTags);
@@ -123,11 +129,21 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
   const [configureDialogOpen, setConfigureDialogOpen] = useState(false);
 
-  // Shipment guidance state (separate from regular guidance)
-  const [selectedShipmentGuidanceCols, setSelectedShipmentGuidanceCols] =
-    useState<Guidance[]>([]);
-  const [selectedShipmentGuidanceRows, setSelectedShipmentGuidanceRows] =
-    useState<Guidance[]>([]);
+  // Depletion guidance state - using new independent Redux system
+  const selectedGuidanceCols: Guidance[] = useSelector(
+    selectPendingGuidanceForecastColumns
+  );
+  const selectedGuidanceRows: Guidance[] = useSelector(
+    selectPendingGuidanceForecastRows
+  );
+
+  // Shipment guidance
+  const selectedShipmentGuidanceCols: Guidance[] = useSelector(
+    selectPendingShipmentGuidanceCols
+  );
+  const selectedShipmentGuidanceRows: Guidance[] = useSelector(
+    selectPendingShipmentGuidanceRows
+  );
 
   // Sync with Redux state
   useEffect(() => {
@@ -214,12 +230,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
   };
 
   // Get selected Guidance objects directly from Redux using the reselect selectors
-  const selectedGuidanceCols: Guidance[] = useSelector(
-    selectPendingGuidanceForecastColumns
-  );
-  const selectedGuidanceRows: Guidance[] = useSelector(
-    selectPendingGuidanceForecastRows
-  );
+  // (Note: These are already defined above with the new independent system)
 
   // Add useEffect to fetch available tags
   useEffect(() => {
@@ -272,24 +283,26 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
     setConfigureDialogOpen(true);
   };
 
-  const handleApplyColumns = async (columns: Guidance[]) => {
+  const handleApplyColumns = (columns: Guidance[]) => {
     setColumnsDialogOpen(false);
     if (tabValue === 1) {
-      // Shipments tab - update local state only
-      setSelectedShipmentGuidanceCols(columns);
+      // Shipments tab - update shipment Redux state
+      const columnIds = columns.map((col) => col.id);
+      dispatch(setShipmentPendingCols(columnIds));
     } else {
-      // Depletion tab - update Redux
+      // Depletion tab - update depletion Redux state
       const columnIds = columns.map((col) => col.id);
       dispatch(setPendingForecastCols(columnIds));
     }
   };
 
-  const handleApplyRows = async (rows: Guidance[]) => {
+  const handleApplyRows = (rows: Guidance[]) => {
     if (tabValue === 1) {
-      // Shipments tab - update local state only
-      setSelectedShipmentGuidanceRows(rows);
+      // Shipments tab - update shipment Redux state
+      const rowIds = rows.map((row) => row.id);
+      dispatch(setShipmentPendingRows(rowIds));
     } else {
-      // Depletion tab - update Redux
+      // Depletion tab - update depletion Redux state
       const rowIds = rows.map((row) => row.id);
       dispatch(setPendingForecastRows(rowIds));
     }
@@ -530,10 +543,10 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
           open={columnsDialogOpen}
           onClose={() => setColumnsDialogOpen(false)}
           title="Shipment Guidance Options"
-          initialSelectedColumns={selectedShipmentGuidanceCols}
-          initialSelectedRows={selectedShipmentGuidanceRows}
-          onApplyColumns={handleApplyColumns}
-          onApplyRows={handleApplyRows}
+          initialSelectedColumns={[]}
+          initialSelectedRows={[]}
+          onApplyColumns={(c) => handleApplyColumns(c as any)}
+          onApplyRows={(r) => handleApplyRows(r as any)}
         />
       ) : (
         // Depletion tab - show regular guidance dialog
@@ -541,12 +554,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
           open={columnsDialogOpen}
           onClose={() => setColumnsDialogOpen(false)}
           title="Forecast Guidance Options"
-          availableGuidance={availableGuidance}
-          initialSelectedColumns={selectedGuidanceCols}
-          initialSelectedRows={selectedGuidanceRows}
-          onApplyColumns={handleApplyColumns}
-          onApplyRows={handleApplyRows}
-          viewContext="depletions"
+          viewContext="forecast"
         />
       )}
     </Paper>

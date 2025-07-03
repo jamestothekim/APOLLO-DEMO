@@ -12,6 +12,7 @@ import dashboardReducer from './slices/dashboardSlice';
 // --- Import Dashboard Reducer --- END
 import sidebarReducer from './slices/sidebarSlice';
 import scanReducer from './slices/scanSlice';
+import guidanceReducer from './guidance/guidanceSlice';
 
 export const store = configureStore({
   reducer: {
@@ -28,6 +29,7 @@ export const store = configureStore({
     // --- Add Dashboard Reducer --- END
     sidebar: sidebarReducer,
     scan: scanReducer,
+    guidance: guidanceReducer,
   },
 });
 

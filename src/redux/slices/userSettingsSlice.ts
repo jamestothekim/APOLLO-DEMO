@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import axios from 'axios';
 
 // Updated Guidance type to match backend response and component usage
@@ -52,17 +52,12 @@ export interface Guidance {
 // Simplified State for Guidance Settings
 export interface GuidanceSettingsState {
   availableGuidance: Guidance[];
-  // Pending state holds selections modified in the UI before saving
-  pendingForecastCols: number[];
-  pendingForecastRows: number[];
-  pendingSummaryCols: number[];
-  pendingSummaryRows: number[];
+  // guidance column/row selections have moved to guidance slice; only brand / market filters remain here
   selectedBrands: string[];
   selectedMarkets: string[];
   volumeForecastMarkets: string[];
   volumeForecastBrands: string[];
   volumeForecastTags: number[];
-  isGuidanceInitialized: boolean; // Tracks if pending state is initialized from UserContext
   // Status for fetching available guidance options
   guidanceStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   guidanceError: string | null;
@@ -71,16 +66,11 @@ export interface GuidanceSettingsState {
 // Simplified Initial State
 const initialState: GuidanceSettingsState = {
   availableGuidance: [],
-  pendingForecastCols: [],
-  pendingForecastRows: [],
-  pendingSummaryCols: [],
-  pendingSummaryRows: [],
   selectedBrands: [],
   selectedMarkets: [],
   volumeForecastMarkets: [],
   volumeForecastBrands: [],
   volumeForecastTags: [],
-  isGuidanceInitialized: false,
   guidanceStatus: 'idle',
   guidanceError: null,
 };
@@ -111,37 +101,7 @@ const guidanceSettingsSlice = createSlice({
   name: 'guidanceSettings', // Renamed slice for clarity
   initialState,
   reducers: {
-    // Accepts initial settings from UserContext
-    initializePendingGuidance: (state, action: PayloadAction<{ forecastCols: number[], forecastRows: number[], summaryCols: number[], summaryRows: number[] }>) => {
-      // Always update pending state from payload when this action is dispatched
-      state.pendingForecastCols = action.payload.forecastCols;
-      state.pendingForecastRows = action.payload.forecastRows;
-      state.pendingSummaryCols = action.payload.summaryCols;
-      state.pendingSummaryRows = action.payload.summaryRows;
-      state.isGuidanceInitialized = true; // Still mark as initialized
-    },
-    // Reducers to update pending state based on user actions
-    setPendingForecastCols: (state, action: PayloadAction<number[]>) => {
-      state.pendingForecastCols = action.payload;
-    },
-    setPendingForecastRows: (state, action: PayloadAction<number[]>) => {
-      state.pendingForecastRows = action.payload;
-    },
-    setPendingSummaryCols: (state, action: PayloadAction<number[]>) => {
-      state.pendingSummaryCols = action.payload;
-    },
-    setPendingSummaryRows: (state, action: PayloadAction<number[]>) => {
-      state.pendingSummaryRows = action.payload;
-    },
-    // Resets the initialization flag (e.g., on logout)
-    resetGuidanceInitialization: (state) => {
-      state.isGuidanceInitialized = false;
-      // Optionally clear pending state on reset/logout too
-      state.pendingForecastCols = [];
-      state.pendingForecastRows = [];
-      state.pendingSummaryCols = [];
-      state.pendingSummaryRows = [];
-    },
+    // (legacy pending-guidance reducers removed)
     setSelectedBrands: (state, action: PayloadAction<string[]>) => {
       state.selectedBrands = action.payload;
     },
@@ -178,12 +138,6 @@ const guidanceSettingsSlice = createSlice({
 
 // Export actions
 export const {
-  initializePendingGuidance,
-  setPendingForecastCols,
-  setPendingForecastRows,
-  setPendingSummaryCols,
-  setPendingSummaryRows,
-  resetGuidanceInitialization,
   setSelectedBrands,
   setSelectedMarkets,
   setVolumeForecastMarkets,
@@ -194,68 +148,13 @@ export const {
 // Export selectors
 export const selectAvailableGuidance = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.availableGuidance;
 export const selectGuidanceStatus = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.guidanceStatus;
-export const selectPendingForecastCols = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingForecastCols;
-export const selectPendingForecastRows = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingForecastRows;
-export const selectPendingSummaryCols = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingSummaryCols;
-export const selectPendingSummaryRows = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingSummaryRows;
-export const selectIsGuidanceInitialized = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.isGuidanceInitialized;
 export const selectSelectedBrands = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.selectedBrands;
 export const selectSelectedMarkets = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.selectedMarkets;
 export const selectVolumeForecastMarkets = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.volumeForecastMarkets;
 export const selectVolumeForecastBrands = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.volumeForecastBrands;
 export const selectVolumeForecastTags = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.volumeForecastTags;
 
-// Selectors to get derived Guidance objects from PENDING IDs
-const selectAvailableGuidanceState = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.availableGuidance;
-const selectPendingForecastColsState = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingForecastCols;
-const selectPendingForecastRowsState = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingForecastRows;
-const selectPendingSummaryColsState = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingSummaryCols;
-const selectPendingSummaryRowsState = (state: { guidanceSettings: GuidanceSettingsState }) => state.guidanceSettings.pendingSummaryRows;
-
-export const selectPendingGuidanceForecastColumns = createSelector(
-    [selectAvailableGuidanceState, selectPendingForecastColsState],
-    (availableGuidance, selectedIds): Guidance[] => {
-        if (!availableGuidance || !selectedIds) return [];
-        const guidanceMap = new Map(availableGuidance.map(g => [g.id, g]));
-        const result = selectedIds
-            .map(id => guidanceMap.get(id))
-            .filter((g): g is Guidance => g !== undefined);
-        return result;
-    }
-);
-
-export const selectPendingGuidanceForecastRows = createSelector(
-    [selectAvailableGuidanceState, selectPendingForecastRowsState],
-    (availableGuidance, selectedIds): Guidance[] => {
-         if (!availableGuidance || !selectedIds) return [];
-        const guidanceMap = new Map(availableGuidance.map(g => [g.id, g]));
-        return selectedIds
-            .map(id => guidanceMap.get(id))
-            .filter((g): g is Guidance => g !== undefined);
-    }
-);
-
-export const selectPendingGuidanceSummaryColumns = createSelector(
-    [selectAvailableGuidanceState, selectPendingSummaryColsState],
-    (availableGuidance, selectedIds): Guidance[] => {
-        if (!availableGuidance || !selectedIds) return [];
-        const guidanceMap = new Map(availableGuidance.map(g => [g.id, g]));
-        return selectedIds
-            .map(id => guidanceMap.get(id))
-            .filter((g): g is Guidance => g !== undefined);
-    }
-);
-
-export const selectPendingGuidanceSummaryRows = createSelector(
-    [selectAvailableGuidanceState, selectPendingSummaryRowsState],
-    (availableGuidance, selectedIds): Guidance[] => {
-        if (!availableGuidance || !selectedIds) return [];
-        const guidanceMap = new Map(availableGuidance.map(g => [g.id, g]));
-        return selectedIds
-            .map(id => guidanceMap.get(id))
-            .filter((g): g is Guidance => g !== undefined);
-    }
-);
+// Selectors for guidance columns/rows have moved to guidance slice
 
 // Remove the syncSelectedBrands thunk and keep just the local state update
 export const updateSelectedBrands = (brands: string[]) => ({
@@ -268,20 +167,35 @@ export const syncAllSettings = createAsyncThunk(
   'guidanceSettings/syncAllSettings',
   async (_, { getState }) => {
     try {
-      const state = getState() as { guidanceSettings: GuidanceSettingsState };
+      // Pull guidance selections from the authoritative `guidance` slice so we
+      // don't accidentally overwrite them with stale data that may live in
+      // guidanceSettings.  We still take brand / market filter prefs from the
+      // guidanceSettings slice.
+
+      const state = getState() as {
+        guidanceSettings: GuidanceSettingsState;
+        // `guidance` slice shape is declared in its own file and not exported.
+        // We use `any` here just to satisfy TypeScript without creating a
+        // duplicate public type.
+        guidance: any;
+      };
+
       const {
         selectedBrands,
         selectedMarkets,
         volumeForecastMarkets,
         volumeForecastBrands,
         volumeForecastTags,
-        pendingForecastCols,
-        pendingForecastRows,
-        pendingSummaryCols,
-        pendingSummaryRows
       } = state.guidanceSettings;
 
-      // Prepare the complete payload for backend sync
+      const {
+        pendingForecastCols: forecast_cols,
+        pendingForecastRows: forecast_rows,
+        summary: { pendingCols: summary_cols, pendingRows: summary_rows },
+      } = state.guidance;
+
+      // Prepare the complete payload for backend sync using the live guidance
+      // selections from the guidance slice.
       const settingsToSync = {
         summary_selected_brands: selectedBrands,
         summary_selected_markets: selectedMarkets,
@@ -289,13 +203,13 @@ export const syncAllSettings = createAsyncThunk(
         forecast_selected_brands: volumeForecastBrands,
         forecast_selected_tags: volumeForecastTags,
         guidance_settings: {
-          forecast_cols: pendingForecastCols,
-          forecast_rows: pendingForecastRows,
-          summary_cols: pendingSummaryCols,
-          summary_rows: pendingSummaryRows,
-        }
+          forecast_cols: forecast_cols,
+          forecast_rows: forecast_rows,
+          summary_cols: summary_cols,
+          summary_rows: summary_rows,
+        },
       };
-
+       
       // Sync to backend with namespaced keys
       await axios.patch(
         `${import.meta.env.VITE_API_URL}/users/sync-settings`,
@@ -304,8 +218,8 @@ export const syncAllSettings = createAsyncThunk(
 
       return true;
     } catch (error) {
-      console.error('Error syncing settings during logout:', error);
-      throw error;
+       console.error('Error syncing settings during logout:', error);
+       throw error;
     }
   }
 );

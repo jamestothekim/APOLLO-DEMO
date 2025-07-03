@@ -332,7 +332,7 @@ export const Shipments: React.FC<ShipmentsProps> = ({
         },
         sx: {
           ...cellPaddingSx,
-          ...(guidance.id === 14 && { minWidth: 150 }),
+          ...(guidance.id === 1 && { minWidth: 150 }), // Updated from 14 to 1 for Trends
         },
         render: (_: any, row: ShipmentData) => {
           if (row.isLoading) {

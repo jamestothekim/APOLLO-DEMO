@@ -26,7 +26,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import { DetailsContainer } from "./details/detailsContainer";
 import type { MarketData } from "../volumeForecast";
 // Import Guidance from the canonical source in the Redux slice
-import type { Guidance } from "../../redux/slices/userSettingsSlice";
+import type { Guidance } from "../../redux/guidance/guidanceSlice";
 import axios from "axios";
 
 // --- Redux Imports ---
@@ -75,6 +75,8 @@ import {
   calculateRowGuidanceMonthlyData,
   formatGuidanceValue,
 } from "../calculations/guidanceCalculations";
+// Import centralized guidance renderer
+import { GuidanceRenderer } from "../guidance/guidanceRenderer";
 // Import processRawData from calculations
 import { processRawData } from "../calculations/depletionCalculations";
 
@@ -829,8 +831,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     // Define the VOL 9L TY column configuration
     const volTyColumn: Column = {
       key: "total",
-      header: "VOL 9L",
-      subHeader: "TY",
+      header: "VOL TY",
+      subHeader: "FY (9L)",
       align: "right" as const,
       sortable: true,
       sortAccessor: (row: ExtendedForecastData) => calculateTotal(row.months),
@@ -885,84 +887,33 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         },
         sx: {
           ...cellPaddingSx,
-          // Set extra width specifically for the Trends column (ID 14)
-          ...(guidance.id === 14 && { minWidth: 150 }),
-        }, // Apply consistent padding and conditional width
+          minWidth: guidance.id === 1 ? 150 : 80, // wider guidance columns (updated from 14 to 1 for Trends)
+        }, // Apply consistent padding
         render: (_: any, row: ExtendedForecastData) => {
-          // Check if the entire row is loading
-          if (row.isLoading) {
-            return (
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <CircularProgress size={16} thickness={4} />
-              </Box>
-            );
-          }
-
+          // Create calculation result from row data
           const valueKey = `guidance_${guidance.id}`;
           const value = row[valueKey];
 
-          // Handle multi_calc display
+          let calculationResult;
           if (
             guidance.calculation.type === "multi_calc" &&
             typeof value === "object" &&
             value !== null
           ) {
-            // Assuming value is { "3M": 0.1, "6M": 0.05, ... }
-            // And subCalculations array is ordered [3M, 6M, 12M]
-            const subCalcOrder =
-              guidance.calculation.subCalculations?.map((sc) => sc.id) || [];
-            const formattedParts = subCalcOrder.map((subId) => {
-              const subResult = value[subId];
-              // Use formatGuidanceValue for consistent formatting
-              return formatGuidanceValue(
-                subResult,
-                guidance.calculation.format
-              );
-            });
-            // Use MUI Box with Flexbox for better layout
-            return (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-around", // Distribute items evenly
-                  alignItems: "center",
-                  width: "100%", // Ensure the Box takes full cell width
-                  textAlign: "right", // Align content within the flex container to the right
-                }}
-              >
-                {formattedParts.map((part, index) => (
-                  // Each part is already formatted by formatGuidanceValue,
-                  // which returns a node (string or Box for negative numbers)
-                  <Box key={index} sx={{ minWidth: "35px" }}>
-                    {" "}
-                    {/* Give each part some minimum space */}
-                    {part}
-                  </Box>
-                ))}
-              </Box>
-            );
+            calculationResult = { multiCalc: value };
+          } else if (typeof value === "number") {
+            calculationResult = { total: value };
+          } else {
+            calculationResult = undefined;
           }
 
-          // Handle single value display (existing logic)
-          else if (typeof value === "number") {
-            // Value exists, format and return it
-            return formatGuidanceValue(
-              value,
-              guidance.calculation?.format,
-              guidance.label
-            );
-          }
-          // Handle cases where value might not be ready or is not the expected type
-          else {
-            // Value doesn't exist yet or is wrong type, show loader or placeholder
-            return (
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                {/* Optionally show loader only if value is explicitly undefined? */}
-                {/* For now, show placeholder if not number or expected object */}
-                -{/* <CircularProgress size={16} thickness={4} /> */}
-              </Box>
-            );
-          }
+          return (
+            <GuidanceRenderer
+              guidance={guidance}
+              calculationResult={calculationResult}
+              calcStatus={row.isLoading ? "calculating" : "succeeded"}
+            />
+          );
         },
       })) || [];
 
@@ -1318,14 +1269,14 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   variant="body2"
                   sx={{ fontWeight: "bold", lineHeight: 1.2 }}
                 >
-                  VOL 9L
+                  VOL TY
                 </Typography>
                 <Typography
                   variant="caption"
                   display="block"
                   sx={{ fontStyle: "italic", lineHeight: 1.1 }}
                 >
-                  TY
+                  FY (9L)
                 </Typography>
               </Box>
               <IconButton
@@ -1446,9 +1397,9 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
           {flatColumns.map((col) => {
             let cellContent: React.ReactNode = null;
 
-            if (col.key === "expand") {
-              cellContent = null;
-            } else if (col.key === "row_guidance_label") {
+            // Only render content for specific columns we care about
+            if (col.key === "row_guidance_label") {
+              // Row guidance label column
               cellContent = (
                 <Box sx={{ textAlign: "center" }}>
                   <Typography
@@ -1472,6 +1423,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 </Box>
               );
             } else if (col.key.startsWith("months.")) {
+              // Month columns
               const month = col.key.split(".")[1];
               const value = monthlyData ? monthlyData[month] : undefined;
               const formattedValue = formatGuidanceValue(
@@ -1510,12 +1462,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                 cellContent = formattedValue;
               }
             }
+            // All other columns (control, guidance, commentary) get empty cells
+            // This automatically maintains alignment without needing to handle each type
 
             return (
               <TableCell
                 key={`${row.id}-${guidance.id}-${col.key}`}
                 align={col.align || "left"}
-                // Apply consistent padding and original column sx
                 sx={{ ...col.sx, ...cellPaddingSx }}
               >
                 {cellContent}

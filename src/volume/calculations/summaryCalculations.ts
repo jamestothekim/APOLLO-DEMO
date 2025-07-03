@@ -14,8 +14,10 @@ export interface AggregationResult {
   maxActualIndex: number;
 }
 
-function roundToWhole(num: number | null | undefined): number {
-  return Math.round(num || 0);
+// Round to a single decimal place so Summary values retain tenths precision
+function roundToTenth(num: number | null | undefined): number {
+  const n = num || 0;
+  return Math.round(n * 10) / 10;
 }
 
 interface MarketLevelBucket {
@@ -273,26 +275,26 @@ export const aggregateSummaryData = (
         variantAggRow.months_py_volume
       ).reduce((s: number, v: number) => s + v, 0);
 
-      variantAggRow.total = roundToWhole(variantAggRow.total);
-      variantAggRow.total_py_volume = roundToWhole(
+      variantAggRow.total = roundToTenth(variantAggRow.total);
+      variantAggRow.total_py_volume = roundToTenth(
         variantAggRow.total_py_volume
       );
-      variantAggRow.prev_published_case_equivalent_volume = roundToWhole(
+      variantAggRow.prev_published_case_equivalent_volume = roundToTenth(
         (Object.values(variantAggRow.months_lc_volume) as number[]).reduce(
           (s: number, v: number) => s + v,
           0
         )
       );
 
-      variantAggRow.total_gsv_ty = roundToWhole(variantAggRow.total_gsv_ty);
-      variantAggRow.total_gsv_py = roundToWhole(variantAggRow.total_gsv_py);
+      variantAggRow.total_gsv_ty = roundToTenth(variantAggRow.total_gsv_ty);
+      variantAggRow.total_gsv_py = roundToTenth(variantAggRow.total_gsv_py);
 
       MONTH_NAMES.forEach((m) => {
-        variantAggRow.months[m] = roundToWhole(variantAggRow.months[m]);
-        variantAggRow.months_py_volume[m] = roundToWhole(
+        variantAggRow.months[m] = roundToTenth(variantAggRow.months[m]);
+        variantAggRow.months_py_volume[m] = roundToTenth(
           variantAggRow.months_py_volume[m]
         );
-        variantAggRow.months_lc_volume[m] = roundToWhole(
+        variantAggRow.months_lc_volume[m] = roundToTenth(
           variantAggRow.months_lc_volume[m] || 0
         );
       });
@@ -303,17 +305,65 @@ export const aggregateSummaryData = (
           : 0;
       variantAggRow.gsv_rate = variantGsvRate;
 
-      variantAggRow.lc_gross_sales_value = roundToWhole(
+      variantAggRow.lc_gross_sales_value = roundToTenth(
         variantAggRow.prev_published_case_equivalent_volume * variantGsvRate
       );
 
       variantAggRow.months_lc_gsv = {};
 
       MONTH_NAMES.forEach((m) => {
-        variantAggRow.months_lc_gsv![m] = roundToWhole(
+        variantAggRow.months_lc_gsv![m] = roundToTenth(
           (variantAggRow.months_lc_volume[m] || 0) * variantGsvRate
         );
       });
+
+      // === Add rolling period aggregates for Trends guidance ===
+      const sumRolling = (
+        values: { [key: string]: number },
+        n: number,
+        endIdx: number
+      ) => {
+        let sum = 0;
+        for (let i = Math.max(0, endIdx - n + 1); i <= endIdx; i++) {
+          const mName = MONTH_NAMES[i];
+          sum += values[mName] || 0;
+        }
+        return sum;
+      };
+
+      variantAggRow.cy_3m_case_equivalent_volume = sumRolling(
+        variantAggRow.months,
+        3,
+        maxActualIndex
+      );
+      variantAggRow.cy_6m_case_equivalent_volume = sumRolling(
+        variantAggRow.months,
+        6,
+        maxActualIndex
+      );
+      variantAggRow.cy_12m_case_equivalent_volume = sumRolling(
+        variantAggRow.months,
+        12,
+        maxActualIndex
+      );
+
+      variantAggRow.py_3m_case_equivalent_volume = sumRolling(
+        variantAggRow.months_py_volume,
+        3,
+        maxActualIndex
+      );
+      variantAggRow.py_6m_case_equivalent_volume = sumRolling(
+        variantAggRow.months_py_volume,
+        6,
+        maxActualIndex
+      );
+      variantAggRow.py_12m_case_equivalent_volume = sumRolling(
+        variantAggRow.months_py_volume,
+        12,
+        maxActualIndex
+      );
+
+      variantAggRow.lastActualIdx = maxActualIndex;
 
       return variantAggRow;
     })
@@ -367,30 +417,78 @@ export const aggregateSummaryData = (
           (brandAgg.months_lc_gsv[m] || 0) + (variantRow.months_lc_gsv[m] || 0);
       }
     });
+
+    brandAgg.lastActualIdx = maxActualIndex;
   });
 
   brandAggsMap.forEach((brandAgg) => {
-    brandAgg.total = roundToWhole(brandAgg.total);
-    brandAgg.total_py_volume = roundToWhole(brandAgg.total_py_volume);
-    brandAgg.total_gsv_ty = roundToWhole(brandAgg.total_gsv_ty);
-    brandAgg.total_gsv_py = roundToWhole(brandAgg.total_gsv_py);
-    brandAgg.prev_published_case_equivalent_volume = roundToWhole(
+    brandAgg.total = roundToTenth(brandAgg.total);
+    brandAgg.total_py_volume = roundToTenth(brandAgg.total_py_volume);
+    brandAgg.total_gsv_ty = roundToTenth(brandAgg.total_gsv_ty);
+    brandAgg.total_gsv_py = roundToTenth(brandAgg.total_gsv_py);
+    brandAgg.prev_published_case_equivalent_volume = roundToTenth(
       brandAgg.prev_published_case_equivalent_volume
     );
-    brandAgg.lc_gross_sales_value = roundToWhole(brandAgg.lc_gross_sales_value);
+    brandAgg.lc_gross_sales_value = roundToTenth(brandAgg.lc_gross_sales_value);
 
     MONTH_NAMES.forEach((m) => {
-      brandAgg.months[m] = roundToWhole(brandAgg.months[m]);
-      brandAgg.months_py_volume[m] = roundToWhole(brandAgg.months_py_volume[m]);
-      brandAgg.months_lc_volume[m] = roundToWhole(
+      brandAgg.months[m] = roundToTenth(brandAgg.months[m]);
+      brandAgg.months_py_volume[m] = roundToTenth(brandAgg.months_py_volume[m]);
+      brandAgg.months_lc_volume[m] = roundToTenth(
         brandAgg.months_lc_volume[m] || 0
       );
       if (brandAgg.months_lc_gsv) {
-        brandAgg.months_lc_gsv[m] = roundToWhole(
+        brandAgg.months_lc_gsv[m] = roundToTenth(
           brandAgg.months_lc_gsv[m] || 0
         );
       }
     });
+
+    // === Rolling period aggregates for Trends guidance at brand level ===
+    const sumRollingB = (
+      values: { [key: string]: number },
+      n: number,
+      endIdx: number
+    ) => {
+      let s = 0;
+      for (let i = Math.max(0, endIdx - n + 1); i <= endIdx; i++) {
+        const mName = MONTH_NAMES[i];
+        s += values[mName] || 0;
+      }
+      return s;
+    };
+    brandAgg.cy_3m_case_equivalent_volume = sumRollingB(
+      brandAgg.months,
+      3,
+      maxActualIndex
+    );
+    brandAgg.cy_6m_case_equivalent_volume = sumRollingB(
+      brandAgg.months,
+      6,
+      maxActualIndex
+    );
+    brandAgg.cy_12m_case_equivalent_volume = sumRollingB(
+      brandAgg.months,
+      12,
+      maxActualIndex
+    );
+    brandAgg.py_3m_case_equivalent_volume = sumRollingB(
+      brandAgg.months_py_volume,
+      3,
+      maxActualIndex
+    );
+    brandAgg.py_6m_case_equivalent_volume = sumRollingB(
+      brandAgg.months_py_volume,
+      6,
+      maxActualIndex
+    );
+    brandAgg.py_12m_case_equivalent_volume = sumRollingB(
+      brandAgg.months_py_volume,
+      12,
+      maxActualIndex
+    );
+
+    brandAgg.lastActualIdx = maxActualIndex;
   });
 
   return {

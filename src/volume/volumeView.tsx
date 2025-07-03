@@ -9,12 +9,7 @@ import axios from "axios";
 // --- Redux Imports --- // Renamed from userSettingsSlice
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "../redux/store"; // Import RootState
-import {
-  fetchGuidance,
-  initializePendingGuidance,
-  selectIsGuidanceInitialized,
-  selectAvailableGuidance,
-} from "../redux/slices/userSettingsSlice"; // Use correct filename
+import { fetchGuidance } from "../redux/slices/userSettingsSlice";
 
 export const VolumeView = () => {
   const { user, isLoggedIn } = useUser();
@@ -24,9 +19,6 @@ export const VolumeView = () => {
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
-
-  const isGuidanceInitializedInRedux = useSelector(selectIsGuidanceInitialized);
-  const availableGuidanceFromRedux = useSelector(selectAvailableGuidance);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -66,18 +58,8 @@ export const VolumeView = () => {
         // Dispatch fetchGuidance thunk
         dispatch(fetchGuidance());
 
-        // --- Initialize Redux Pending State --- START
-        if (!isGuidanceInitializedInRedux && user?.user_settings) {
-          const guidanceSettings = user.user_settings.guidance_settings || {};
-          const initialPayload = {
-            forecastCols: guidanceSettings.forecast_cols || [],
-            forecastRows: guidanceSettings.forecast_rows || [],
-            summaryCols: guidanceSettings.summary_cols || [],
-            summaryRows: guidanceSettings.summary_rows || [],
-          };
-          dispatch(initializePendingGuidance(initialPayload));
-        }
-        // --- Initialize Redux Pending State --- END
+        // Guidance columns/rows are now loaded exclusively via loadGuidanceSettings (triggered in UserContext),
+        // so no additional initialization is required here.
       } catch (error) {
         console.error("Error fetching initial volume data:", error);
         setFetchError(
@@ -93,7 +75,7 @@ export const VolumeView = () => {
     if (isLoggedIn) {
       fetchInitialData();
     }
-  }, [user, dispatch, isGuidanceInitializedInRedux, isLoggedIn]);
+  }, [user, dispatch, isLoggedIn]);
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -130,11 +112,7 @@ export const VolumeView = () => {
             gap: 2,
           }}
         >
-          <Summary
-            availableBrands={availableBrands}
-            marketData={marketData}
-            availableGuidance={availableGuidanceFromRedux}
-          />
+          <Summary availableBrands={availableBrands} marketData={marketData} />
           <VolumeForecast
             availableBrands={availableBrands}
             marketData={marketData}

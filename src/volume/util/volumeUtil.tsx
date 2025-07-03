@@ -191,13 +191,39 @@ export const exportToCSV = (
       const guidanceColumns =
         selectedGuidance?.map((guidance) => {
           const valueKey = `guidance_${guidance.id}`;
-          const value = item[valueKey];
+          const rawVal =
+            typeof guidance.value === "string"
+              ? item[guidance.value]
+              : item[valueKey];
 
-          if (value === undefined || isNaN(value)) return "";
+          if (rawVal === undefined) return "";
+
+          if (
+            guidance.calculation.type === "multi_calc" &&
+            typeof rawVal === "object" &&
+            rawVal !== null
+          ) {
+            const parts = guidance.calculation.subCalculations.map((sub) => {
+              const subVal = rawVal[sub.id];
+              if (subVal === undefined || isNaN(subVal)) return "";
+              if (guidance.calculation.format === "percent") {
+                return `${Math.round(subVal * 100)}%`;
+              }
+              return subVal.toLocaleString(undefined, {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              });
+            });
+            return parts.join(" / ");
+          }
+
+          const value = rawVal as number;
+          if (isNaN(value)) return "";
 
           if (guidance.calculation.format === "percent") {
             return `${Math.round(value * 100)}%`;
           } else if (
+            guidance.label &&
             guidance.label.toLowerCase().includes("gsv") &&
             !guidance.label.toLowerCase().includes("%")
           ) {
@@ -207,12 +233,11 @@ export const exportToCSV = (
               minimumFractionDigits: 0,
               maximumFractionDigits: 0,
             }).format(value);
-          } else {
-            return value.toLocaleString(undefined, {
-              minimumFractionDigits: 1,
-              maximumFractionDigits: 1,
-            });
           }
+          return value.toLocaleString(undefined, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          });
         }) || [];
 
       const monthValues = monthKeys.map((month) => {
@@ -292,9 +317,9 @@ export const exportToCSV = (
         ...(data.some((r) => r.customer_name)
           ? [item.customer_name || ""]
           : []),
-        item.product.includes(" - ")
+        item.product && item.product.includes(" - ")
           ? item.product.split(" - ")[1]
-          : item.product,
+          : item.product || "",
         item.forecastLogic,
         formattedTotal,
       ];
@@ -302,17 +327,36 @@ export const exportToCSV = (
       const guidanceColumns =
         selectedGuidance?.map((guidance) => {
           const valueKey = `guidance_${guidance.id}`;
-          const value =
-            typeof guidance.value === "string"
-              ? item[guidance.value]
-              : item[valueKey];
+          const rawVal = item[valueKey];
 
-          if (value === undefined || isNaN(value)) return "";
+          if (rawVal === undefined) return "";
+
+          if (
+            guidance.calculation.type === "multi_calc" &&
+            typeof rawVal === "object" &&
+            rawVal !== null
+          ) {
+            const parts = guidance.calculation.subCalculations.map((sub) => {
+              const subVal = rawVal[sub.id];
+              if (subVal === undefined || isNaN(subVal)) return "";
+              if (guidance.calculation.format === "percent") {
+                return `${Math.round(subVal * 100)}%`;
+              }
+              return subVal.toLocaleString(undefined, {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+              });
+            });
+            return parts.join(" / ");
+          }
+
+          const value = rawVal as number;
+          if (isNaN(value)) return "";
 
           if (guidance.calculation.format === "percent") {
             return `${Math.round(value * 100)}%`;
           } else if (
-            guidance.label.toLowerCase().includes("gsv") &&
+            guidance.label?.toLowerCase().includes("gsv") &&
             !guidance.label.toLowerCase().includes("%")
           ) {
             return new Intl.NumberFormat("en-US", {
@@ -321,12 +365,11 @@ export const exportToCSV = (
               minimumFractionDigits: 0,
               maximumFractionDigits: 0,
             }).format(value);
-          } else {
-            return value.toLocaleString(undefined, {
-              minimumFractionDigits: 1,
-              maximumFractionDigits: 1,
-            });
           }
+          return value.toLocaleString(undefined, {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          });
         }) || [];
 
       const monthValues = monthKeys.map((month) => {

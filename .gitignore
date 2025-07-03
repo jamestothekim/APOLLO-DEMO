@@ -28,3 +28,12 @@ dist-ssr
 
 # Project specific
 wg_fivestar/
+
+# Security - Private keys and certificates
+*.p8
+*.pem
+*.key
+*.crt
+*.csr
+rsa_key.*
+*.pub

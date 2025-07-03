@@ -12,11 +12,11 @@ import type { AppDispatch } from "./redux/store";
 import { fetchVolumeData } from "./redux/slices/depletionSlice";
 import { fetchDashboardConfig } from "./redux/slices/dashboardSlice";
 import {
-  initializePendingGuidance,
   setSelectedBrands,
   syncAllSettings,
   setSelectedMarkets,
 } from "./redux/slices/userSettingsSlice";
+import { loadGuidanceSettings } from "./redux/guidance/guidanceSlice";
 
 // Types
 export interface MarketAccess {
@@ -242,7 +242,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (response.data.user) {
         dispatch({ type: "UPDATE_USER", payload: response.data.user });
-        // Don't set initial data loading during auth check - only during actual login
+        await appDispatch(loadGuidanceSettings()).unwrap();
         return true;
       }
       dispatch({ type: "LOGOUT" });
@@ -273,6 +273,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
             token: response.data.token,
           },
         });
+        await appDispatch(loadGuidanceSettings()).unwrap();
         return true;
       }
 
@@ -425,15 +426,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           summary_selected_brands ||
           summary_selected_markets
         ) {
-          appDispatch(
-            initializePendingGuidance({
-              forecastCols: guidance_settings?.forecast_cols || [],
-              forecastRows: guidance_settings?.forecast_rows || [],
-              summaryCols: guidance_settings?.summary_cols || [],
-              summaryRows: guidance_settings?.summary_rows || [],
-            })
-          );
-
           // Initialize selected brands if they exist
           if (summary_selected_brands) {
             appDispatch(setSelectedBrands(summary_selected_brands));
