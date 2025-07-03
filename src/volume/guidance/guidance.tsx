@@ -100,6 +100,43 @@ const makeSubLabel = (p: string, m: string, c: string): string => {
   return `${period} (${unit})`;
 };
 
+/* --- NEW: human-readable tooltip text helper --- */
+const getTooltipText = (g: GuidanceDef): string => {
+  // Special case – Trends (multi-calc)
+  if (isTrends(g)) {
+    return "Rolling trends: 3, 6, and 12-month % change vs LY";
+  }
+
+  const metricLabel = metricOptions.find((o) => o.value === g.metric)?.label;
+  const periodLabel = periodOptions.find((o) => o.value === g.period)?.label;
+  const dimensionOpt = dimensionOptions.find((o) => o.value === g.dimension);
+  const dimensionShort = dimensionOpt?.short; // TY / LY / LC
+  const dimensionFull = dimensionOpt?.label; // This Year / Last Year / Last Consensus
+
+  if (!metricLabel || !periodLabel) return g.label;
+
+  // Build description based on calc type
+  if (g.calcType === "diff") {
+    // Difference vs dimension
+    const comp =
+      dimensionShort === "TY"
+        ? "previous period"
+        : dimensionFull?.toLowerCase();
+    return `Difference in ${metricLabel} from ${comp} (${periodLabel})`;
+  }
+  if (g.calcType === "percent") {
+    const comp =
+      dimensionShort === "TY"
+        ? "previous period"
+        : dimensionFull?.toLowerCase();
+    return `Percentage change in ${metricLabel} from ${comp} (${periodLabel})`;
+  }
+  // Direct value
+  return `${metricLabel} for ${
+    dimensionFull?.toLowerCase() || "current period"
+  } (${periodLabel})`;
+};
+
 /* ---------- CORE CONTENT COMPONENT ---------- */
 interface GuidanceDialogInternalProps {
   onApply?: (items: GuidanceItem[]) => void;
@@ -341,15 +378,31 @@ const BuilderContent: React.FC<GuidanceDialogInternalProps> = ({
   };
 
   /* ----- form validation side-effects ----- */
+  // 1) Ensure calc type remains valid when dimension is TY
   useEffect(() => {
-    if (dimension === "TY" && (calc === "diff" || calc === "percent"))
+    if (dimension === "TY" && (calc === "diff" || calc === "percent")) {
       setCalc("direct");
-    if (metric === "vol_9l" && period === "FY" && dimension === "TY")
-      setDimension("LY");
-    if ((period === "YTD" || period === "TG") && dimension !== "TY") {
-      setDimension("TY");
     }
-  }, [metric, period, dimension, calc]);
+  }, [dimension, calc]);
+
+  // 2) Auto-fix invalid combination VOL 9L + FY + TY (business rule)
+  useEffect(() => {
+    if (metric === "vol_9l" && period === "FY" && dimension === "TY") {
+      setDimension("LY");
+    }
+  }, [metric, period, dimension]);
+
+  // 3) Default dimension to TY when user first selects YTD / TG, but do not override subsequent manual changes.
+  const prevPeriodRef = React.useRef(period);
+  useEffect(() => {
+    const prevPeriod = prevPeriodRef.current;
+    if (period !== prevPeriod) {
+      if ((period === "YTD" || period === "TG") && dimension !== "TY") {
+        setDimension("TY");
+      }
+      prevPeriodRef.current = period;
+    }
+  }, [period, dimension]);
 
   /* ----- RENDER ----- */
   return (
@@ -527,7 +580,7 @@ const BuilderContent: React.FC<GuidanceDialogInternalProps> = ({
                               />
                               <ListItemSecondaryAction>
                                 <Tooltip
-                                  title={`${item.guidance.metric} ${item.guidance.period} guidance`}
+                                  title={getTooltipText(item.guidance)}
                                   arrow
                                 >
                                   <IconButton
