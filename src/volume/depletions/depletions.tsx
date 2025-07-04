@@ -34,13 +34,13 @@ import { useDispatch, useSelector } from "react-redux";
 import { triggerSync } from "../../redux/slices/syncSlice"; // Import the action creator
 import type { AppDispatch } from "../../redux/store"; // Added RootState
 import {
-  selectRawVolumeData, // Added import
-  selectVolumeDataStatus, // Added import
-  selectCustomerRawVolumeData,
-  selectCustomerVolumeDataStatus,
   fetchVolumeData,
+  selectProcessedForecastRows,
 } from "../../redux/slices/depletionSlice";
 // ---------------------
+
+// Feature flag for centralized processing
+const USE_CENTRALIZED_PROCESSING = true;
 
 import {
   DynamicTable,
@@ -77,8 +77,7 @@ import {
 } from "../calculations/guidanceCalculations";
 // Import centralized guidance renderer
 import { GuidanceRenderer } from "../guidance/guidanceRenderer";
-// Import processRawData from calculations
-import { processRawData } from "../calculations/depletionCalculations";
+// REMOVED: processRawData import - no longer needed with centralized processing
 
 export interface ExtendedForecastData {
   id: string;
@@ -145,22 +144,7 @@ export type FilterSelectionProps = {
   rowGuidanceSelections?: Guidance[];
 };
 
-// Add this helper function near the top with other utility functions
-const fetchLoggedForecastChanges = async () => {
-  try {
-    const response = await axios.get(
-      `${import.meta.env.VITE_API_URL}/redi/log-forecast-changes`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    return [];
-  }
-};
+// REMOVED: fetchLoggedForecastChanges function - no longer needed with centralized processing
 
 // Add this interface
 interface UndoResponse {
@@ -216,29 +200,11 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const dispatch: AppDispatch = useDispatch(); // <-- Get the dispatch function
 
   // --- Redux State for Volume Data --- START
-  const rawVolumeData = useSelector(selectRawVolumeData);
-  const depletionsStatus = useSelector(selectVolumeDataStatus);
-  // Select customer data
-  const customerRawVolumeData = useSelector(selectCustomerRawVolumeData);
-  const customerDepletionsStatus = useSelector(selectCustomerVolumeDataStatus);
+  // NEW: Centralized processing selector (only one needed now)
+  const processedForecastRows = useSelector(selectProcessedForecastRows);
   // --- Redux State for Volume Data --- END
 
-  // Determine the relevant data and status based on the view
-  const relevantRawData = isCustomerView
-    ? customerRawVolumeData
-    : rawVolumeData;
-  const relevantDepletionsStatus = isCustomerView
-    ? customerDepletionsStatus
-    : depletionsStatus;
-
-  // --- Log the received data --- START
-  useEffect(() => {}, [
-    rawVolumeData,
-    depletionsStatus,
-    customerRawVolumeData,
-    customerDepletionsStatus,
-  ]);
-  // --- Log the received data --- END
+  // REMOVED: Legacy data logging - no longer needed with centralized processing
 
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
@@ -1767,45 +1733,50 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Effect to process raw data from Redux when it changes
   useEffect(() => {
-    if (relevantDepletionsStatus === "succeeded" && relevantRawData) {
-      // Fetch logged changes (if necessary for applying Redis updates)
-      fetchLoggedForecastChanges()
-        .then((loggedChanges) => {
-          const processed = processRawData(
-            relevantRawData,
-            loggedChanges, // Pass logged changes if needed
-            isCustomerView ?? false,
-            selectedGuidance
-          );
-          const nonZeroData = processed.filter(hasNonZeroTotal);
-          setForecastData(nonZeroData);
+    // ------------------------------------------------------------------
+    // NEW PATH – use centralized processing when flag enabled
+    // ------------------------------------------------------------------
+    if (USE_CENTRALIZED_PROCESSING) {
+      const relevantProcessedRows = isCustomerView
+        ? processedForecastRows.customerRows
+        : processedForecastRows.marketRows;
 
-          // Update available brands based on the processed data
-          const brands = Array.from(
-            new Set(nonZeroData.map((row) => row.brand))
-          ).sort();
-          setAvailableBrands(brands);
-        })
-        .catch((error) => {
-          console.error("Error fetching logged changes:", error);
-          // Optionally handle error, maybe process without logged changes
-          const processed = processRawData(
-            relevantRawData,
-            [], // Process without logged changes on error
-            isCustomerView ?? false,
-            selectedGuidance
-          );
-          const nonZeroData = processed.filter(hasNonZeroTotal);
-          setForecastData(nonZeroData);
-          const brands = Array.from(
-            new Set(nonZeroData.map((row) => row.brand))
-          ).sort();
-          setAvailableBrands(brands);
-        });
+      // Debug log to verify centralized processing is working
+      console.log("[DEPLETIONS] Using centralized processing:", {
+        isCustomerView,
+        totalRows: relevantProcessedRows.length,
+        sampleRow: relevantProcessedRows[0]?.brand,
+        // Debug manual edits
+        rowsWithManualEdits: relevantProcessedRows.filter((row) =>
+          Object.values(row.months || {}).some(
+            (month) => month?.isManuallyModified
+          )
+        ).length,
+        sampleManualEdit: relevantProcessedRows.find((row) =>
+          Object.values(row.months || {}).some(
+            (month) => month?.isManuallyModified
+          )
+        )?.brand,
+      });
+
+      const nonZeroData = relevantProcessedRows.filter(hasNonZeroTotal);
+      setForecastData(nonZeroData);
+
+      // Update available brands based on the processed data
+      const brands = Array.from(
+        new Set(nonZeroData.map((row) => row.brand))
+      ).sort();
+      setAvailableBrands(brands);
+
+      return; // Skip legacy path
     }
+
+    // Legacy path removed - centralized processing is always enabled
+    console.warn("[DEPLETIONS] Legacy processing path should not be reached");
   }, [
-    relevantRawData,
-    relevantDepletionsStatus,
+    // Centralized processing dependencies
+    USE_CENTRALIZED_PROCESSING,
+    processedForecastRows,
     isCustomerView,
     selectedGuidance,
   ]);

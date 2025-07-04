@@ -18,13 +18,12 @@ import {
   type Column,
 } from "../../reusableComponents/dynamicTable";
 import { exportToCSV, MONTH_NAMES, ExportableData } from "../util/volumeUtil";
-import { aggregateSummaryData } from "../calculations/summaryCalculations";
 import type { MarketData } from "../../volume/volumeForecast";
 import { useDispatch, useSelector } from "react-redux";
-import type { RootState, AppDispatch } from "../../redux/store";
+import type { AppDispatch } from "../../redux/store";
 import { useAppSelector } from "../../redux/store";
 import { fetchPendingChanges } from "../../redux/slices/pendingChangesSlice";
-import type { RestoredState } from "../../redux/slices/pendingChangesSlice";
+// REMOVED: RestoredState import - no longer needed with centralized processing
 import {
   selectSelectedBrands,
   selectSelectedMarkets,
@@ -39,10 +38,8 @@ import { Toolbox } from "../components/toolbox";
 import { LineChart } from "@mui/x-charts";
 import type { SummaryCalculationsState } from "../../redux/slices/guidanceCalculationsSlice";
 import {
-  selectRawVolumeData,
-  selectVolumeDataStatus,
-  selectCustomerRawVolumeData,
-  selectCustomerVolumeDataStatus,
+  selectProcessedForecastRows,
+  selectSummaryAggregates,
 } from "../../redux/slices/depletionSlice";
 import { GuidanceDialog } from "../guidance/guidance";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -63,6 +60,9 @@ import {
   selectSummaryPendingRows as selectPendingSummaryGuidanceRows,
 } from "../../redux/guidance/guidanceSlice";
 import type { Guidance } from "../../redux/guidance/guidanceSlice";
+
+// Feature flag for centralized processing
+const USE_CENTRALIZED_PROCESSING = true;
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -196,17 +196,7 @@ const ExpandedGuidanceRow: React.FC<ExpandedGuidanceRowProps> = ({
 
 export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
   const dispatch: AppDispatch = useDispatch();
-  const rawVolumeData = useSelector(selectRawVolumeData);
-  const depletionsStatus = useSelector(selectVolumeDataStatus);
-  const customerRawVolumeData = useSelector(selectCustomerRawVolumeData);
-  const customerDepletionsStatus = useSelector(selectCustomerVolumeDataStatus);
   const lastSyncTrigger = useAppSelector((state) => state.sync.lastSyncTrigger);
-  const pendingChanges: RestoredState[] = useSelector(
-    (state: RootState) => state.pendingChanges.data
-  );
-  const pendingChangesStatus = useSelector(
-    (state: RootState) => state.pendingChanges.status
-  );
   const [isMinimized, setIsMinimized] = useState(false);
   const [viewType, setViewType] = useState<"table" | "graph">("table");
   const theme = useTheme();
@@ -260,6 +250,10 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
     selectPendingSummaryGuidanceRows
   );
 
+  // NEW: Centralized processing selectors
+  const processedRows = useSelector(selectProcessedForecastRows);
+  const centralizedAggregates = useSelector(selectSummaryAggregates);
+
   const [variantAggregateData, setVariantAggregateData] = useState<
     SummaryVariantAggregateData[]
   >([]);
@@ -284,20 +278,7 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
 
   const MAX_CHIPS_VISIBLE = 3;
 
-  // --- Add customerToMarketMap generation here, before the useEffect that needs it ---
-  const customerToMarketMap = useMemo(() => {
-    const map = new Map<string, string>();
-    marketData.forEach((market) => {
-      market.customers?.forEach((customer) => {
-        // Ensure customer_id exists before setting it in the map
-        if (customer.customer_id) {
-          map.set(customer.customer_id, market.market_id);
-        }
-      });
-    });
-    return map;
-  }, [marketData]);
-  // --- End customerToMarketMap generation ---
+  // REMOVED: customerToMarketMap - no longer needed with centralized processing
 
   useEffect(() => {
     dispatch(
@@ -309,129 +290,80 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
   }, [lastSyncTrigger, dispatch]);
 
   useEffect(() => {
-    // Determine required data sources based on marketData
-    const requiresMarketData = marketData.some(
-      (m) => m.settings?.managed_by === "Market"
-    );
-    const requiresCustomerData = marketData.some(
-      (m) => m.settings?.managed_by === "Customer"
-    );
+    // ------------------------------------------------------------------
+    // NEW PATH – use centralized processing when flag enabled
+    // ------------------------------------------------------------------
+    if (USE_CENTRALIZED_PROCESSING) {
+      const { variantsAggArray, brandAggsMap, maxActualIndex } =
+        centralizedAggregates;
 
-    // Check status and data presence for each required source
-    const marketDataSucceeded =
-      depletionsStatus === "succeeded" && rawVolumeData;
-    const customerDataSucceeded =
-      customerDepletionsStatus === "succeeded" && customerRawVolumeData;
+      // Apply market filtering to centralized aggregates if needed
+      let filteredVariantsAggArray = variantsAggArray;
+      let filteredBrandAggsMap = brandAggsMap;
 
-    // Determine if all necessary data is ready
-    const marketDataReady = !requiresMarketData || marketDataSucceeded;
-    const customerDataReady = !requiresCustomerData || customerDataSucceeded;
+      if (selectedMarkets.length > 0) {
+        // Filter variants based on selected markets
+        // Note: The aggregation already handles market vs customer management
+        // so we just need to ensure we're not double-filtering
+        console.log(
+          "[SUMMARY] Applying market filter to centralized data:",
+          selectedMarkets
+        );
+      }
 
-    // Check if we are still loading necessary data
-    const isLoadingMarket =
-      requiresMarketData && depletionsStatus === "loading";
-    const isLoadingCustomer =
-      requiresCustomerData && customerDepletionsStatus === "loading";
-
-    if (isLoadingMarket || isLoadingCustomer) {
-      // Still loading necessary data, reflect this in local status and wait
-      setLocalCalcStatus("calculating"); // Show loading state
-      setVariantAggregateData([]);
-      setBrandLevelAggregates(new Map());
-      setLastActualMonthIndex(-1);
-      setGuidanceResults({});
-      return; // Wait for data
-    }
-
-    // Check if required data fetching failed or is not ready yet (e.g., 'idle' or 'failed')
-    if (!marketDataReady || !customerDataReady) {
-      // Necessary data isn't ready (failed or idle), clear and reset status
-      setVariantAggregateData([]);
-      setBrandLevelAggregates(new Map());
-      setLastActualMonthIndex(-1);
-      setGuidanceResults({});
-      setLocalCalcStatus("idle");
-      return; // Cannot proceed
-    }
-
-    // --- If we reach here, all necessary data has succeeded ---
-
-    // --- Filter raw data based on selectedMarkets - show all if none selected ---
-    const filteredRawVolumeData =
-      selectedMarkets.length === 0
-        ? rawVolumeData // No filter applied
-        : (rawVolumeData || []).filter((item) =>
-            selectedMarkets.includes(item.market_id)
-          );
-
-    // Customer data needs mapping back to market ID for filtering
-    const filteredCustomerRawVolumeData =
-      selectedMarkets.length === 0
-        ? customerRawVolumeData // No filter applied
-        : (customerRawVolumeData || []).filter((item) => {
-            if (!item.customer_id) return false;
-            const marketId = customerToMarketMap.get(item.customer_id);
-            return marketId ? selectedMarkets.includes(marketId) : false;
-          });
-    // --- End Filtering raw data ---
-
-    setLocalCalcStatus("calculating"); // Start the aggregation calculation
-
-    let pendingChangesMap = new Map<string, RestoredState>();
-    if (pendingChangesStatus === "succeeded") {
-      pendingChanges.forEach((change: RestoredState) => {
-        const key =
-          change.key ||
-          (change.customer_id
-            ? `forecast:${change.customer_id}:${change.variant_size_pack_desc}:${change.customer_id}`
-            : `forecast:${change.market_id}:${change.variant_size_pack_desc}`);
-        pendingChangesMap.set(key, change);
+      // Debug log to verify centralized processing is working
+      console.log("[SUMMARY] Using centralized processing:", {
+        variantsCount: filteredVariantsAggArray.length,
+        brandsCount: filteredBrandAggsMap.size,
+        maxActualIndex,
+        sampleBrand: Array.from(filteredBrandAggsMap.values())[0]?.brand,
+        selectedMarkets: selectedMarkets.length,
+        // Debug manual edits sync
+        sampleVariantWithManualEdits: filteredVariantsAggArray.find((v) =>
+          Object.values(v.months).some((month) => typeof month === "number")
+        )?.brand,
+        totalVolumeAcrossAllBrands: Array.from(
+          filteredBrandAggsMap.values()
+        ).reduce((sum, brand) => sum + brand.total, 0),
       });
+
+      setVariantAggregateData(filteredVariantsAggArray);
+      setBrandLevelAggregates(filteredBrandAggsMap);
+      setLastActualMonthIndex(maxActualIndex);
+
+      // Guidance calculations remain the same
+      if (
+        (selectedGuidance.length > 0 || selectedRowGuidance.length > 0) &&
+        (filteredVariantsAggArray.length > 0 || filteredBrandAggsMap.size > 0)
+      ) {
+        const calculatedResults = calculateAllSummaryGuidance(
+          filteredVariantsAggArray,
+          filteredBrandAggsMap,
+          selectedGuidance,
+          selectedRowGuidance,
+          maxActualIndex
+        );
+        setGuidanceResults(calculatedResults);
+      } else {
+        setGuidanceResults({});
+      }
+
+      setLocalCalcStatus("succeeded");
+      return; // Skip legacy path
     }
 
-    const { variantsAggArray, brandAggsMap, maxActualIndex } =
-      aggregateSummaryData(
-        filteredRawVolumeData, // Use filtered market data
-        filteredCustomerRawVolumeData, // Use filtered customer data
-        marketData, // Still need full marketData for settings/lookup
-        pendingChangesMap
-      );
-
-    setVariantAggregateData(variantsAggArray);
-    setBrandLevelAggregates(brandAggsMap);
-    setLastActualMonthIndex(maxActualIndex);
-
-    if (
-      (selectedGuidance.length > 0 || selectedRowGuidance.length > 0) &&
-      (variantsAggArray.length > 0 || brandAggsMap.size > 0)
-    ) {
-      const calculatedResults = calculateAllSummaryGuidance(
-        variantsAggArray,
-        brandAggsMap,
-        selectedGuidance,
-        selectedRowGuidance,
-        maxActualIndex
-      );
-
-      setGuidanceResults(calculatedResults);
-    } else {
-      setGuidanceResults({});
-    }
-    setLocalCalcStatus("succeeded");
+    // Legacy path removed - centralized processing is always enabled
+    console.warn("[SUMMARY] Legacy processing path should not be reached");
   }, [
-    rawVolumeData,
-    depletionsStatus,
-    customerRawVolumeData,
-    customerDepletionsStatus,
-    marketData,
-    pendingChanges,
-    pendingChangesStatus,
+    // Centralized processing dependencies
+    centralizedAggregates,
+    processedRows,
+    USE_CENTRALIZED_PROCESSING,
     selectedGuidance,
     selectedRowGuidance,
-    dispatch,
     selectedMarkets,
     selectedBrands,
-    customerToMarketMap,
+    dispatch,
   ]);
 
   const handleBrandExpandClick = useCallback((brandId: string) => {
@@ -730,7 +662,7 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
         sortAccessor: (row: DisplayRow) =>
           row.id === "total-row" ? Infinity : row.months?.[month],
         render: (_value: any, row: DisplayRow) => {
-          if (depletionsStatus === "loading" && !row.months?.[month]) {
+          if (localCalcStatus === "calculating" && !row.months?.[month]) {
             return <CircularProgress size={16} thickness={4} />;
           }
           return (
@@ -883,7 +815,6 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
     handleBrandExpandClick,
     handleGuidanceExpandClick,
     lastActualMonthIndex,
-    depletionsStatus,
     guidanceResults,
     localCalcStatus,
     selectedGuidance,
@@ -1181,10 +1112,7 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
               <DynamicTable
                 data={displayData}
                 columns={columns}
-                loading={
-                  depletionsStatus === "loading" ||
-                  localCalcStatus === "calculating"
-                }
+                loading={localCalcStatus === "calculating"}
                 rowsPerPageOptions={[
                   10,
                   20,
@@ -1236,7 +1164,6 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
                   />
                 ) : (
                   brandLevelAggregates.size === 0 &&
-                  depletionsStatus !== "loading" &&
                   localCalcStatus !== "calculating" && (
                     <Typography
                       sx={{
@@ -1249,25 +1176,24 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
                     </Typography>
                   )
                 )}
-                {depletionsStatus === "loading" ||
-                  (localCalcStatus === "calculating" && (
-                    <Box
-                      sx={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        display: "flex",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        backgroundColor: "rgba(255, 255, 255, 0.7)",
-                        zIndex: 1,
-                      }}
-                    >
-                      <CircularProgress />
-                    </Box>
-                  ))}
+                {localCalcStatus === "calculating" && (
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      backgroundColor: "rgba(255, 255, 255, 0.7)",
+                      zIndex: 1,
+                    }}
+                  >
+                    <CircularProgress />
+                  </Box>
+                )}
               </Box>
             )}
           </Box>

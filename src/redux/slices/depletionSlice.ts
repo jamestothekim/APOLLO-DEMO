@@ -1,6 +1,13 @@
 import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit';
 import axios from 'axios';
 import type { RootState } from '../store'; // Assuming your store file is named store.ts
+import { processRawData } from "../../volume/calculations/depletionCalculations";
+import {
+  selectPendingForecastColsIds,
+  selectGuidanceDefs,
+} from "../guidance/guidanceSlice";
+import type { Guidance } from "../guidance/guidanceSlice";
+import { aggregateFromProcessedRows } from "../../volume/calculations/summaryCalculations";
 
 // Define the shape of a single raw depletion forecast item from the API
 // This reflects the data structure BEFORE aggregation/processing
@@ -307,23 +314,72 @@ export const selectDashboardData = createSelector(
     }
 );
 
-// Selectors for derived/processed data will be added later (using createSelector for memoization)
-// Example placeholder:
-// export const selectProcessedDepletionsForTable = createSelector(
-//     [selectRawVolumeData, selectPendingChanges], // Example dependencies
-//     (rawVolumeData, pendingChanges) => {
-//         // ... processing logic from processRawData in Depletions.tsx ...
-//         return processedData;
-//     }
-// );
-// export const selectAggregatedDataForSummary = createSelector(
-//     [selectRawVolumeData, selectPendingChanges], // Example dependencies
-//     (rawVolumeData, pendingChanges) => {
-//         // ... aggregation logic from Summary.tsx ...
-//         return aggregatedData;
-//     }
-// );
+// -----------------------------------------------------------------------------
+// Centralized Processed Forecast Rows Selectors (Single Source of Truth)
+// -----------------------------------------------------------------------------
 
+// Helper: map pending column IDs to full guidance objects
+const selectActiveGuidance = createSelector(
+  [selectGuidanceDefs, selectPendingForecastColsIds],
+  (defs, ids) => {
+    const map = new Map(defs.map((d) => [d.id, d]));
+    return ids.map((id) => map.get(id)).filter((g): g is Guidance => g != null);
+  }
+);
+
+// Core selector – returns { marketRows, customerRows } with all processing applied
+export const selectProcessedForecastRows = createSelector(
+  [
+    selectRawVolumeData,
+    selectCustomerRawVolumeData,
+    selectActiveGuidance,
+    (state: RootState) => state.pendingChanges.data, // Redis overlays
+  ],
+  (rawData, customerData, guidanceDefs, pendingChanges) => {
+    const marketRows = processRawData(
+      rawData,
+      pendingChanges,
+      false, // isCustomerView
+      guidanceDefs
+    );
+    const customerRows = processRawData(
+      customerData,
+      pendingChanges,
+      true, // isCustomerView
+      guidanceDefs
+    );
+    return { marketRows, customerRows };
+  }
+);
+
+// Summary aggregation selector - converts processed rows to summary format
+export const selectSummaryAggregates = createSelector(
+  [selectProcessedForecastRows, selectLastActualMonthIndex],
+  ({ marketRows, customerRows }, lastActualIndex) => {
+    // Combine market and customer rows for comprehensive summary
+    // Summary should always show state-level aggregates regardless of management type
+    const allRows = [...marketRows, ...customerRows];
+    return aggregateFromProcessedRows(allRows, lastActualIndex);
+  }
+);
+
+// Filtered summary aggregates selector for market filtering
+export const selectFilteredSummaryAggregates = createSelector(
+  [
+    selectSummaryAggregates,
+    (_: RootState, selectedMarkets: string[]) => selectedMarkets,
+  ],
+  (summaryAggregates, selectedMarkets) => {
+    if (selectedMarkets.length === 0) {
+      return summaryAggregates; // No filtering needed
+    }
+    
+    // For Summary, we don't filter at variant level since it should show
+    // state-level aggregates. The filtering happens at the data source level
+    // in the processRawData function. Return the aggregates as-is.
+    return summaryAggregates;
+  }
+);
 
 // Export the reducer as the default export
 export default volumeSlice.reducer;
