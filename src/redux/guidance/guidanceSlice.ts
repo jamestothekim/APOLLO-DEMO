@@ -182,12 +182,19 @@ const initialState: GuidanceState = {
 
 export const loadGuidanceSettings = createAsyncThunk<
   GuidanceState,
-  void,
+  string | void, // Accept optional token parameter
   { rejectValue: string }
->('guidance/loadSettings', async (_, { rejectWithValue }) => {
+>('guidance/loadSettings', async (token, { rejectWithValue }) => {
   try {
+    // Use provided token or fall back to localStorage
+    const authToken = token || localStorage.getItem('token');
+    
+    if (!authToken) {
+      return rejectWithValue('No authentication token available');
+    }
+    
     const res = await axios.get(`${import.meta.env.VITE_API_URL}/users/settings`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      headers: { Authorization: `Bearer ${authToken}` },
     });
 
     const remote: any = res.data?.guidance_settings ?? {};

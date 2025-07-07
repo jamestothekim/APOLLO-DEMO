@@ -38,7 +38,6 @@ const sidebarSlice = createSlice({
     ) => {
       const { month, value } = action.payload;
       if (state.months[month]) {
-        console.log('[sidebarSlice] updateMonthValue:', month, value); // DEBUG
         state.months[month] = {
           ...state.months[month],
           value,

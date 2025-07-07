@@ -31,16 +31,13 @@ import axios from "axios";
 
 // --- Redux Imports ---
 import { useDispatch, useSelector } from "react-redux";
-import { triggerSync } from "../../redux/slices/syncSlice"; // Import the action creator
-import type { AppDispatch } from "../../redux/store"; // Added RootState
+import { triggerSync } from "../../redux/slices/syncSlice";
+import type { AppDispatch } from "../../redux/store";
 import {
   fetchVolumeData,
-  selectProcessedForecastRows,
+  selectFilteredDepletionsRows,
 } from "../../redux/slices/depletionSlice";
 // ---------------------
-
-// Feature flag for centralized processing
-const USE_CENTRALIZED_PROCESSING = true;
 
 import {
   DynamicTable,
@@ -77,7 +74,6 @@ import {
 } from "../calculations/guidanceCalculations";
 // Import centralized guidance renderer
 import { GuidanceRenderer } from "../guidance/guidanceRenderer";
-// REMOVED: processRawData import - no longer needed with centralized processing
 
 export interface ExtendedForecastData {
   id: string;
@@ -144,8 +140,6 @@ export type FilterSelectionProps = {
   rowGuidanceSelections?: Guidance[];
 };
 
-// REMOVED: fetchLoggedForecastChanges function - no longer needed with centralized processing
-
 // Add this interface
 interface UndoResponse {
   success: boolean;
@@ -200,11 +194,17 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
   const dispatch: AppDispatch = useDispatch(); // <-- Get the dispatch function
 
   // --- Redux State for Volume Data --- START
-  // NEW: Centralized processing selector (only one needed now)
-  const processedForecastRows = useSelector(selectProcessedForecastRows);
+  // Use centralized filtered selector that handles all filtering
+  const filteredForecastRows = useSelector((state: any) =>
+    selectFilteredDepletionsRows(
+      state,
+      selectedMarkets,
+      selectedBrands,
+      selectedTags,
+      isCustomerView ?? false
+    )
+  );
   // --- Redux State for Volume Data --- END
-
-  // REMOVED: Legacy data logging - no longer needed with centralized processing
 
   const [forecastData, setForecastData] = useState<ExtendedForecastData[]>([]);
   const [availableBrands, setAvailableBrands] = useState<string[]>([]);
@@ -274,37 +274,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     setComment(selectedComment || "");
   }, [selectedComment]);
 
-  // Update the filtered data logic
-  const filteredData = useMemo(() => {
-    return forecastData.filter((row) => {
-      const marketMatch =
-        selectedMarkets.length === 0 ||
-        (isCustomerView
-          ? selectedMarkets.some((selectedMarket) => {
-              // Handle both prefixed ("C.17054") and non-prefixed ("17054") customer IDs
-              const cleanSelectedId = selectedMarket.startsWith("C.")
-                ? selectedMarket.substring(2)
-                : selectedMarket;
-              return row.customer_id === cleanSelectedId;
-            })
-          : selectedMarkets.includes(row.market_id));
-      const brandMatch =
-        selectedBrands.length === 0 || selectedBrands.includes(row.brand);
-
-      // Add tag filtering
-      const tagMatch =
-        selectedTags.length === 0 ||
-        (row.tags && row.tags.some((tag) => selectedTags.includes(tag.tag_id)));
-
-      return marketMatch && brandMatch && tagMatch;
-    });
-  }, [
-    forecastData,
-    selectedMarkets,
-    selectedBrands,
-    selectedTags,
-    isCustomerView,
-  ]);
+  // Filtering is now handled centrally by Redux selectors
+  // forecastData already contains the filtered and processed data
 
   // Update useEffect to set available markets based on view type
   useEffect(() => {
@@ -434,7 +405,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
 
     setSelectedRowForSidebar(row.id);
-    const selectedData = filteredData.find((r) => r.id === row.id);
+    const selectedData = forecastData.find((r) => r.id === row.id);
     if (selectedData) {
       // Deep clone to prevent mutation issues
       const clonedData = JSON.parse(JSON.stringify(selectedData));
@@ -1739,38 +1710,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     );
   }, [selectedDataState]);
 
-  // Effect to process raw data from Redux when it changes
-  useEffect(() => {
-    // ------------------------------------------------------------------
-    // NEW PATH – use centralized processing when flag enabled
-    // ------------------------------------------------------------------
-    if (USE_CENTRALIZED_PROCESSING) {
-      const relevantProcessedRows = isCustomerView
-        ? processedForecastRows.customerRows
-        : processedForecastRows.marketRows;
-
-      const nonZeroData = relevantProcessedRows.filter(hasNonZeroTotal);
-      setForecastData(nonZeroData);
-
-      // Update available brands based on the processed data
-      const brands = Array.from(
-        new Set(nonZeroData.map((row) => row.brand))
-      ).sort();
-      setAvailableBrands(brands);
-
-      return; // Skip legacy path
-    }
-
-    // Legacy path removed - centralized processing is always enabled
-    console.warn("[DEPLETIONS] Legacy processing path should not be reached");
-  }, [
-    // Centralized processing dependencies
-    USE_CENTRALIZED_PROCESSING,
-    processedForecastRows,
-    isCustomerView,
-    selectedGuidance,
-  ]);
-
   // Parse user_access if it's a string
   const userAccess = useMemo(() => {
     if (!user?.user_access) return null;
@@ -1821,10 +1760,23 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     }
   }, [selectedMarkets, selectedBrands, selectedTags]);
 
+  // Effect to process filtered data from Redux when it changes
+  useEffect(() => {
+    // Use the filtered rows from the centralized selector
+    const nonZeroData = filteredForecastRows.filter(hasNonZeroTotal);
+    setForecastData(nonZeroData);
+
+    // Update available brands based on the processed data
+    const brands = Array.from(
+      new Set(nonZeroData.map((row) => row.brand))
+    ).sort();
+    setAvailableBrands(brands);
+  }, [filteredForecastRows]);
+
   return (
     <Box>
       <DynamicTable
-        data={filteredData}
+        data={forecastData}
         columns={columns}
         onRowClick={handleSidebarSelect}
         expandedRowIds={expandedRowIds}

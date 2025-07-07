@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Box,
   Paper,
@@ -18,12 +18,11 @@ import {
   type Column,
 } from "../../reusableComponents/dynamicTable";
 import { exportToCSV, MONTH_NAMES, ExportableData } from "../util/volumeUtil";
-import type { MarketData } from "../../volume/volumeForecast";
+import type { MarketData } from "../volumeForecast";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "../../redux/store";
 import { useAppSelector } from "../../redux/store";
 import { fetchPendingChanges } from "../../redux/slices/pendingChangesSlice";
-// REMOVED: RestoredState import - no longer needed with centralized processing
 import {
   selectSelectedBrands,
   selectSelectedMarkets,
@@ -39,30 +38,24 @@ import { LineChart } from "@mui/x-charts";
 import type { SummaryCalculationsState } from "../../redux/slices/guidanceCalculationsSlice";
 import {
   selectProcessedForecastRows,
-  selectSummaryAggregates,
+  selectFilteredSummaryAggregates,
 } from "../../redux/slices/depletionSlice";
 import { GuidanceDialog } from "../guidance/guidance";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-// Import guidance calculations from shared location
 import type { CalculatedGuidanceValue } from "../calculations/guidanceCalculations";
 import {
   calculateAllSummaryGuidance,
   calculateTotalGuidance,
 } from "../calculations/guidanceCalculations";
-// Import centralized guidance renderer
 import {
   GuidanceRenderer,
   MonthlyGuidanceRenderer,
 } from "../guidance/guidanceRenderer";
 import {
-  // SUMMARY guidance actions/selectors (new - independent)
   selectSummaryPendingCols as selectPendingSummaryGuidanceCols,
   selectSummaryPendingRows as selectPendingSummaryGuidanceRows,
 } from "../../redux/guidance/guidanceSlice";
 import type { Guidance } from "../../redux/guidance/guidanceSlice";
-
-// Feature flag for centralized processing
-const USE_CENTRALIZED_PROCESSING = true;
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -119,8 +112,6 @@ interface SummaryProps {
   availableBrands: string[];
   marketData: MarketData[];
 }
-
-// --- Note: Removed local guidance renderers - now using centralized components ---
 
 // --- NEW Component for Rendering a Single Expanded Row ---
 interface ExpandedGuidanceRowProps {
@@ -252,7 +243,9 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
 
   // NEW: Centralized processing selectors
   const processedRows = useSelector(selectProcessedForecastRows);
-  const centralizedAggregates = useSelector(selectSummaryAggregates);
+  const centralizedAggregates = useAppSelector((state) =>
+    selectFilteredSummaryAggregates(state, selectedMarkets, selectedBrands)
+  );
 
   const [variantAggregateData, setVariantAggregateData] = useState<
     SummaryVariantAggregateData[]
@@ -278,8 +271,6 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
 
   const MAX_CHIPS_VISIBLE = 3;
 
-  // REMOVED: customerToMarketMap - no longer needed with centralized processing
-
   useEffect(() => {
     dispatch(
       fetchPendingChanges({
@@ -290,75 +281,36 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
   }, [lastSyncTrigger, dispatch]);
 
   useEffect(() => {
-    // ------------------------------------------------------------------
-    // NEW PATH – use centralized processing when flag enabled
-    // ------------------------------------------------------------------
-    if (USE_CENTRALIZED_PROCESSING) {
-      const { variantsAggArray, brandAggsMap, maxActualIndex } =
-        centralizedAggregates;
+    // Use centralized filtered processing
+    const { variantsAggArray, brandAggsMap, maxActualIndex } =
+      centralizedAggregates;
 
-      // Apply market filtering to centralized aggregates if needed
-      let filteredVariantsAggArray = variantsAggArray;
-      let filteredBrandAggsMap = brandAggsMap;
+    setVariantAggregateData(variantsAggArray);
+    setBrandLevelAggregates(brandAggsMap);
+    setLastActualMonthIndex(maxActualIndex);
 
-      if (selectedMarkets.length > 0) {
-        // Filter variants based on selected markets
-        // Note: The aggregation already handles market vs customer management
-        // so we just need to ensure we're not double-filtering
-        console.log(
-          "[SUMMARY] Applying market filter to centralized data:",
-          selectedMarkets
-        );
-      }
-
-      // Debug log to verify centralized processing is working
-      console.log("[SUMMARY] Using centralized processing:", {
-        variantsCount: filteredVariantsAggArray.length,
-        brandsCount: filteredBrandAggsMap.size,
-        maxActualIndex,
-        sampleBrand: Array.from(filteredBrandAggsMap.values())[0]?.brand,
-        selectedMarkets: selectedMarkets.length,
-        // Debug manual edits sync
-        sampleVariantWithManualEdits: filteredVariantsAggArray.find((v) =>
-          Object.values(v.months).some((month) => typeof month === "number")
-        )?.brand,
-        totalVolumeAcrossAllBrands: Array.from(
-          filteredBrandAggsMap.values()
-        ).reduce((sum, brand) => sum + brand.total, 0),
-      });
-
-      setVariantAggregateData(filteredVariantsAggArray);
-      setBrandLevelAggregates(filteredBrandAggsMap);
-      setLastActualMonthIndex(maxActualIndex);
-
-      // Guidance calculations remain the same
-      if (
-        (selectedGuidance.length > 0 || selectedRowGuidance.length > 0) &&
-        (filteredVariantsAggArray.length > 0 || filteredBrandAggsMap.size > 0)
-      ) {
-        const calculatedResults = calculateAllSummaryGuidance(
-          filteredVariantsAggArray,
-          filteredBrandAggsMap,
-          selectedGuidance,
-          selectedRowGuidance,
-          maxActualIndex
-        );
-        setGuidanceResults(calculatedResults);
-      } else {
-        setGuidanceResults({});
-      }
-
-      setLocalCalcStatus("succeeded");
-      return; // Skip legacy path
+    // Guidance calculations remain the same
+    if (
+      (selectedGuidance.length > 0 || selectedRowGuidance.length > 0) &&
+      (variantsAggArray.length > 0 || brandAggsMap.size > 0)
+    ) {
+      const calculatedResults = calculateAllSummaryGuidance(
+        variantsAggArray,
+        brandAggsMap,
+        selectedGuidance,
+        selectedRowGuidance,
+        maxActualIndex
+      );
+      setGuidanceResults(calculatedResults);
+    } else {
+      setGuidanceResults({});
     }
 
-    // Legacy path removed - centralized processing is always enabled
-    console.warn("[SUMMARY] Legacy processing path should not be reached");
+    setLocalCalcStatus("succeeded");
   }, [
     // Centralized processing dependencies
     centralizedAggregates,
     processedRows,
-    USE_CENTRALIZED_PROCESSING,
     selectedGuidance,
     selectedRowGuidance,
     selectedMarkets,
@@ -410,10 +362,7 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
     allBrandKeys.forEach((brand) => {
       const brandAgg = brandLevelAggregates.get(brand);
       if (brandAgg) {
-        // Skip this brand if filters are applied and this brand is not selected
-        if (selectedBrands.length > 0 && !selectedBrands.includes(brand)) {
-          return;
-        }
+        // Filtering is now handled centrally by the Redux selector
 
         const brandAggregateKey = `brand:${brandAgg.id}`;
         const brandGuidanceForRow: { [key: string]: number | undefined } = {};

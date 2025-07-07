@@ -363,21 +363,85 @@ export const selectSummaryAggregates = createSelector(
   }
 );
 
-// Filtered summary aggregates selector for market filtering
+// Filtered summary aggregates selector for market and brand filtering
 export const selectFilteredSummaryAggregates = createSelector(
   [
-    selectSummaryAggregates,
-    (_: RootState, selectedMarkets: string[]) => selectedMarkets,
+    selectProcessedForecastRows,
+    selectLastActualMonthIndex,
+    (_state: RootState, selectedMarkets: string[]) => selectedMarkets,
+    (_state: RootState, _selectedMarkets: string[], selectedBrands: string[]) => selectedBrands,
   ],
-  (summaryAggregates, selectedMarkets) => {
-    if (selectedMarkets.length === 0) {
-      return summaryAggregates; // No filtering needed
+  ({ marketRows, customerRows }, lastActualIndex, selectedMarkets, selectedBrands) => {
+    // Combine market and customer rows for comprehensive summary
+    let allRows = [...marketRows, ...customerRows];
+    
+    // Apply market filtering
+    if (selectedMarkets.length > 0) {
+      allRows = allRows.filter((row) => {
+        // Check if this row matches any of the selected markets
+        // This handles both market-managed and customer-managed markets
+        const matches = selectedMarkets.some((selectedMarket) => {
+          // Handle customer IDs (prefixed with "C.")
+          if (selectedMarket.startsWith("C.")) {
+            const cleanSelectedId = selectedMarket.substring(2);
+            return row.customer_id === cleanSelectedId;
+          }
+          // Handle market IDs (direct match)
+          return row.market_id === selectedMarket;
+        });
+        return matches;
+      });
     }
     
-    // For Summary, we don't filter at variant level since it should show
-    // state-level aggregates. The filtering happens at the data source level
-    // in the processRawData function. Return the aggregates as-is.
-    return summaryAggregates;
+    // Apply brand filtering
+    if (selectedBrands.length > 0) {
+      allRows = allRows.filter((row) => selectedBrands.includes(row.brand));
+    }
+    
+    // Aggregate the filtered rows
+    return aggregateFromProcessedRows(allRows, lastActualIndex);
+  }
+);
+
+// Filtered depletions selector for market, brand, and tag filtering
+export const selectFilteredDepletionsRows = createSelector(
+  [
+    selectProcessedForecastRows,
+    (_state: RootState, selectedMarkets: string[]) => selectedMarkets,
+    (_state: RootState, _selectedMarkets: string[], selectedBrands: string[]) => selectedBrands,
+    (_state: RootState, _selectedMarkets: string[], _selectedBrands: string[], selectedTags: number[]) => selectedTags,
+    (_state: RootState, _selectedMarkets: string[], _selectedBrands: string[], _selectedTags: number[], isCustomerView: boolean) => isCustomerView,
+  ],
+  ({ marketRows, customerRows }, selectedMarkets, selectedBrands, selectedTags, isCustomerView) => {
+    // Choose the appropriate rows based on view type
+    const relevantRows = isCustomerView ? customerRows : marketRows;
+    
+    // Apply filtering
+    return relevantRows.filter((row) => {
+      // Market filtering
+      const marketMatch =
+        selectedMarkets.length === 0 ||
+        (isCustomerView
+          ? selectedMarkets.some((selectedMarket) => {
+              // Handle both prefixed ("C.17054") and non-prefixed ("17054") customer IDs
+              const cleanSelectedId = selectedMarket.startsWith("C.")
+                ? selectedMarket.substring(2)
+                : selectedMarket;
+              return row.customer_id === cleanSelectedId;
+            })
+          : selectedMarkets.includes(row.market_id));
+      
+      // Brand filtering
+      const brandMatch =
+        selectedBrands.length === 0 || selectedBrands.includes(row.brand);
+
+      // Tag filtering
+      const tagMatch =
+        selectedTags.length === 0 ||
+        (row.tags && row.tags.some((tag) => selectedTags.includes(tag.tag_id)));
+
+      return marketMatch && brandMatch && tagMatch;
+    });
   }
 );
 

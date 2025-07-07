@@ -266,14 +266,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       );
 
       if (response.data.user && response.data.token) {
+        const { token } = response.data;
+
+        // First dispatch the LOGIN action to set the token
         dispatch({
           type: "LOGIN",
           payload: {
             user: response.data.user,
-            token: response.data.token,
+            token: token,
           },
         });
-        await appDispatch(loadGuidanceSettings()).unwrap();
+
+        // Load guidance settings with the token directly to avoid localStorage timing issues
+        await appDispatch(loadGuidanceSettings(token)).unwrap();
         return true;
       }
 
