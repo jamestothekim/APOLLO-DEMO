@@ -280,7 +280,13 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       const marketMatch =
         selectedMarkets.length === 0 ||
         (isCustomerView
-          ? selectedMarkets.includes(row.customer_id || "")
+          ? selectedMarkets.some((selectedMarket) => {
+              // Handle both prefixed ("C.17054") and non-prefixed ("17054") customer IDs
+              const cleanSelectedId = selectedMarket.startsWith("C.")
+                ? selectedMarket.substring(2)
+                : selectedMarket;
+              return row.customer_id === cleanSelectedId;
+            })
           : selectedMarkets.includes(row.market_id));
       const brandMatch =
         selectedBrands.length === 0 || selectedBrands.includes(row.brand);
@@ -938,10 +944,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
               {
                 key: "customer",
                 header: "CUSTOMER",
-                align: "left" as const,
+                align: "center" as const,
                 extraWide: true,
                 sx: cellPaddingSx,
-                // Potentially make filterable too if needed
+                filterable: true, // Enable filtering with magnifying glass
+                getValue: (row: ExtendedForecastData) =>
+                  row.customer_name || "", // Extract value for filtering
                 render: (_: any, row: ExtendedForecastData) =>
                   row.customer_name || "-",
               },
@@ -1740,24 +1748,6 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
       const relevantProcessedRows = isCustomerView
         ? processedForecastRows.customerRows
         : processedForecastRows.marketRows;
-
-      // Debug log to verify centralized processing is working
-      console.log("[DEPLETIONS] Using centralized processing:", {
-        isCustomerView,
-        totalRows: relevantProcessedRows.length,
-        sampleRow: relevantProcessedRows[0]?.brand,
-        // Debug manual edits
-        rowsWithManualEdits: relevantProcessedRows.filter((row) =>
-          Object.values(row.months || {}).some(
-            (month) => month?.isManuallyModified
-          )
-        ).length,
-        sampleManualEdit: relevantProcessedRows.find((row) =>
-          Object.values(row.months || {}).some(
-            (month) => month?.isManuallyModified
-          )
-        )?.brand,
-      });
 
       const nonZeroData = relevantProcessedRows.filter(hasNonZeroTotal);
       setForecastData(nonZeroData);

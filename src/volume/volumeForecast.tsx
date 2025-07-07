@@ -371,8 +371,10 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                     const label = isCustomerData(option)
                       ? option.display
                       : option.market_name;
+                    const { key, ...tagProps } = getTagProps({ index });
                     return (
                       <Chip
+                        key={key}
                         label={label}
                         size="small"
                         variant="outlined"
@@ -382,7 +384,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                           backgroundColor: "transparent",
                           "& .MuiChip-label": { px: 1 },
                         }}
-                        {...getTagProps({ index })}
+                        {...tagProps}
                       />
                     );
                   })
@@ -405,20 +407,24 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                   <TextField {...params} label="Filter Brands" />
                 )}
                 renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip
-                      label={option}
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      sx={{
-                        borderRadius: "16px",
-                        backgroundColor: "transparent",
-                        "& .MuiChip-label": { px: 1 },
-                      }}
-                      {...getTagProps({ index })}
-                    />
-                  ))
+                  value.map((option, index) => {
+                    const { key, ...tagProps } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key}
+                        label={option}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{
+                          borderRadius: "16px",
+                          backgroundColor: "transparent",
+                          "& .MuiChip-label": { px: 1 },
+                        }}
+                        {...tagProps}
+                      />
+                    );
+                  })
                 }
                 sx={{ width: "100%" }}
               />
@@ -443,20 +449,24 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
                   <TextField {...params} label="Filter Tags" />
                 )}
                 renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip
-                      label={option.tag_name}
-                      size="small"
-                      variant="outlined"
-                      color="primary"
-                      sx={{
-                        borderRadius: "16px",
-                        backgroundColor: "transparent",
-                        "& .MuiChip-label": { px: 1 },
-                      }}
-                      {...getTagProps({ index })}
-                    />
-                  ))
+                  value.map((option, index) => {
+                    const { key, ...tagProps } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key}
+                        label={option.tag_name}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{
+                          borderRadius: "16px",
+                          backgroundColor: "transparent",
+                          "& .MuiChip-label": { px: 1 },
+                        }}
+                        {...tagProps}
+                      />
+                    );
+                  })
                 }
                 sx={{ width: "100%" }}
               />
