@@ -122,6 +122,17 @@ export const processReportData = (
     return { rows: [], columns: [], data: [[]], valueFormat: "number" };
   }
 
+  // --- 1. Calculate last actual month index from raw data ---
+  let lastActualMonthIndex = -1;
+  rawData.forEach((item) => {
+    if (item?.data_type?.includes("actual")) {
+      const monthIndex = (item.month || 0) - 1; // Convert to 0-based index
+      if (monthIndex >= 0 && monthIndex < 12) {
+        lastActualMonthIndex = Math.max(lastActualMonthIndex, monthIndex);
+      }
+    }
+  });
+
   // --- 2. Filter Data ---
   let filteredData = [...rawData];
   filters.forEach((filter) => {
@@ -184,7 +195,22 @@ export const processReportData = (
   const columnDimensionId = columnDimensionIds[0]; // Assuming one col dim
 
   filteredData.forEach((item) => {
-    const value = parseFloat(item[valueDimension.id]) || 0; // Get the measure value
+    let value = parseFloat(item[valueDimension.id]) || 0; // Get the measure value
+
+    // Apply projected volume logic for case_equivalent_volume (matching depletionCalculations.ts)
+    if (valueDimension.id === "case_equivalent_volume") {
+      const monthIndex = (item.month || 0) - 1; // Convert to 0-based index
+      const isCurrentMonth = monthIndex === lastActualMonthIndex + 1;
+      const useProjected =
+        isCurrentMonth &&
+        item.market_area_name !== "Control" &&
+        item.projected_case_equivalent_volume !== undefined &&
+        !item.is_manual_input;
+
+      if (useProjected) {
+        value = parseFloat(item.projected_case_equivalent_volume) || 0;
+      }
+    }
 
     // Determine the keys for the map based on whether row/col dimensions exist
     const rowKey = rowDimensionId
