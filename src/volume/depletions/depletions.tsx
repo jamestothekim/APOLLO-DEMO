@@ -54,6 +54,7 @@ import {
   calculateTotal,
   ForecastLogic,
   SIDEBAR_GUIDANCE_OPTIONS,
+  roundToTenth,
 } from "../util/volumeUtil";
 import {
   Save as SaveIcon,
@@ -791,7 +792,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         const total = calculateTotal(row.months);
         return isNaN(total)
           ? "-"
-          : total.toLocaleString(undefined, {
+          : roundToTenth(total).toLocaleString(undefined, {
               minimumFractionDigits: 1,
               maximumFractionDigits: 1,
             });
@@ -1121,7 +1122,7 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
                   // Assign onClick ONLY if it's an actual/preview month
                   onClick={isClickable ? handleClick : undefined}
                 >
-                  {value.toLocaleString(undefined, {
+                  {roundToTenth(value).toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                   })}

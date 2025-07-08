@@ -125,7 +125,7 @@ export const LoadingApollo: React.FC<LoadingApolloProps> = ({
   showProgressMessages = false,
 }) => {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
-  const [animationDuration, setAnimationDuration] = useState(4); // Start with 4 seconds
+  const [animationDuration] = useState(4); // Keep constant at 4 seconds
 
   const progressMessages = [
     "Preparing your data...",
@@ -149,19 +149,6 @@ export const LoadingApollo: React.FC<LoadingApolloProps> = ({
 
     return () => clearInterval(interval);
   }, [showProgressMessages, progressMessages.length]);
-
-  // Speed up rotation based on message index
-  useEffect(() => {
-    if (!showProgressMessages) return;
-
-    if (currentMessageIndex === 3) {
-      // "All systems are GO..." - speed up by 50% (4s -> 2s)
-      setAnimationDuration(2);
-    } else if (currentMessageIndex === 4) {
-      // "APOLLO is GO for launch..." - speed up by another 50% (2s -> 1s)
-      setAnimationDuration(1);
-    }
-  }, [currentMessageIndex, showProgressMessages]);
 
   const displayMessage = showProgressMessages ? "Loading APOLLO" : message;
   const displaySubMessage = showProgressMessages

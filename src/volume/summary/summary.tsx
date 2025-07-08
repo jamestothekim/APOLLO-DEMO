@@ -17,7 +17,12 @@ import {
   DynamicTable,
   type Column,
 } from "../../reusableComponents/dynamicTable";
-import { exportToCSV, MONTH_NAMES, ExportableData } from "../util/volumeUtil";
+import {
+  exportToCSV,
+  MONTH_NAMES,
+  ExportableData,
+  roundToTenth,
+} from "../util/volumeUtil";
 import type { MarketData } from "../volumeForecast";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "../../redux/store";
@@ -504,6 +509,41 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
     const hasRowGuidance =
       selectedRowGuidance && selectedRowGuidance.length > 0;
 
+    // Separate expand column like in productMaster.tsx
+    const expandColumn: Column = {
+      key: "expand",
+      header: "",
+      width: 24,
+      align: "left",
+      render: (_, row: DisplayRow) => (
+        <Box sx={{ position: "relative", width: "100%", minHeight: "24px" }}>
+          {row.isBrandRow && row.id !== "total-row" && (
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleBrandExpandClick(row.id);
+              }}
+              sx={{
+                position: "absolute",
+                left: 0,
+                top: "50%",
+                transform: "translateY(-50%)",
+                p: 0.25,
+              }}
+            >
+              {expandedBrandIds.has(row.id) ? (
+                <KeyboardArrowDownIcon fontSize="small" />
+              ) : (
+                <ChevronRightIcon fontSize="small" />
+              )}
+            </IconButton>
+          )}
+        </Box>
+      ),
+      sortable: false,
+    };
+
     const brandColumn: Column = {
       key: "brand",
       header: "BRAND / VARIANT",
@@ -513,33 +553,14 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
         row.id === "total-row" ? "\uffff" : row.brand,
       extraWide: true,
       render: (_value: any, row: DisplayRow) => {
-        const isExpanded = expandedBrandIds.has(row.id);
-        const isTotalRow = row.id === "total-row";
-
         return (
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
-              pl: row.level * 2,
+              pl: 1, // Add left padding for spacing
             }}
           >
-            {row.isBrandRow && !isTotalRow && (
-              <IconButton
-                size="small"
-                sx={{ mr: 0.5, p: 0.25 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleBrandExpandClick(row.id);
-                }}
-              >
-                {isExpanded ? (
-                  <KeyboardArrowDownIcon fontSize="inherit" />
-                ) : (
-                  <ChevronRightIcon fontSize="inherit" />
-                )}
-              </IconButton>
-            )}
             <Typography
               variant="body2"
               sx={{
@@ -562,7 +583,7 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
       sortAccessor: (row: DisplayRow) =>
         row.id === "total-row" ? Infinity : row.total,
       render: (value: number) =>
-        value?.toLocaleString(undefined, {
+        roundToTenth(value).toLocaleString(undefined, {
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         }) ?? "0.0",
@@ -615,7 +636,7 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
             return <CircularProgress size={16} thickness={4} />;
           }
           return (
-            row.months?.[month]?.toLocaleString(undefined, {
+            roundToTenth(row.months?.[month]).toLocaleString(undefined, {
               minimumFractionDigits: 1,
               maximumFractionDigits: 1,
             }) ?? "0.0"
@@ -729,6 +750,7 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
       : null;
 
     let combinedColumns: Column[] = [
+      expandColumn, // Add expand column first
       brandColumn,
       tyVolColumn,
       ...guidanceColumns,
@@ -740,9 +762,9 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
 
     combinedColumns.push(...monthColumns);
 
-    // Add right border to the last non-month column
+    // Add right border to the last non-month column (adjust index for new expand column)
     const lastValueColIndex =
-      1 + guidanceColumns.length + (rowGuidanceColumn ? 1 : 0);
+      2 + guidanceColumns.length + (rowGuidanceColumn ? 1 : 0); // Changed from 1 to 2
     if (
       lastValueColIndex >= 0 &&
       lastValueColIndex < combinedColumns.length - MONTH_NAMES.length

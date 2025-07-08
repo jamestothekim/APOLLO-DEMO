@@ -6,6 +6,17 @@ import {
 // Import guidance calculations from the shared location
 import { recalculateGuidance } from "./guidanceCalculations";
 
+/**
+ * Rounds a number to one decimal place (tenths precision) for consistent display.
+ * This should be used at the final display/export stage, not during aggregation.
+ * @param num - The number to round
+ * @returns The number rounded to one decimal place
+ */
+export const roundToTenth = (num: number | null | undefined): number => {
+  const n = num || 0;
+  return Math.round(n * 10) / 10;
+};
+
 export interface ExtendedForecastData {
   id: string;
   market_id: string;
@@ -206,17 +217,18 @@ export const processRawData = (
         const valueToAdd = useProjected
           ? item.projected_case_equivalent_volume
           : item.case_equivalent_volume;
-        aggregatedItem.months[monthName]!.value += Math.round((valueToAdd || 0) * 100) / 100;
+        // Store raw values without intermediate rounding for accurate aggregation
+        aggregatedItem.months[monthName]!.value += Number(valueToAdd) || 0;
         if (item.is_manual_input) {
           aggregatedItem.months[monthName]!.isManuallyModified = true;
         }
-        // PY Volume
+        // PY Volume - store raw values
         if (item.py_case_equivalent_volume !== undefined) {
-          aggregatedItem.py_case_equivalent_volume_months[monthName]!.value += Math.round((Number(item.py_case_equivalent_volume) || 0) * 100) / 100;
+          aggregatedItem.py_case_equivalent_volume_months[monthName]!.value += Number(item.py_case_equivalent_volume) || 0;
         }
-        // LC Volume
+        // LC Volume - store raw values
         if (item.prev_published_case_equivalent_volume !== undefined) {
-          aggregatedItem.prev_published_case_equivalent_volume_months[monthName]!.value += Math.round((Number(item.prev_published_case_equivalent_volume) || 0) * 100) / 100;
+          aggregatedItem.prev_published_case_equivalent_volume_months[monthName]!.value += Number(item.prev_published_case_equivalent_volume) || 0;
         }
       }
       // Aggregate total GSV

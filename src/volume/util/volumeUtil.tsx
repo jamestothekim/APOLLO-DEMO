@@ -1,6 +1,17 @@
 import { ExtendedForecastData } from "../depletions/depletions";
 import type { Guidance } from "../../redux/slices/userSettingsSlice";
 
+/**
+ * Rounds a number to one decimal place (tenths precision) for consistent display.
+ * This should be used at the final display/export stage, not during aggregation.
+ * @param num - The number to round
+ * @returns The number rounded to one decimal place
+ */
+export const roundToTenth = (num: number | null | undefined): number => {
+  const n = num || 0;
+  return Math.round(n * 10) / 10;
+};
+
 export type ForecastOption = {
   id: number;
   label: string;
@@ -187,16 +198,22 @@ export const exportToCSV = (
       const brandVariant = item.isBrandRow ? item.brand : item.variant || "";
 
       const totalVolumeTY = item.case_equivalent_volume ?? 0;
-      const formattedTotalTY = totalVolumeTY.toLocaleString(undefined, {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      });
+      const formattedTotalTY = roundToTenth(totalVolumeTY).toLocaleString(
+        undefined,
+        {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }
+      );
 
       const totalVolumeLY = item.py_case_equivalent_volume ?? 0;
-      const formattedTotalLY = totalVolumeLY.toLocaleString(undefined, {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      });
+      const formattedTotalLY = roundToTenth(totalVolumeLY).toLocaleString(
+        undefined,
+        {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }
+      );
 
       const baseColumns = [brandVariant, formattedTotalTY, formattedTotalLY];
 
@@ -221,7 +238,7 @@ export const exportToCSV = (
               if (guidance.calculation.format === "percent") {
                 return `${Math.round(subVal * 100)}%`;
               }
-              return subVal.toLocaleString(undefined, {
+              return roundToTenth(subVal).toLocaleString(undefined, {
                 minimumFractionDigits: 1,
                 maximumFractionDigits: 1,
               });
@@ -246,7 +263,7 @@ export const exportToCSV = (
               maximumFractionDigits: 0,
             }).format(value);
           }
-          return value.toLocaleString(undefined, {
+          return roundToTenth(value).toLocaleString(undefined, {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
           });
@@ -254,7 +271,7 @@ export const exportToCSV = (
 
       const monthValues = monthKeys.map((month) => {
         const value = item.months[month]?.value || 0;
-        return value.toLocaleString(undefined, {
+        return roundToTenth(value).toLocaleString(undefined, {
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         });
@@ -319,10 +336,13 @@ export const exportToCSV = (
 
     dataRows = data.map((item) => {
       const totalVolume = calculateTotal(item.months);
-      const formattedTotal = totalVolume.toLocaleString(undefined, {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      });
+      const formattedTotal = roundToTenth(totalVolume).toLocaleString(
+        undefined,
+        {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }
+      );
 
       const baseColumns = [
         item.market_name,
@@ -354,7 +374,7 @@ export const exportToCSV = (
               if (guidance.calculation.format === "percent") {
                 return `${Math.round(subVal * 100)}%`;
               }
-              return subVal.toLocaleString(undefined, {
+              return roundToTenth(subVal).toLocaleString(undefined, {
                 minimumFractionDigits: 1,
                 maximumFractionDigits: 1,
               });
@@ -378,7 +398,7 @@ export const exportToCSV = (
               maximumFractionDigits: 0,
             }).format(value);
           }
-          return value.toLocaleString(undefined, {
+          return roundToTenth(value).toLocaleString(undefined, {
             minimumFractionDigits: 1,
             maximumFractionDigits: 1,
           });
@@ -386,7 +406,7 @@ export const exportToCSV = (
 
       const monthValues = monthKeys.map((month) => {
         const value = item.months[month]?.value || 0;
-        return value.toLocaleString(undefined, {
+        return roundToTenth(value).toLocaleString(undefined, {
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         });

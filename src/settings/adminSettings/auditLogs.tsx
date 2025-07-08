@@ -40,7 +40,7 @@ export const AuditLogs = () => {
         setLoading(true);
         // setError(null);
         const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/audit/logs`, // Fetches with default page=1, limit=50
+          `${import.meta.env.VITE_API_URL}/audit/logs`, // Fetch all logs without limit
           {
             headers: {
               "Content-Type": "application/json",
@@ -263,8 +263,8 @@ export const AuditLogs = () => {
         columns={columns}
         getRowId={(row: AuditLogData) => String(row.id)} // id is already mapped from audit_id
         // No onRowClick, as this is a read-only table.
-        rowsPerPageOptions={[25, 50, 100, 200]} // API defaults to 50 logs per page
-        defaultRowsPerPage={50}
+        rowsPerPageOptions={[25, 50, 100, 200, { value: -1, label: "All" }]} // Added "All" option
+        defaultRowsPerPage={100} // Increased default from 50 to 100
         enableColumnFiltering
         // Other DynamicTable props like enableSorting, enablePagination are likely true by default
         // or can be added if needed.
