@@ -396,7 +396,7 @@ export const exportToCSV = (
         ...baseColumns,
         ...guidanceColumns,
         ...monthValues,
-        item.commentary || "",
+        (item.commentary || "").replace(/\r?\n/g, " "),
       ];
     });
 

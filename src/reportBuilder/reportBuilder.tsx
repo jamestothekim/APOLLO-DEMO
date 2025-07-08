@@ -420,21 +420,6 @@ const ReportBuilder = () => {
             </Select>
           </FormControl>
           {/* --- Filter Dimension Select --- END */}
-
-          {/* Version Select - Keep this last or reposition as needed */}
-          <FormControl sx={{ m: 1, minWidth: 150, flexGrow: 1 }}>
-            <InputLabel id="version-select-label">Version</InputLabel>
-            <Select
-              labelId="version-select-label"
-              value="April Working"
-              input={<OutlinedInput label="Version" />}
-              disabled
-            >
-              <MenuItem value="April Working">
-                <em>April Working</em>
-              </MenuItem>
-            </Select>
-          </FormControl>
         </Box>
       </Paper>
       {/* --- Configuration UI --- END */}

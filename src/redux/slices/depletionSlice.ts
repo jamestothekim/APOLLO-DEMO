@@ -356,9 +356,16 @@ export const selectProcessedForecastRows = createSelector(
 export const selectSummaryAggregates = createSelector(
   [selectProcessedForecastRows, selectLastActualMonthIndex],
   ({ marketRows, customerRows }, lastActualIndex) => {
-    // Combine market and customer rows for comprehensive summary
-    // Summary should always show state-level aggregates regardless of management type
-    const allRows = [...marketRows, ...customerRows];
+    // Avoid double-counting by using customer-level data when available, market-level otherwise
+    // Determine which markets have customer breakdown
+    const marketsWithCustomers = new Set(
+      customerRows.map(row => row.market_id).filter(Boolean)
+    );
+    
+    // Use customer rows for markets with customer breakdown, market rows for others
+    const marketOnlyRows = marketRows.filter(row => !marketsWithCustomers.has(row.market_id));
+    const allRows = [...marketOnlyRows, ...customerRows];
+    
     return aggregateFromProcessedRows(allRows, lastActualIndex);
   }
 );
@@ -372,8 +379,15 @@ export const selectFilteredSummaryAggregates = createSelector(
     (_state: RootState, _selectedMarkets: string[], selectedBrands: string[]) => selectedBrands,
   ],
   ({ marketRows, customerRows }, lastActualIndex, selectedMarkets, selectedBrands) => {
-    // Combine market and customer rows for comprehensive summary
-    let allRows = [...marketRows, ...customerRows];
+    // Avoid double-counting by using customer-level data when available, market-level otherwise
+    // Determine which markets have customer breakdown
+    const marketsWithCustomers = new Set(
+      customerRows.map(row => row.market_id).filter(Boolean)
+    );
+    
+    // Use customer rows for markets with customer breakdown, market rows for others
+    const marketOnlyRows = marketRows.filter(row => !marketsWithCustomers.has(row.market_id));
+    let allRows = [...marketOnlyRows, ...customerRows];
     
     // Apply market filtering
     if (selectedMarkets.length > 0) {
