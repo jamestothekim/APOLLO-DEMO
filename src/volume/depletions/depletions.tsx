@@ -49,13 +49,13 @@ import {
   MONTH_NAMES,
   MONTH_MAPPING,
   processMonthData,
-  exportToCSV,
   hasNonZeroTotal,
   calculateTotal,
   ForecastLogic,
   SIDEBAR_GUIDANCE_OPTIONS,
   roundToTenth,
 } from "../util/volumeUtil";
+import { exportDepletionsToExcel } from "../util/exportExcel";
 import {
   Save as SaveIcon,
   Publish as PublishIcon,
@@ -1606,8 +1606,51 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
   // Add handleExport function
   const handleExport = useCallback(() => {
-    exportToCSV(forecastData, selectedGuidance);
-  }, [forecastData, selectedGuidance]);
+    // Convert forecastData to the format expected by the new export system
+    const exportData = forecastData.map((row): any => ({
+      market_id: row.market_id,
+      market_name: row.market_name,
+      customer_id: row.customer_id,
+      customer_name: row.customer_name,
+      product: row.product,
+      brand: row.brand,
+      variant: row.variant,
+      variant_id: row.variant_id,
+      variant_size_pack_id: row.variant_size_pack_id,
+      variant_size_pack_desc: row.variant_size_pack_desc,
+      forecastLogic: row.forecastLogic,
+      months: row.months,
+      case_equivalent_volume: row.case_equivalent_volume,
+      py_case_equivalent_volume: row.py_case_equivalent_volume,
+      gross_sales_value: row.gross_sales_value,
+      py_gross_sales_value: row.py_gross_sales_value,
+      commentary: row.commentary,
+      // Add monthly data for LY and LC dimensions
+      py_case_equivalent_volume_months:
+        row.py_case_equivalent_volume_months || {},
+      prev_published_case_equivalent_volume:
+        row.prev_published_case_equivalent_volume || 0,
+      prev_published_case_equivalent_volume_months:
+        row.prev_published_case_equivalent_volume_months || {},
+      lc_gross_sales_value: row.lc_gross_sales_value || 0,
+      lc_gross_sales_value_months: row.lc_gross_sales_value_months || {},
+      // Add any guidance calculations
+      ...Object.fromEntries(
+        Object.entries(row).filter(([key]) => key.startsWith("guidance_"))
+      ),
+    }));
+
+    if (rowGuidanceSelections && rowGuidanceSelections.length > 0) {
+      exportDepletionsToExcel(
+        exportData,
+        selectedGuidance,
+        rowGuidanceSelections,
+        -1
+      );
+    } else {
+      exportDepletionsToExcel(exportData, selectedGuidance, [], -1);
+    }
+  }, [forecastData, selectedGuidance, rowGuidanceSelections]);
 
   // Register export handler
   useEffect(() => {

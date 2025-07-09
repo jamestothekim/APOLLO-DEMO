@@ -255,7 +255,7 @@ export const Toolbox: React.FC<ToolboxProps> = ({
               borderRadius: "8px",
             }}
           >
-            Export CSV
+            Export
           </Button>
         )}
 

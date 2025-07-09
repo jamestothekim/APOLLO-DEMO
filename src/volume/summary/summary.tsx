@@ -17,12 +17,8 @@ import {
   DynamicTable,
   type Column,
 } from "../../reusableComponents/dynamicTable";
-import {
-  exportToCSV,
-  MONTH_NAMES,
-  ExportableData,
-  roundToTenth,
-} from "../util/volumeUtil";
+import { roundToTenth, MONTH_NAMES } from "../util/volumeUtil";
+import { exportSummaryByMarketAndVariant } from "../util/exportExcel";
 import type { MarketData } from "../volumeForecast";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch } from "../../redux/store";
@@ -61,6 +57,7 @@ import {
   selectSummaryPendingRows as selectPendingSummaryGuidanceRows,
 } from "../../redux/guidance/guidanceSlice";
 import type { Guidance } from "../../redux/guidance/guidanceSlice";
+import { RootState } from "../../redux/store";
 
 // --- Export these types --- START
 export interface SummaryVariantAggregateData {
@@ -792,71 +789,29 @@ export const Summary = ({ availableBrands, marketData }: SummaryProps) => {
     selectedBrands,
   ]);
 
+  // Select all processed forecast rows (no filtering) for export
+  const allProcessedRows = useSelector((state: RootState) => {
+    const { marketRows, customerRows } = selectProcessedForecastRows(state);
+
+    // Avoid double-counting by using customer-level data when available, market-level otherwise
+    const marketsWithCustomers = new Set(
+      customerRows.map((row) => row.market_id).filter(Boolean)
+    );
+
+    // Use customer rows for markets with customer breakdown, market rows for others
+    const marketOnlyRows = marketRows.filter(
+      (row) => !marketsWithCustomers.has(row.market_id)
+    );
+    return [...marketOnlyRows, ...customerRows];
+  });
+
   const handleExport = () => {
-    if (!displayData || displayData.length === 0) {
-      return;
-    }
-
-    const formattedData: ExportableData[] = displayData.map(
-      (row: DisplayRow): ExportableData => {
-        const exportMonths: { [key: string]: { value: number } } = {};
-        MONTH_NAMES.forEach((month) => {
-          exportMonths[month] = { value: row.months?.[month] || 0 };
-        });
-
-        // Prepare the base export row structure
-        const exportRow: Partial<ExportableData> = {
-          // Add fields required by the updated exportToCSV for summary
-          market_id: "SUMMARY", // Dummy value for summary
-          market_name: "Summary View", // Descriptive name
-          product: row.isBrandRow ? row.brand : row.variant || "", // Use Brand or Variant name
-          brand: row.brand,
-          variant: row.isBrandRow ? "" : row.variant || "",
-          variant_id: row.isBrandRow ? "" : row.variant_id || "",
-          variant_size_pack_id: "", // Not applicable in summary
-          variant_size_pack_desc: row.isBrandRow
-            ? row.brand
-            : row.variant || "", // Consistent with product
-          forecastLogic: "aggregated", // Fixed value for summary
-          months: exportMonths,
-          case_equivalent_volume: row.total ?? 0, // Total TY Volume
-          py_case_equivalent_volume: row.total_py_volume ?? 0, // Add Total PY Volume
-          gross_sales_value: row.total_gsv_ty ?? 0, // Keep for potential future use or internal consistency
-          py_gross_sales_value: row.total_gsv_py ?? 0, // Keep for potential future use
-          // Include flags needed by the export function
-          isBrandRow: row.isBrandRow, // Pass the flag
-        };
-
-        // Merge calculated guidance values into the export row
-        if (selectedRowGuidance && selectedRowGuidance.length > 0) {
-          const aggregateKey = row.isBrandRow
-            ? `brand:${row.id}`
-            : `variant:${row.brand}_${row.variant_id || row.variant}`;
-          const rowGuidanceResults = guidanceResults[aggregateKey];
-
-          if (rowGuidanceResults) {
-            selectedRowGuidance.forEach((guidance) => {
-              const guidanceKey = `guidance_${guidance.id}`;
-              const calculationResult = rowGuidanceResults[guidance.id];
-              // Add the calculated total to the export row using the dynamic key
-              if (calculationResult && calculationResult.total !== undefined) {
-                exportRow[guidanceKey] = calculationResult.total;
-              }
-            });
-          }
-        }
-
-        return exportRow as ExportableData; // Cast to full type
-      }
-    );
-
-    // Call exportToCSV - pass empty array for selectedGuidance
-    exportToCSV(
-      formattedData,
-      [], // No columns selected currently
-      true, // isSummaryView = true
-      lastActualMonthIndex
-    );
+    // Use the new market-by-variant export function with actual guidance
+    exportSummaryByMarketAndVariant(allProcessedRows, {
+      selectedGuidance: selectedGuidance, // Pass actual column guidance
+      selectedRowGuidance: selectedRowGuidance,
+      lastActualMonthIndex,
+    });
   };
 
   const series = useMemo(() => {

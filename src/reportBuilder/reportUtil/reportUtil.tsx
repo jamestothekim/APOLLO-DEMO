@@ -1,11 +1,4 @@
 import { ChipOwnProps } from "@mui/material/Chip";
-// --- Import Export utilities needed here ---
-// import {
-//   exportToCSV,
-//   type ExportableData,
-//   type Guidance, // exportToCSV might depend on this type signature
-// } from "../../volume/depletions/util/depletionsUtil"; // Path from reportUtil/ up to src/ then down
-// -------------------------------------------
 
 // Define the structure for a dimension
 export interface ReportDimension {
@@ -455,7 +448,6 @@ const triggerCSVDownload = (csvContent: string, filename: string) => {
   }
 };
 
-// --- Update exportReportToCSV to use new functions ---
 export const exportReportToCSV = (
   aggregationResult: AggregationResult,
   rowDimension: ReportDimension | null,
