@@ -25,7 +25,7 @@ export const DEMO_BRANDS = [
   'Jack Donaldson', 'Johnny Stroller', 'Gray Moose', 'Absolute Zero', 
   'Jamerson', 'Crown Loyal', 'Patton Silver', 'Captain Morgains',
   'Jose Quervo', 'Smirnov', 'Bombay Sapphire Plus', 'Tanqueray Green',
-  'Bacardi Superior Plus', 'Maker\'s Mark II', 'Buffalo Trace Route', 'Woodford Reserved', 'Bulleit Rye Plus'
+  'Bacardi Superior Plus', "Maker's Mark II", 'Buffalo Trace Route', 'Woodford Reserved', 'Bulleit Rye Plus'
 ];
 
 export const DEMO_MARKETS = [
@@ -40,7 +40,7 @@ export const DEMO_MARKETS = [
 const DEMO_VARIANTS = {
   'Jack Donaldson': ['Old No. 8', 'Single Barrel Select', 'Gentleman Jake', 'Tennessee Fire'],
   'Johnny Stroller': ['Red Tag', 'Black Tag', 'Blue Tag', 'Gold Tag Reserve'],
-  'Gray Moose': ['Original', 'L\'Orange', 'La Poire', 'Le Citron'],
+  'Gray Moose': ['Original', "L'Orange", 'La Poire', 'Le Citron'],
   'Absolute Zero': ['Original', 'Citron', 'Vanilla', 'Mandrin'],
   'Jamerson': ['Original', 'Black Barrel', '18 Year', 'Caskmates'],
   'Crown Loyal': ['Original', 'Reserve', 'XR', 'Northern Harvest'],
@@ -51,9 +51,9 @@ const DEMO_VARIANTS = {
   'Bombay Sapphire Plus': ['Original', 'East', 'Star of Bombay', 'Premier Cru'],
   'Tanqueray Green': ['London Dry', 'Rangpur', 'No. TEN', 'Sevilla'],
   'Bacardi Superior Plus': ['White', 'Gold', 'Black', 'Reserva Ocho'],
-  'Maker\'s Mark II': ['Original', '46', 'Private Select', 'Cask Strength'],
+  "Maker's Mark II": ['Original', '46', 'Private Select', 'Cask Strength'],
   'Buffalo Trace Route': ['Original', 'Single Barrel', 'Antique', 'White Dog'],
-  'Woodford Reserved': ['Double Oaked', 'Rye', 'Master\'s Collection', 'Wheat'],
+  'Woodford Reserved': ['Double Oaked', 'Rye', "Master's Collection", 'Wheat'],
   'Bulleit Rye Plus': ['Bourbon', 'Rye', '10 Year', 'Barrel Strength']
 };
 
@@ -185,13 +185,15 @@ export function generateGuidanceSettings() {
 // =============================================================================
 
 export function generateVolumeDataItem(market: any, brand: string, month: number, year: number = 2025) {
-  const variants = DEMO_VARIANTS[brand as keyof typeof DEMO_VARIANTS] || [`${brand} Original`];
-  const variant = getRandomFromArray(variants);
-  const variantId = `${brand.substring(0, 2).toUpperCase()}${Math.floor(Math.random() * 100).toString().padStart(3, '0')}`;
+  // Safe variant lookup with fallback
+  const variants = DEMO_VARIANTS[brand as keyof typeof DEMO_VARIANTS];
+  const variant = variants ? getRandomFromArray(variants) : `${brand} Original`;
+  const brandCode = brand.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase() || 'XX';
+  const variantId = `${brandCode}${Math.floor(Math.random() * 100).toString().padStart(3, '0')}`;
   
   return {
-    market_id: market.market_id,
-    market: market.market,
+    market_id: market?.market_id || 'UNKNOWN',
+    market: market?.market || 'Unknown Market',
     market_area_name: 'BBG East',
     customer_id: '17259',
     customer: 'BREAKTHRU BEVERAGE',
@@ -207,7 +209,7 @@ export function generateVolumeDataItem(market: any, brand: string, month: number
     data_type: month <= 6 ? 'actual_complete' : 'forecast',
     is_manual_input: month > 6 ? getRandomBetween(0, 1) > 0.7 : false,
     forecast_status: month > 6 ? getRandomFromArray(['draft', 'consensus']) : 'draft',
-    current_version: month > 6 ? getRandomBetween(0, 2) : 0,
+    current_version: month > 6 ? Math.floor(getRandomBetween(0, 2)) : 0,
     group_id: null,
     publication_id: null,
     tag_id: [1],
@@ -244,8 +246,11 @@ export function generateVolumeData(markets: string[], brands: string[] | null, i
   // Generate 12 months of data for each market/brand combination
   for (const market of relevantMarkets) {
     for (const brand of relevantBrands) {
-      for (let month = 1; month <= 12; month++) {
-        data.push(generateVolumeDataItem(market, brand, month));
+      // Ensure brand exists in our system
+      if (DEMO_BRANDS.includes(brand)) {
+        for (let month = 1; month <= 12; month++) {
+          data.push(generateVolumeDataItem(market, brand, month));
+        }
       }
     }
   }
@@ -349,7 +354,7 @@ export function generateMarketData(marketIds: number[]) {
 // =============================================================================
 
 export function generateAccountLevelSales(market: string, product: string, month: number, year: number) {
-  const numAccounts = getRandomBetween(3, 8);
+  const numAccounts = Math.floor(getRandomBetween(3, 8));
   const accounts = [];
   
   for (let i = 0; i < numAccounts; i++) {
@@ -365,7 +370,7 @@ export function generateAccountLevelSales(market: string, product: string, month
 }
 
 export function generateAccountDetails(outletId: string, period: string = 'R12') {
-  const numBrands = getRandomBetween(4, 8);
+  const numBrands = Math.floor(getRandomBetween(4, 8));
   const data = [];
   
   for (let i = 0; i < numBrands; i++) {
