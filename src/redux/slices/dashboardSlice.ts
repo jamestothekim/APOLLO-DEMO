@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
 import type { RootState } from '../store';
 
 // --- Interfaces --- //
@@ -158,16 +157,6 @@ export const syncDashboardToBackend = createAsyncThunk(
   'dashboard/syncToBackend',
   async (items: PublishedItem[], { rejectWithValue }) => {
     try {
-      // Ensure the items are properly structured before sending
-      const cleanedItems = items.map(({ id, type, name, order, config, gridPosition }) => ({
-        id,
-        type,
-        name,
-        order,
-        config,
-        gridPosition
-      }));
-
       // Demo mode - simulate dashboard sync
       const { simulateApiDelay } = await import('../../playData/demoConfig');
       await simulateApiDelay(200, 500);

@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
-import axios from 'axios';
 
 // ------------------------------------------------------------------
 //  Types
@@ -251,20 +250,9 @@ export const loadGuidanceSettings = createAsyncThunk<
 export const syncGuidanceSettings = createAsyncThunk<
   void,
   void,
-  { state: { guidance: GuidanceState }; rejectValue: string }
->('guidance/syncSettings', async (_, { getState, rejectWithValue }) => {
+  { rejectValue: string }
+>('guidance/syncSettings', async (_, { rejectWithValue }) => {
   try {
-    const state = getState().guidance;
-    const payload = {
-      guidance_settings: {
-        forecast_defs: state.defs,
-        forecast_cols: state.pendingForecastCols,
-        forecast_rows: state.pendingForecastRows,
-        summary_defs: state.summary.defs,
-        summary_cols: state.summary.pendingCols,
-        summary_rows: state.summary.pendingRows,
-      },
-    };
     // Demo mode - simulate settings sync
     const { simulateApiDelay } = await import('../../playData/demoConfig');
     await simulateApiDelay(200, 500);

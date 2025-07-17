@@ -4,7 +4,6 @@ import { Summary } from "./summary/summary";
 import { LoadingProgress } from "../reusableComponents/loadingProgress";
 import { VolumeForecast, type MarketData } from "./volumeForecast";
 import { useUser } from "../userContext";
-import axios from "axios";
 
 // --- Redux Imports --- // Renamed from userSettingsSlice
 import { useDispatch } from "react-redux";

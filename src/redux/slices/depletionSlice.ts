@@ -23,20 +23,20 @@ export interface RawDepletionForecastItem {
     variant_size_pack_id?: string;
     month: number; // Month number (1-12)
     case_equivalent_volume?: number;
-    py_case_equivalent_volume?: number;
-    gross_sales_value?: number;
-    py_gross_sales_value?: number;
+    py_case_equivalent_volume?: string | number;
+    gross_sales_value?: string | number;
+    py_gross_sales_value?: string | number;
     forecast_method?: string; // Forecast logic/method used for this *source* row
     data_type?: string; // e.g., 'actual_complete', 'forecast'
     is_manual_input?: boolean;
     // Include other potential fields from the API response if necessary
     // Example: id, market_name, customer_name (if consistently provided)
-    cy_3m_case_equivalent_volume?: number;
-    cy_6m_case_equivalent_volume?: number;
-    cy_12m_case_equivalent_volume?: number;
-    py_3m_case_equivalent_volume?: number;
-    py_6m_case_equivalent_volume?: number;
-    py_12m_case_equivalent_volume?: number;
+    cy_3m_case_equivalent_volume?: string | number;
+    cy_6m_case_equivalent_volume?: string | number;
+    cy_12m_case_equivalent_volume?: string | number;
+    py_3m_case_equivalent_volume?: string | number;
+    py_6m_case_equivalent_volume?: string | number;
+    py_12m_case_equivalent_volume?: string | number;
     [key: string]: any; // Allow other properties
 }
 
@@ -66,12 +66,7 @@ const initialState: DepletionsState = {
     customerLastActualMonthIndex: -1, // Initialize if storing
 };
 
-// Helper function to determine the default reporting year
-const getCurrentReportingYear = (): string => {
-    // Currently returns the calendar year
-    // TODO: Adapt this function for fiscal year logic based on client/settings if needed on frontend
-    return new Date().getFullYear().toString();
-  };
+// Helper function to get current reporting year
 
 // --- Async Thunk for Fetching Depletions Data ---
 // Naming: 'fetchVolumeData' implies it's the core data source for the volume view.
@@ -81,10 +76,9 @@ export const fetchVolumeData = createAsyncThunk<
     { rejectValue: string, state: RootState } // Include RootState for potential future logic
 >(
     'volume/fetchData', // Slice name convention: feature/actionName
-    async ({ markets, brands, isCustomerView, year }, { rejectWithValue }) => { // Add year to args
+    async ({ markets, brands, isCustomerView, year: _year }, { rejectWithValue }) => { // Add year to args
 
-        // Get current year if not provided, using the utility function
-        const targetYear = year || getCurrentReportingYear();
+        // Get current year for backend call (unused in demo mode but needed for real API)
 
         try {
             const token = localStorage.getItem("token");
@@ -93,23 +87,6 @@ export const fetchVolumeData = createAsyncThunk<
                 return rejectWithValue("Authentication token not found.");
             }
 
-            // Use null for empty arrays if the API expects that
-            const marketsParam = !isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
-            const customersParam = isCustomerView && markets && markets.length > 0 ? JSON.stringify(markets) : null;
-            const brandsParam = brands && brands.length > 0 ? JSON.stringify(brands) : null;
-
-            // --- Log API Call Parameters --- START
-            const requestUrl = `${import.meta.env.VITE_API_URL}/volume/depletions-forecast`;
-            const requestParams = {
-                isMarketView: !isCustomerView,
-                markets: marketsParam,
-                customers: customersParam,
-                year: targetYear, // Send the year param
-                // Only include 'brands' param if not null
-                ...(brandsParam && { brands: brandsParam }),
-            };
-            // --- Log API Call Parameters --- END
-            
             // Demo mode - generate volume data
             const { generateVolumeData } = await import('../../playData/dataGenerators');
             const { simulateApiDelay } = await import('../../playData/demoConfig');

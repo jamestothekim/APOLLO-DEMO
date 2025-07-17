@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import axios from 'axios';
 
 // Updated Guidance type to match backend response and component usage
 
@@ -218,36 +217,20 @@ export const syncAllSettings = createAsyncThunk(
       };
 
       const {
-        selectedBrands,
-        selectedMarkets,
-        volumeForecastMarkets,
-        volumeForecastBrands,
-        volumeForecastTags,
+        selectedBrands: _selectedBrands,
+        selectedMarkets: _selectedMarkets,
+        volumeForecastMarkets: _volumeForecastMarkets,
+        volumeForecastBrands: _volumeForecastBrands,
+        volumeForecastTags: _volumeForecastTags,
       } = state.guidanceSettings;
 
       const {
-        pendingForecastCols: forecast_cols,
-        pendingForecastRows: forecast_rows,
-        summary: { pendingCols: summary_cols, pendingRows: summary_rows },
+        pendingForecastCols: _forecast_cols,
+        pendingForecastRows: _forecast_rows,
+        summary: { pendingCols: _summary_cols, pendingRows: _summary_rows },
       } = state.guidance;
 
-      // Prepare the complete payload for backend sync using the live guidance
-      // selections from the guidance slice.
-      const settingsToSync = {
-        summary_selected_brands: selectedBrands,
-        summary_selected_markets: selectedMarkets,
-        forecast_selected_markets: volumeForecastMarkets,
-        forecast_selected_brands: volumeForecastBrands,
-        forecast_selected_tags: volumeForecastTags,
-        guidance_settings: {
-          forecast_cols: forecast_cols,
-          forecast_rows: forecast_rows,
-          summary_cols: summary_cols,
-          summary_rows: summary_rows,
-        },
-      };
-       
-      // Demo mode - simulate settings sync
+      // Demo mode - simulate sync
       const { simulateApiDelay } = await import('../../playData/demoConfig');
       await simulateApiDelay(200, 500);
 

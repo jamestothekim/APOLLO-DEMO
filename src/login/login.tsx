@@ -17,7 +17,6 @@ import { useTheme } from "@mui/material/styles";
 import { useUser } from "../userContext";
 import { useNavigate } from "react-router-dom";
 import { ForgotPassword } from "./forgotPassword";
-import axios from "axios";
 
 export const Login: React.FC = () => {
   const theme = useTheme();
