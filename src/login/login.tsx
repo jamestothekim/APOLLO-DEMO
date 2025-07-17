@@ -120,7 +120,7 @@ export const Login: React.FC = () => {
         } else {
           setNotification({
             open: true,
-            message: "Invalid credentials. Use demo@apollo.com / demo123",
+            message: "Invalid credentials. Use james@illysium.ai / demo",
             severity: "error",
           });
         }

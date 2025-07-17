@@ -1,7 +1,7 @@
 // Demo user credentials
 export const DEMO_CREDENTIALS = {
-  email: 'demo@apollo.com',
-  password: 'demo123',
+  email: 'james@illysium.ai',
+  password: 'demo',
   // Alternative credentials for testing
   admin: {
     email: 'admin@apollo.com', 
@@ -21,7 +21,7 @@ export const createDemoToken = (userId: number = 10): string => {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = btoa(JSON.stringify({ 
     id: userId, 
-    email: 'demo@apollo.com', 
+    email: 'james@illysium.ai', 
     role: 'Market Manager',
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours

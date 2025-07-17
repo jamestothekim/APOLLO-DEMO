@@ -14,7 +14,7 @@ export function getRandomFromArray<T>(array: T[]): T {
 }
 
 export function generateRandomId(): string {
-  return Math.random().toString(36).substr(2, 9);
+  return Math.random().toString(36).substring(2, 11);
 }
 
 // =============================================================================
@@ -64,9 +64,9 @@ const DEMO_VARIANTS = {
 export function generateDemoUser() {
   return {
     id: 10,
-    email: 'demo@apollo.com',
-    first_name: 'Demo',
-    last_name: 'User',
+    email: 'james@illysium.ai',
+    first_name: 'James',
+    last_name: 'Kim',
     role: 'Market Manager',
     address: '123 Demo Street',
     city: 'Demo City',
