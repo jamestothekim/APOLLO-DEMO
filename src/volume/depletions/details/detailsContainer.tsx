@@ -3,7 +3,6 @@ import { Dialog, DialogContent, IconButton, Box } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { DepletionDetails } from "./depletionDetails";
 import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
-import axios from "axios";
 
 interface DetailsContainerProps {
   open: boolean;
@@ -28,7 +27,7 @@ export const DetailsContainer = ({
   variant_size_pack_id,
   variant_size_pack_desc,
 }: DetailsContainerProps) => {
-  const [accountLevelSalesData, setAccountLevelSalesData] = useState([]);
+  const [accountLevelSalesData, setAccountLevelSalesData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [showContent, setShowContent] = useState(false);
@@ -45,29 +44,29 @@ export const DetailsContainer = ({
       setDataReady(false);
       setShowContent(false);
       try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/volume/account-level-sales`,
-          {
-            params: {
-              month,
-              year,
-              market: market_id,
-              product: productToQuery,
-            },
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-            signal: controller.signal,
-          }
+        // Demo mode - generate account level sales data
+        const { generateAccountLevelSalesData } = await import(
+          "../../../playData/dataGenerators"
+        );
+        const { simulateApiDelay } = await import(
+          "../../../playData/demoConfig"
+        );
+
+        await simulateApiDelay(); // Simulate API delay
+
+        const accountLevelData = generateAccountLevelSalesData(
+          market_id,
+          productToQuery,
+          month || new Date().getMonth() + 1,
+          year || new Date().getFullYear()
         );
 
         if (isMounted) {
-          setAccountLevelSalesData(response.data);
+          setAccountLevelSalesData(accountLevelData);
           setDataReady(true);
         }
       } catch (error: unknown) {
-        if (axios.isCancel(error)) return;
-        console.error("Error fetching account level sales:", error);
+        console.error("Error generating account level sales data:", error);
         if (isMounted) {
           setShowContent(true); // Show error state
           setIsLoading(false);

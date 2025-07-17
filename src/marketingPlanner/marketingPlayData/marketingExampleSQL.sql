@@ -1,0 +1,6 @@
+-- Marketing A&P Management Example SQL Queries
+-- This file contains example SQL queries for marketing program data
+-- Example query for marketing program allocation data
+-- SELECT market_id, brand_id, program_id, total_ty, month_01, month_02, ... 
+-- FROM marketing_programs 
+-- WHERE year = 2024;

@@ -13,6 +13,9 @@ import dashboardReducer from './slices/dashboardSlice';
 import sidebarReducer from './slices/sidebarSlice';
 import scanReducer from './slices/scanSlice';
 import guidanceReducer from './guidance/guidanceSlice';
+import growthRatesReducer from './slices/growthRatesSlice';
+import chainReducer from './slices/chainSlice';
+import marketingReducer from './slices/marketingSlice';
 
 export const store = configureStore({
   reducer: {
@@ -30,6 +33,9 @@ export const store = configureStore({
     sidebar: sidebarReducer,
     scan: scanReducer,
     guidance: guidanceReducer,
+    growthRates: growthRatesReducer,
+    chain: chainReducer,
+    marketing: marketingReducer,
   },
 });
 

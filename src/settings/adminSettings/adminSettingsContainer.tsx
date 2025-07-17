@@ -60,19 +60,7 @@ export const AdminSettingsContainer = () => {
           <Tabs value={activeTab} onChange={handleTabChange}>
             <Tab label="Users" />
             <Tab label="Markets" />
-            <Tab
-              label={
-                <Box sx={{ display: "flex", alignItems: "center" }}>
-                  Products
-                  <Chip
-                    label="PROTO"
-                    color="secondary"
-                    size="small"
-                    sx={{ borderRadius: 4, ml: 1, fontSize: "0.65em" }}
-                  />
-                </Box>
-              }
-            />
+            <Tab label="Products" />
             <Tab label="Rates" />
             <Tab label="Logs" />
           </Tabs>

@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import axios from 'axios';
 
 // Define RestoredState interface (copy from previous attempts or define as needed)
 // Ensure this matches the structure returned by /redi/sync-forecast
@@ -47,26 +46,19 @@ const initialState: PendingChangesState = {
 export const fetchPendingChanges = createAsyncThunk(
   'pendingChanges/fetch',
   // Thunk argument should match what we dispatch from the component
-  async (filters: { markets: string[] | null; brands: string[] | null }, { rejectWithValue }) => {
+  async (_filters: { markets: string[] | null; brands: string[] | null }, { rejectWithValue }) => {
     try {
-        const marketsParam = filters.markets ? JSON.stringify(filters.markets) : null;
-        const brandsParam = filters.brands ? JSON.stringify(filters.brands) : null;
-        const response = await axios.get(
-            `${import.meta.env.VITE_API_URL}/redi/sync-forecast`,
-            {
-              params: {
-                markets: marketsParam,
-                brands: brandsParam,
-              },
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            }
-          );
-      return response.data as RestoredState[]; // Ensure data is typed
+        // Demo mode - generate pending changes data
+        const { simulateApiDelay } = await import('../../playData/demoConfig');
+        
+        await simulateApiDelay(); // Simulate API delay
+        
+        // Return empty array for demo - no pending changes to sync
+        const demoData: RestoredState[] = [];
+        return demoData;
     } catch (error: any) {
-        const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch pending changes';
-        console.error("[Redux Thunk] Error fetching from /redi/sync-forecast:", errorMessage);
+        const errorMessage = error.message || 'Failed to generate pending changes data';
+        console.error("[Redux Thunk] Error generating pending changes:", errorMessage);
         return rejectWithValue(errorMessage);
     }
   }

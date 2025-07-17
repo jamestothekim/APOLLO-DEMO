@@ -4,6 +4,7 @@ import React, {
   useReducer,
   useEffect,
   useRef,
+  useCallback,
 } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -225,7 +226,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const initialFetchPerformedRef = useRef(false);
 
-  const checkAuth = async (): Promise<boolean> => {
+  const checkAuth = useCallback(async (): Promise<boolean> => {
     try {
       const token = tokenService.getToken();
 
@@ -255,46 +256,43 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       dispatch({ type: "SET_CHECKING", payload: false });
     }
-  };
+  }, [dispatch, appDispatch]);
 
-  const login = async (_email: string, _password: string): Promise<boolean> => {
-    console.log("UserContext login called with:", _email);
-    try {
-      // Demo login - generate demo user and token
-      const { generateDemoUser } = await import("./playData/dataGenerators");
-      const { createDemoToken, simulateApiDelay } = await import(
-        "./playData/demoConfig"
-      );
+  const login = useCallback(
+    async (_email: string, _password: string): Promise<boolean> => {
+      try {
+        // Demo login - generate demo user and token
+        const { generateDemoUser } = await import("./playData/dataGenerators");
+        const { createDemoToken, simulateApiDelay } = await import(
+          "./playData/demoConfig"
+        );
 
-      console.log("Simulating API delay...");
-      await simulateApiDelay(); // Simulate API delay
+        await simulateApiDelay(); // Simulate API delay
 
-      console.log("Generating demo user...");
-      const demoUser = generateDemoUser();
-      const token = createDemoToken(demoUser.id);
+        const demoUser = generateDemoUser();
+        const token = createDemoToken(demoUser.id);
 
-      console.log("Dispatching LOGIN action...");
-      // First dispatch the LOGIN action to set the token
-      dispatch({
-        type: "LOGIN",
-        payload: {
-          user: demoUser,
-          token: token,
-        },
-      });
+        // First dispatch the LOGIN action to set the token
+        dispatch({
+          type: "LOGIN",
+          payload: {
+            user: demoUser,
+            token: token,
+          },
+        });
 
-      console.log("Loading guidance settings...");
-      // Load guidance settings without passing token (it will use the one from localStorage)
-      await appDispatch(loadGuidanceSettings()).unwrap();
-      console.log("Login successful!");
-      return true;
-    } catch (error) {
-      console.error("Login error in userContext:", error);
-      return false;
-    }
-  };
+        // Load guidance settings without passing token (it will use the one from localStorage)
+        await appDispatch(loadGuidanceSettings()).unwrap();
+        return true;
+      } catch (error) {
+        console.error("Login error in userContext:", error);
+        return false;
+      }
+    },
+    [dispatch, appDispatch]
+  );
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       // Sync all settings before logging out
       await appDispatch(syncAllSettings()).unwrap();
@@ -309,97 +307,32 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       initialFetchPerformedRef.current = false;
       navigate("/login");
     }
-  };
+  }, [appDispatch, dispatch, navigate]);
 
   // Initial auth check and periodic checks
   useEffect(() => {
-    checkAuth();
-
-    let removalAttempts = 0;
-    let lastKnownToken = localStorage.getItem("token");
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "token") {
-        const currentToken = e.newValue;
-
-        if (!currentToken && e.oldValue) {
-          removalAttempts++;
-
-          if (removalAttempts > 3) {
-            if (lastKnownToken) {
-              sessionStorage.setItem("token_backup", lastKnownToken);
-            }
-            setTimeout(() => {
-              const backupToken = sessionStorage.getItem("token_backup");
-              if (backupToken) {
-                localStorage.setItem("token", backupToken);
-              } else {
-                tokenService.syncToken();
-              }
-              removalAttempts = 0;
-            }, 1000);
-            return;
-          }
-
-          tokenService.syncToken();
-        } else if (currentToken) {
-          lastKnownToken = currentToken;
-          removalAttempts = 0;
-          sessionStorage.removeItem("token_backup");
-        }
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
-    const tokenCheckInterval = setInterval(() => {
-      const token = localStorage.getItem("token");
-      const authHeader = axios.defaults.headers.common["Authorization"];
-      const backupToken = sessionStorage.getItem("token_backup");
-
-      if (!token && (authHeader || backupToken)) {
-        if (backupToken) {
-          localStorage.setItem("token", backupToken);
-        } else {
-          tokenService.syncToken();
-        }
-      }
-    }, 60000);
-
-    const authCheckInterval = setInterval(() => {
-      tokenService.syncToken();
-
-      if (!tokenService.verifyTokenPresence()) {
-        const token = tokenService.getToken();
-        if (token) {
-          tokenService.setAuthHeader(token);
-        } else {
-          dispatch({ type: "LOGOUT" });
-        }
-      }
+    // Only run checkAuth if we have a token
+    const token = tokenService.getToken();
+    if (token) {
       checkAuth();
-    }, 2 * 60 * 60 * 1000);
+    } else {
+      dispatch({ type: "SET_CHECKING", payload: false });
+    }
+
+    // Simple token sync without complex retry logic
+    const authCheckInterval = setInterval(() => {
+      const token = tokenService.getToken();
+      if (token && !axios.defaults.headers.common["Authorization"]) {
+        tokenService.setAuthHeader(token);
+      } else if (!token) {
+        dispatch({ type: "LOGOUT" });
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
 
     return () => {
       clearInterval(authCheckInterval);
-      clearInterval(tokenCheckInterval);
-      window.removeEventListener("storage", handleStorageChange);
     };
   }, [checkAuth]);
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      tokenService.syncToken();
-    });
-
-    observer.observe(document, {
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
-
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(

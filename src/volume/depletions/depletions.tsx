@@ -55,6 +55,7 @@ import {
   SIDEBAR_GUIDANCE_OPTIONS,
   roundToTenth,
 } from "../util/volumeUtil";
+import { calculateRowGrowthRates } from "../../redux/slices/growthRatesSlice";
 import { exportDepletionsToExcel } from "../util/exportExcel";
 import {
   Save as SaveIcon,
@@ -439,46 +440,20 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         );
       }
 
-      // Store the initial state before making any changes
-      const initialState = {
-        userId,
-        market_id: rowData.market_id,
-        market_name: rowData.market_name,
-        variant_size_pack_desc: rowData.variant_size_pack_desc,
-        variant_size_pack_id: rowData.variant_size_pack_id,
-        brand: rowData.brand,
-        variant: rowData.variant,
-        variant_id: rowData.variant_id,
-        customer_id: rowData.customer_id,
-        customer_name: rowData.customer_name,
-        forecastType: rowData.forecastLogic,
-        forecast_generation_month_date: rowData.forecast_generation_month_date, // Add forecast_generation_month_date
-        months: JSON.parse(JSON.stringify(rowData.months)),
-        comment: rowData.commentary || null, // Add initial comment for undo
-      };
+      // In demo mode, we don't need to store initial state or request body
+      // These were used for API calls which we've replaced with local calculations
 
-      const requestBody = {
-        forecastMethod: newLogic,
-        market_id: isCustomerView ? rowData.customer_id : rowData.market_id,
-        variant_size_pack_desc: rowData.variant_size_pack_desc,
-        isCustomerView: isCustomerView,
-      };
-
-      const forecastResponse = await axios.post(
-        `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
-        requestBody,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
+      // Demo mode - use growth rate calculations instead of API
+      const { generateDemoForecastChange } = await import(
+        "../util/forecastCalculations"
       );
 
-      if (!forecastResponse.data) {
-        throw new Error("No data received from forecast update");
-      }
+      const forecastResponseData = await generateDemoForecastChange(
+        rowData,
+        newLogic as any, // Cast to ForecastLogic type
+        { simulateDelay: true }
+      );
 
-      const forecastResponseData = forecastResponse.data;
       const updatedMonths = processMonthData(forecastResponseData);
 
       // Find the last actual month index
@@ -523,6 +498,26 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
         months: updatedMonths,
       };
 
+      // Calculate and store growth rates for this row
+      dispatch(
+        calculateRowGrowthRates({
+          rowId: rowData.id,
+          forecastLogic: newLogic,
+          cy_3m_case_equivalent_volume:
+            rowData.cy_3m_case_equivalent_volume || 0,
+          py_3m_case_equivalent_volume:
+            rowData.py_3m_case_equivalent_volume || 0,
+          cy_6m_case_equivalent_volume:
+            rowData.cy_6m_case_equivalent_volume || 0,
+          py_6m_case_equivalent_volume:
+            rowData.py_6m_case_equivalent_volume || 0,
+          cy_12m_case_equivalent_volume:
+            rowData.cy_12m_case_equivalent_volume || 0,
+          py_12m_case_equivalent_volume:
+            rowData.py_12m_case_equivalent_volume || 0,
+        })
+      );
+
       // Use the centralized function to recalculate all guidance
       if (selectedGuidance && selectedGuidance.length > 0) {
         updatedRow = recalculateGuidance(updatedRow, selectedGuidance);
@@ -539,36 +534,12 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       // Only log to Redis if we have a userId
       if (userId) {
-        await axios.post(
-          `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
-          {
-            userId,
-            market_id: isCustomerView ? rowData.customer_id : rowData.market_id,
-            market_name: isCustomerView
-              ? rowData.customer_name
-              : rowData.market_name,
-            variant_size_pack_desc: rowData.variant_size_pack_desc,
-            variant_size_pack_id: rowData.variant_size_pack_id,
-            brand: rowData.brand,
-            variant: rowData.variant,
-            variant_id: rowData.variant_id,
-            customer_id: isCustomerView ? rowData.customer_id : null,
-            customer_name: isCustomerView ? rowData.customer_name : null,
-            forecastType: newLogic,
-            months: updatedMonths,
-            initialState,
-            isManualEdit: false,
-            comment: rowData.commentary || null,
-            forecast_generation_month_date:
-              rowData.forecast_generation_month_date, // Add forecast_generation_month_date
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
-        dispatch(triggerSync()); // <-- Dispatch the Redux action
+        // Demo mode - simulate Redis logging
+        const { simulateApiDelay } = await import("../../playData/demoConfig");
+        await simulateApiDelay(100, 200); // Quick simulation of Redis log
+
+        // Remove triggerSync in demo mode to prevent data refresh that overwrites manual edits
+        // dispatch(triggerSync()); // <-- Disabled for demo mode
       }
 
       return updatedRow;
@@ -627,86 +598,16 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
     if (!user || !initialSidebarState) return; // Add check for initialSidebarState
 
     try {
-      // Use the initial state we captured when the sidebar was opened
-      const stateToLogForUndo = {
-        userId: user.id,
-        market_id: isCustomerView
-          ? initialSidebarState.customer_id // Use initial state here
-          : initialSidebarState.market_id, // Use initial state here
-        market_name: isCustomerView
-          ? initialSidebarState.customer_name // Use initial state here
-          : initialSidebarState.market_name, // Use initial state here
-        variant_size_pack_desc: initialSidebarState.variant_size_pack_desc, // Use initial state here
-        variant_size_pack_id: initialSidebarState.variant_size_pack_id, // Use initial state here
-        brand: initialSidebarState.brand, // Use initial state here
-        variant: initialSidebarState.variant, // Use initial state here
-        variant_id: initialSidebarState.variant_id, // Use initial state here
-        customer_id: isCustomerView ? initialSidebarState.customer_id : null, // Use initial state here
-        customer_name: isCustomerView
-          ? initialSidebarState.customer_name
-          : null, // Use initial state here
-        forecastType: initialSidebarState.forecastLogic, // Use initial forecast logic
-        forecast_generation_month_date:
-          initialSidebarState.forecast_generation_month_date, // Add forecast_generation_month_date
-        months: JSON.parse(JSON.stringify(initialSidebarState.months)), // Use initial months data
-        comment: initialSidebarState.commentary || null, // Add initial comment for undo
-      };
+      // In demo mode, we don't need to log state for undo
+      // This would be used for Redis logging which we've replaced with simulation
 
-      // First update the forecast (still uses editedData for the actual change)
-      const forecastResponse = await axios.post(
-        `${import.meta.env.VITE_API_URL}/volume/change-forecast`,
-        {
-          forecastMethod: editedData.forecastLogic,
-          market_id: isCustomerView
-            ? editedData.customer_id
-            : editedData.market_id,
-          variant_size_pack_desc: editedData.variant_size_pack_desc,
-          isCustomerView: isCustomerView,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-
-      if (!forecastResponse.data) {
-        throw new Error("Failed to update forecast");
-      }
+      // Demo mode - simulate forecast update
+      const { simulateApiDelay } = await import("../../playData/demoConfig");
+      await simulateApiDelay(200, 400); // Simulate forecast update API call
 
       // Then log to Redis with the correct initial state for undo
-      // and the current edited state for the actual log entry
-      await axios.post(
-        `${import.meta.env.VITE_API_URL}/redi/log-forecast-change`,
-        {
-          userId: user.id,
-          market_id: isCustomerView // Log current market/customer
-            ? editedData.customer_id
-            : editedData.market_id,
-          market_name: isCustomerView
-            ? editedData.customer_name
-            : editedData.market_name,
-          variant_size_pack_desc: editedData.variant_size_pack_desc,
-          variant_size_pack_id: editedData.variant_size_pack_id,
-          brand: editedData.brand,
-          variant: editedData.variant,
-          variant_id: editedData.variant_id,
-          customer_id: isCustomerView ? editedData.customer_id : null,
-          customer_name: isCustomerView ? editedData.customer_name : null,
-          forecastType: editedData.forecastLogic, // Log current forecast logic
-          months: JSON.parse(JSON.stringify(editedData.months)), // Log current months
-          initialState: stateToLogForUndo, // <<< Pass the correctly captured initial state
-          isManualEdit: true, // <<< Flag this as a manual edit
-          comment: editedData.commentary || null, // Log current comment
-          forecast_generation_month_date:
-            editedData.forecast_generation_month_date, // Add forecast_generation_month_date
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
+      // Demo mode - simulate Redis logging for manual edits
+      await simulateApiDelay(100, 200);
 
       // Recalculate guidance if they exist
       let finalEditedData = editedData;
@@ -723,7 +624,8 @@ export const Depletions: React.FC<FilterSelectionProps> = ({
 
       // Clear the initial state reference after successful save
       setInitialSidebarState(null);
-      dispatch(triggerSync()); // <-- Dispatch the Redux action
+      // Remove triggerSync in demo mode to prevent data refresh that overwrites manual edits
+      // dispatch(triggerSync()); // <-- Disabled for demo mode
     } catch (error) {
       console.error("Error saving changes:", error);
     }

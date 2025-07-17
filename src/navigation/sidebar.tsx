@@ -6,7 +6,7 @@ import {
   ListItemText,
   Toolbar,
   Box,
-  Chip,
+  Collapse,
 } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
@@ -14,8 +14,12 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import LogoutIcon from "@mui/icons-material/Logout";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import LinkIcon from "@mui/icons-material/Link";
+import CampaignIcon from "@mui/icons-material/Campaign";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "../userContext";
+import { useState } from "react";
+import { ALLOWED_MARKETING_ACCESS } from "../marketingPlanner/marketingPlayData/marketingData";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -32,8 +36,9 @@ interface NavItem {
 export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
   const navigate = useNavigate();
   const { logout, user } = useUser();
+  const [chainsExpanded, setChainsExpanded] = useState(true);
 
-  const navigationItems: (NavItem | false)[] = [
+  const mainNavigationItems: NavItem[] = [
     { text: "Dashboard", icon: <DashboardIcon />, path: "/" },
     {
       text: "Report Builder",
@@ -41,15 +46,31 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
       path: "/report-builder",
     },
     { text: "Volume", icon: <ShowChartIcon />, path: "/volume" },
-    user?.user_access?.Admin && {
-      text: "Scan Planner",
-      icon: <CalendarMonthIcon />,
-      path: "/scan-planner",
-    },
-    { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
   ];
 
-  const visibleItems = navigationItems.filter((i): i is NavItem => Boolean(i));
+  const chainsItems: NavItem[] = [
+    { text: "Volume", icon: <ShowChartIcon />, path: "/chains/volume" },
+    ...(user?.user_access?.Admin
+      ? [{ text: "Scans", icon: <CalendarMonthIcon />, path: "/scan-planner" }]
+      : []),
+  ];
+
+  const marketingItems: NavItem[] = [
+    ...(user?.email &&
+    ALLOWED_MARKETING_ACCESS.allowedEmails.includes(user.email)
+      ? [
+          {
+            text: "Marketing",
+            icon: <CampaignIcon />,
+            path: "/marketing",
+          },
+        ]
+      : []),
+  ];
+
+  const bottomNavigationItems: NavItem[] = [
+    { text: "Settings", icon: <SettingsIcon />, path: "/settings" },
+  ];
 
   const handleLogout = async () => {
     try {
@@ -57,6 +78,10 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
     } catch (error) {
       console.error("Error during sidebar logout process:", error);
     }
+  };
+
+  const handleChainsClick = () => {
+    setChainsExpanded(!chainsExpanded);
   };
 
   return (
@@ -80,7 +105,8 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <Toolbar />
         <List>
-          {visibleItems.map((item) => (
+          {/* Main Navigation Items */}
+          {mainNavigationItems.map((item) => (
             <ListItem
               button
               key={item.text}
@@ -88,14 +114,59 @@ export const Sidebar = ({ isOpen, drawerWidth, onClose }: SidebarProps) => {
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
-              {item.text === "Scan Planner" && (
-                <Chip
-                  label="PROTO"
-                  color="secondary"
-                  size="small"
-                  sx={{ borderRadius: 4, ml: 1, fontSize: "0.65em" }}
-                />
-              )}
+            </ListItem>
+          ))}
+
+          {/* Chains Section - Only visible to admins */}
+          {user?.user_access?.Admin && (
+            <>
+              <ListItem button onClick={handleChainsClick}>
+                <ListItemIcon>
+                  <LinkIcon />
+                </ListItemIcon>
+                <ListItemText primary="Chains" />
+              </ListItem>
+
+              {/* Collapsible Chains Items */}
+              <Collapse in={chainsExpanded} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  {chainsItems.map((item) => (
+                    <ListItem
+                      button
+                      key={item.text}
+                      onClick={() => navigate(item.path)}
+                      sx={{ pl: 4 }}
+                    >
+                      <ListItemIcon>{item.icon}</ListItemIcon>
+                      <ListItemText primary={item.text} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Collapse>
+            </>
+          )}
+
+          {/* Marketing Items */}
+          {marketingItems.map((item) => (
+            <ListItem
+              button
+              key={item.text}
+              onClick={() => navigate(item.path)}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItem>
+          ))}
+
+          {/* Bottom Navigation Items */}
+          {bottomNavigationItems.map((item) => (
+            <ListItem
+              button
+              key={item.text}
+              onClick={() => navigate(item.path)}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
             </ListItem>
           ))}
         </List>

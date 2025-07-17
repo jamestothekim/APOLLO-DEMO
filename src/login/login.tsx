@@ -37,12 +37,12 @@ export const Login: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
 
-  // If already logged in, this component shouldn't be shown
+  // If already logged in, redirect
   useEffect(() => {
     if (isLoggedIn) {
-      localStorage.setItem("isAuthenticated", "true");
+      navigate("/", { replace: true });
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, navigate]);
 
   // Show forgot password component if requested
   if (showForgotPassword) {
@@ -93,15 +93,6 @@ export const Login: React.FC = () => {
       } else {
         // Demo login - check credentials against demo data
         const { DEMO_CREDENTIALS } = await import("../playData/demoConfig");
-
-        console.log("Login attempt:", {
-          email: formData.email,
-          password: formData.password,
-          expectedEmail1: DEMO_CREDENTIALS.email,
-          expectedPassword1: DEMO_CREDENTIALS.password,
-          expectedEmail2: DEMO_CREDENTIALS.admin.email,
-          expectedPassword2: DEMO_CREDENTIALS.admin.password,
-        });
 
         if (
           (formData.email === DEMO_CREDENTIALS.email &&

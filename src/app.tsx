@@ -22,6 +22,8 @@ import { UserProvider, useUser } from "./userContext";
 import { LoadingApollo } from "./reusableComponents/loadingApollo";
 import { ActivateAccount } from "./accountActivation/activateAccount";
 import { ScanContainer } from "./scanPlanner/scanContainer";
+import { ChainContainer } from "./chains/chainContainer";
+import MarketingContainer from "./marketingPlanner/marketingContainer";
 
 const drawerWidth = 240;
 
@@ -83,6 +85,8 @@ const AppLayout = () => {
             <Route path="/volume" element={<VolumeView />} />
             <Route path="/scan-planner" element={<ScanContainer />} />
             <Route path="/settings" element={<SettingsContainer />} />
+            <Route path="/chains/volume" element={<ChainContainer />} />
+            <Route path="/marketing" element={<MarketingContainer />} />
           </Routes>
         </Box>
       </Box>

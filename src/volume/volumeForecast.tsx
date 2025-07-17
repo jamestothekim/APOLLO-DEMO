@@ -496,21 +496,7 @@ export const VolumeForecast: React.FC<VolumeForecastProps> = ({
           <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
             <Tabs value={tabValue} onChange={handleTabChange}>
               <Tab label="Depletion" />
-              {user?.user_access?.Admin && (
-                <Tab
-                  label={
-                    <Box sx={{ display: "flex", alignItems: "center" }}>
-                      Shipments
-                      <Chip
-                        label="PROTO"
-                        color="secondary"
-                        size="small"
-                        sx={{ borderRadius: 4, ml: 1, fontSize: "0.65em" }}
-                      />
-                    </Box>
-                  }
-                />
-              )}
+              {user?.user_access?.Admin && <Tab label="Shipments" />}
             </Tabs>
           </Box>
 

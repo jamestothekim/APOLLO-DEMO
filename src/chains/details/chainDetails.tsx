@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LoadingProgress } from "../../../reusableComponents/loadingProgress";
+import { LoadingProgress } from "../../reusableComponents/loadingProgress";
 import {
   Box,
   FormControl,
@@ -13,59 +13,25 @@ import {
   Tabs,
   Tab,
   IconButton,
+  SelectChangeEvent,
 } from "@mui/material";
 import { LineChart } from "@mui/x-charts";
-import { DynamicTable } from "../../../reusableComponents/dynamicTable";
-import { Toolbox } from "../../components/toolbox";
+import { DynamicTable } from "../../reusableComponents/dynamicTable";
+import { Toolbox } from "../../volume/components/toolbox";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import RestaurantIcon from "@mui/icons-material/Restaurant";
-import StorefrontIcon from "@mui/icons-material/Storefront";
 import CloseIcon from "@mui/icons-material/Close";
+import BusinessIcon from "@mui/icons-material/Business";
+import {
+  generateChainHistoricalData,
+  generateChainInvoiceData,
+  ChainHistoricalData,
+  ChainInvoiceData,
+} from "../chainPlayData/chainPlayData";
 
-interface AccountDetailsProps {
-  outletId: string;
+interface ChainDetailsProps {
+  chainName: string;
+  market: string;
   onClose: () => void;
-  cachedData?: AccountData[];
-  onDataFetched: (data: AccountData[]) => void;
-}
-
-interface AccountData {
-  outlet_id: string;
-  outlet_name: string;
-  address_line_1: string;
-  city: string;
-  state: string;
-  vip_cot_premise_type_code: string;
-  vip_cot_premise_type_desc: string;
-  year: string;
-  month: string;
-  month_name: string;
-  brand: string;
-  variant: string;
-  variant_id: string;
-  variant_size_pack_id: string;
-  variant_size_pack_desc: string;
-  case_equivalent_quantity: string;
-  sales_dollars: number;
-}
-
-interface InvoiceData {
-  outlet_id: string;
-  outlet_name: string;
-  city: string;
-  state: string;
-  premise_type: string;
-  account_type: string;
-  invoice_date: string;
-  invoice_number: string;
-  brand: string;
-  variant: string;
-  variant_id: string;
-  variant_size_pack_id: string;
-  variant_size_pack_desc: string;
-  quantity: number;
-  case_equivalent_quantity: number;
-  sales_dollars: number;
 }
 
 interface TabPanelProps {
@@ -86,103 +52,77 @@ const TabPanel = (props: TabPanelProps) => {
 // Add period type
 type Period = "R12" | "2024";
 
-const AccountDetails: React.FC<AccountDetailsProps> = ({
-  outletId,
+const ChainDetails: React.FC<ChainDetailsProps> = ({
+  chainName,
+  market,
   onClose,
-  cachedData,
-  onDataFetched,
 }) => {
   const theme = useTheme();
-  const [accountData, setAccountData] = useState<AccountData[]>([]);
+  const [chainData, setChainData] = useState<ChainHistoricalData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [viewType, setViewType] = useState<"table" | "graph">("graph");
   const [tabValue, setTabValue] = useState(0);
-  const [invoiceData, setInvoiceData] = useState<InvoiceData[]>([]);
+  const [invoiceData, setInvoiceData] = useState<ChainInvoiceData[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("R12");
 
   useEffect(() => {
-    if (cachedData) {
-      setAccountData(cachedData);
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchAccountDetails = async () => {
+    const fetchChainDetails = async () => {
       try {
         setIsLoading(true);
+        // Simulate API call delay
+        await new Promise((resolve) => setTimeout(resolve, 800));
 
-        // Demo mode - generate account details data
-        const { generateAccountDetailsData } = await import(
-          "../../../playData/dataGenerators"
-        );
-        const { simulateApiDelay } = await import(
-          "../../../playData/demoConfig"
-        );
+        const data = generateChainHistoricalData(chainName, market);
+        setChainData(data);
 
-        await simulateApiDelay(); // Simulate API delay
-
-        const data = generateAccountDetailsData(outletId, selectedPeriod);
-
-        setAccountData(data);
-        onDataFetched(data); // Cache the fetched data
         // Set initial brand selection
         const uniqueBrands = [...new Set(data.map((d) => d.brand))];
         setSelectedBrands(uniqueBrands.slice(0, 3)); // Select first 3 brands by default
       } catch (err) {
-        console.error("Error generating account details data:", err);
+        console.error("Error fetching chain details:", err);
         setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to generate account details"
+          err instanceof Error ? err.message : "Failed to fetch chain details"
         );
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (outletId) {
-      fetchAccountDetails();
+    if (chainName && market) {
+      fetchChainDetails();
     }
-  }, [outletId, cachedData, onDataFetched, selectedPeriod]);
+  }, [chainName, market, selectedPeriod]);
 
   useEffect(() => {
     const fetchInvoiceData = async () => {
       try {
         setIsLoadingInvoices(true);
+        // Simulate API call delay
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-        // Demo mode - generate invoice data
-        const { generateInvoiceDetailsData } = await import(
-          "../../../playData/dataGenerators"
-        );
-        const { simulateApiDelay } = await import(
-          "../../../playData/demoConfig"
-        );
-
-        await simulateApiDelay(); // Simulate API delay
-
-        const data = generateInvoiceDetailsData(outletId, selectedPeriod);
+        const data = generateChainInvoiceData(chainName, market);
         setInvoiceData(data);
       } catch (err) {
-        console.error("Error generating invoice data:", err);
+        console.error("Error fetching invoice data:", err);
       } finally {
         setIsLoadingInvoices(false);
       }
     };
 
-    if (outletId && tabValue === 1) {
+    if (chainName && market && tabValue === 1) {
       fetchInvoiceData();
     }
-  }, [outletId, tabValue, selectedPeriod]);
+  }, [chainName, market, tabValue, selectedPeriod]);
 
-  const handleBrandChange = (event: any) => {
-    setSelectedBrands(event.target.value);
+  const handleBrandChange = (event: SelectChangeEvent<string[]>) => {
+    setSelectedBrands(event.target.value as string[]);
   };
 
-  const handlePeriodChange = (event: any) => {
-    setSelectedPeriod(event.target.value);
+  const handlePeriodChange = (event: SelectChangeEvent<Period>) => {
+    setSelectedPeriod(event.target.value as Period);
   };
 
   const getMonthLabels = () => {
@@ -228,7 +168,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
     }
   };
 
-  const aggregateByBrand = (data: AccountData[]) => {
+  const aggregateByBrand = (data: ChainHistoricalData[]) => {
     const brandMap = new Map<string, number[]>();
     const monthLabels = getMonthLabels();
 
@@ -263,7 +203,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
     return { brandMap, monthLabels };
   };
 
-  const { brandMap, monthLabels } = aggregateByBrand(accountData);
+  const { brandMap, monthLabels } = aggregateByBrand(chainData);
 
   const series = selectedBrands.map((brand, index) => {
     const colors = [
@@ -304,14 +244,14 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
 
   const tableData = [
     ...new Set(
-      accountData
+      chainData
         .filter((d) => selectedBrands.includes(d.brand))
         .map((item) => item.variant_size_pack_desc)
     ),
   ].map((sizePack) => {
-    const row: any = { variant_size_pack_desc: sizePack };
+    const row: Record<string, unknown> = { variant_size_pack_desc: sizePack };
     monthLabels.forEach((_, index) => {
-      const monthData = accountData.filter((d) => {
+      const monthData = chainData.filter((d) => {
         if (selectedPeriod === "2024") {
           return (
             d.variant_size_pack_desc === sizePack &&
@@ -368,6 +308,20 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       filterable: true,
     },
     {
+      header: "Outlet",
+      key: "outlet_name",
+      align: "left" as const,
+      filterable: true,
+    },
+    {
+      header: "City/State",
+      key: "city",
+      align: "left" as const,
+      filterable: true,
+      render: (_: unknown, row: ChainInvoiceData) =>
+        `${row.city}, ${row.state}`,
+    },
+    {
       header: "Brand",
       key: "brand",
       align: "left" as const,
@@ -383,9 +337,8 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
       header: "Cases (9L)",
       key: "case_equivalent_quantity",
       align: "right" as const,
-      render: (value: string) => {
-        const num = Number(value);
-        return isNaN(num) ? "0.00" : num.toFixed(2);
+      render: (value: number) => {
+        return isNaN(value) ? "0.00" : value.toFixed(2);
       },
     },
     {
@@ -414,7 +367,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
 
   return (
     <Box sx={{ width: "100%", mt: -3 }}>
-      {/* Header with back button and account info */}
+      {/* Header with back button and chain info */}
       <Box
         sx={{
           display: "flex",
@@ -429,24 +382,16 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
           width: "calc(100% + 48px)",
           mx: -3,
           mt: -3,
-          pt: 3,
+          pt: 6,
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", flex: 1, mb: 1 }}>
           <IconButton onClick={onClose} sx={{ mr: 2 }} aria-label="back">
             <ArrowBackIcon />
           </IconButton>
-          {accountData.length > 0 && (
-            <Box sx={{ mr: 1.5, display: "flex", alignItems: "center" }}>
-              {accountData[0].vip_cot_premise_type_code
-                ?.toLowerCase()
-                .includes("on") ? (
-                <RestaurantIcon sx={{ color: theme.palette.primary.main }} />
-              ) : (
-                <StorefrontIcon sx={{ color: theme.palette.primary.main }} />
-              )}
-            </Box>
-          )}
+          <Box sx={{ mr: 1.5, display: "flex", alignItems: "center" }}>
+            <BusinessIcon sx={{ color: theme.palette.primary.main }} />
+          </Box>
           <Box sx={{ flex: 1 }}>
             <Typography
               variant="h5"
@@ -455,7 +400,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
                 color: theme.palette.primary.main,
               }}
             >
-              {accountData.length > 0 && accountData[0].outlet_name}
+              {chainName.toUpperCase()}
             </Typography>
             <Typography
               variant="body2"
@@ -464,8 +409,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
                 mb: 0.25,
               }}
             >
-              {accountData.length > 0 &&
-                `${accountData[0].address_line_1}, ${accountData[0].city}, ${accountData[0].state}`}
+              {market} Market
             </Typography>
           </Box>
           <FormControl sx={{ minWidth: 120, ml: 2 }}>
@@ -541,7 +485,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
                   </Box>
                 )}
               >
-                {[...new Set(accountData.map((item) => item.brand))].map(
+                {[...new Set(chainData.map((item) => item.brand))].map(
                   (brand) => (
                     <MenuItem key={brand} value={brand}>
                       {brand}
@@ -605,7 +549,9 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
               <DynamicTable
                 data={tableData}
                 columns={tableColumns}
-                getRowId={(row) => row.variant_size_pack_desc}
+                getRowId={(row: Record<string, unknown>) =>
+                  row.variant_size_pack_desc as string
+                }
                 enableColumnFiltering={true}
               />
             )}
@@ -624,8 +570,8 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
             <DynamicTable
               data={invoiceData}
               columns={invoiceColumns}
-              getRowId={(row) =>
-                `${row.invoice_number}-${row.variant_size_pack_desc}`
+              getRowId={(row: ChainInvoiceData) =>
+                `${row.invoice_number}-${row.outlet_id}-${row.variant_size_pack_id}`
               }
               enableColumnFiltering={true}
             />
@@ -636,4 +582,4 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({
   );
 };
 
-export { AccountDetails };
+export { ChainDetails };
