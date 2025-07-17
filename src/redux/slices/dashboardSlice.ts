@@ -144,8 +144,12 @@ export default dashboardSlice.reducer;
 export const fetchDashboardConfig = createAsyncThunk(
   'dashboard/fetchConfig',
   async () => {
-    const response = await axios.get(`${import.meta.env.VITE_API_URL}/users/dashboard`);
-    return response.data.dashboard || [];
+    // Demo mode - generate dashboard config
+    const { generateDashboardConfig } = await import('../../playData/dataGenerators');
+    const { simulateApiDelay } = await import('../../playData/demoConfig');
+    
+    await simulateApiDelay();
+    return generateDashboardConfig();
   }
 );
 
@@ -164,9 +168,9 @@ export const syncDashboardToBackend = createAsyncThunk(
         gridPosition
       }));
 
-      await axios.put(`${import.meta.env.VITE_API_URL}/users/dashboard`, {
-        dashboard: cleanedItems
-      });
+      // Demo mode - simulate dashboard sync
+      const { simulateApiDelay } = await import('../../playData/demoConfig');
+      await simulateApiDelay(200, 500);
       return items;
     } catch (error: any) {
       console.error('Error syncing dashboard:', error);

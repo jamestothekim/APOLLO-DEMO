@@ -80,15 +80,52 @@ export const fetchGuidance = createAsyncThunk<Guidance[]>(
   'guidanceSettings/fetchGuidance',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/util/get-guidance`
-      );
-      return response.data as Guidance[];
+      // Demo mode - return static guidance data
+      const { simulateApiDelay } = await import('../../playData/demoConfig');
+      await simulateApiDelay();
+      
+      // Return basic guidance structure
+      const guidance: Guidance[] = [
+        { 
+          id: 1, 
+          label: 'TRENDS', 
+          sublabel: '3M / 6M / 12M',
+          value: null,
+          calculation: {
+            type: 'multi_calc',
+            format: 'percent',
+            subCalculations: [
+              { id: '3M', cyField: 'cy_3m_case_equivalent_volume', pyField: 'py_3m_case_equivalent_volume', calculationType: 'percentage' },
+              { id: '6M', cyField: 'cy_6m_case_equivalent_volume', pyField: 'py_6m_case_equivalent_volume', calculationType: 'percentage' },
+              { id: '12M', cyField: 'cy_12m_case_equivalent_volume', pyField: 'py_12m_case_equivalent_volume', calculationType: 'percentage' }
+            ]
+          },
+          displayType: 'column',
+          availability: 'both'
+        },
+        { 
+          id: 2, 
+          label: 'VOL LY', 
+          sublabel: 'FY (9L)',
+          value: 'py_case_equivalent_volume',
+          calculation: { type: 'direct', format: 'number' },
+          displayType: 'both',
+          availability: 'both'
+        },
+        { 
+          id: 9, 
+          label: 'VOL LC', 
+          sublabel: 'FY (9L)',
+          value: 'prev_published_case_equivalent_volume',
+          calculation: { type: 'direct', format: 'number' },
+          displayType: 'both',
+          availability: 'both'
+        }
+      ];
+      
+      return guidance;
     } catch (error) {
         console.error('Error fetching guidance:', error);
-        if (axios.isAxiosError(error)) {
-          return rejectWithValue(error.response?.data || 'Failed to fetch guidance');
-        }
         return rejectWithValue('An unexpected error occurred');
     }
   }
@@ -210,11 +247,9 @@ export const syncAllSettings = createAsyncThunk(
         },
       };
        
-      // Sync to backend with namespaced keys
-      await axios.patch(
-        `${import.meta.env.VITE_API_URL}/users/sync-settings`,
-        settingsToSync // Send the complete settings object
-      );
+      // Demo mode - simulate settings sync
+      const { simulateApiDelay } = await import('../../playData/demoConfig');
+      await simulateApiDelay(200, 500);
 
       return true;
     } catch (error) {

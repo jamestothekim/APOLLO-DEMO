@@ -110,22 +110,13 @@ export const fetchVolumeData = createAsyncThunk<
             };
             // --- Log API Call Parameters --- END
             
-            const response = await axios.get(
-                requestUrl, // Use the defined URL
-                {
-                    params: requestParams, // Use the defined params
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
-          
-            if (!response.data) {
-                console.warn('[fetchVolumeData] API returned no data.');
-                return rejectWithValue("No data received from API.");
-            }
-
-            const rawData: RawDepletionForecastItem[] = response.data;
+            // Demo mode - generate volume data
+            const { generateVolumeData } = await import('../../playData/dataGenerators');
+            const { simulateApiDelay } = await import('../../playData/demoConfig');
+            
+            await simulateApiDelay(); // Simulate API delay
+            
+            const rawData: RawDepletionForecastItem[] = generateVolumeData(markets || [], brands, isCustomerView);
             
             // Calculate last actual month index directly from the fetched data
             let maxActualIndex = -1;

@@ -193,11 +193,13 @@ export const loadGuidanceSettings = createAsyncThunk<
       return rejectWithValue('No authentication token available');
     }
     
-    const res = await axios.get(`${import.meta.env.VITE_API_URL}/users/settings`, {
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-
-    const remote: any = res.data?.guidance_settings ?? {};
+    // Demo mode - generate guidance settings
+    const { generateGuidanceSettings } = await import('../../playData/dataGenerators');
+    const { simulateApiDelay } = await import('../../playData/demoConfig');
+    
+    await simulateApiDelay();
+    
+    const remote: any = generateGuidanceSettings();
     let defs = remote.forecast_defs ?? remote.guidance_defs ?? [];
 
     const summaryDefsRaw = remote.summary_defs ?? [];
@@ -263,9 +265,9 @@ export const syncGuidanceSettings = createAsyncThunk<
         summary_rows: state.summary.pendingRows,
       },
     };
-    await axios.patch(`${import.meta.env.VITE_API_URL}/users/sync-settings`, payload, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    });
+    // Demo mode - simulate settings sync
+    const { simulateApiDelay } = await import('../../playData/demoConfig');
+    await simulateApiDelay(200, 500);
   } catch (err: any) {
     return rejectWithValue(err.message || 'Failed to sync guidance settings');
   }

@@ -64,93 +64,43 @@ export const Login: React.FC = () => {
 
     try {
       if (requiresTwoFactor) {
-        try {
-          // Step 2: Verify 2FA code
-          const verifyResponse = await axios.post(
-            `${import.meta.env.VITE_API_URL}/2fa/verify-login-code`,
-            {
-              email: formData.email,
-              code: formData.twoFactorCode,
-            }
-          );
+        // Demo 2FA - accept any 6-digit code
+        if (formData.twoFactorCode && formData.twoFactorCode.length === 6) {
+          const success = await login(formData.email, formData.password);
 
-          if (verifyResponse.data.success) {
-            // If verification was successful, use the login function from useUser
-            const success = await login(formData.email, formData.password);
-
-            if (success) {
-              setNotification({
-                open: true,
-                message: "Login successful!",
-                severity: "success",
-              });
-              navigate("/", { replace: true });
-              return;
-            } else {
-              setNotification({
-                open: true,
-                message: "Login failed after verification. Please try again.",
-                severity: "error",
-              });
-            }
+          if (success) {
+            setNotification({
+              open: true,
+              message: "Login successful!",
+              severity: "success",
+            });
+            navigate("/", { replace: true });
+            return;
           } else {
             setNotification({
               open: true,
-              message: "Invalid verification code. Please try again.",
+              message: "Login failed after verification. Please try again.",
               severity: "error",
             });
           }
-        } catch (verifyError: any) {
-          // Check if this is the Twilio 20404 error (which actually means success)
-          if (verifyError.response?.data?.code === "20404") {
-            // If verification was successful, use the login function from useUser
-            const success = await login(formData.email, formData.password);
-
-            if (success) {
-              setNotification({
-                open: true,
-                message: "Login successful!",
-                severity: "success",
-              });
-              navigate("/", { replace: true });
-              return;
-            } else {
-              setNotification({
-                open: true,
-                message: "Login failed after verification. Please try again.",
-                severity: "error",
-              });
-            }
-          } else {
-            throw verifyError; // Re-throw if it's a different error
-          }
-        }
-      } else {
-        // Initial login attempt
-        const response = await axios.post(
-          `${import.meta.env.VITE_API_URL}/users/login`,
-          {
-            email: formData.email,
-            password: formData.password,
-          }
-        );
-
-        if (response.data.requiresTwoFactor) {
-          // Send 2FA code and show verification screen
-          await axios.post(
-            `${import.meta.env.VITE_API_URL}/2fa/send-login-code`,
-            {
-              email: formData.email,
-            }
-          );
-
-          setRequiresTwoFactor(true);
+        } else {
           setNotification({
             open: true,
-            message: "Please enter the verification code sent to your phone",
-            severity: "info",
+            message:
+              "Please enter a 6-digit verification code (any digits work for demo)",
+            severity: "error",
           });
-        } else if (response.data.user && response.data.token) {
+        }
+      } else {
+        // Demo login - check credentials against demo data
+        const { DEMO_CREDENTIALS } = await import("../playData/demoConfig");
+
+        if (
+          (formData.email === DEMO_CREDENTIALS.email &&
+            formData.password === DEMO_CREDENTIALS.password) ||
+          (formData.email === DEMO_CREDENTIALS.admin.email &&
+            formData.password === DEMO_CREDENTIALS.admin.password)
+        ) {
           const success = await login(formData.email, formData.password);
 
           if (success) {
@@ -167,6 +117,12 @@ export const Login: React.FC = () => {
               severity: "error",
             });
           }
+        } else {
+          setNotification({
+            open: true,
+            message: "Invalid credentials. Use demo@apollo.com / demo123",
+            severity: "error",
+          });
         }
       }
     } catch (error: any) {

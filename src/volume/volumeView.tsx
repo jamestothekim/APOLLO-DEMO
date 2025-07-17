@@ -32,28 +32,24 @@ export const VolumeView = () => {
       setIsInitialDataLoading(true);
       setFetchError(null);
       try {
-        const brandsPromise = axios.get<string[]>(
-          `${import.meta.env.VITE_API_URL}/volume/brands`
+        // Demo mode - use static brand and market data
+        const { DEMO_BRANDS, generateMarketData } = await import(
+          "../playData/dataGenerators"
         );
+        const { simulateApiDelay } = await import("../playData/demoConfig");
 
-        let marketsPromise = Promise.resolve({ data: [] as MarketData[] });
+        await simulateApiDelay(); // Simulate API delay
+
+        setAvailableBrands(DEMO_BRANDS);
+
+        // Generate market data based on user access
         if (user?.user_access?.Markets?.length) {
           const userMarketIds = user.user_access.Markets.map((m) => m.id);
-          marketsPromise = axios.get<MarketData[]>(
-            `${
-              import.meta.env.VITE_API_URL
-            }/volume/get-markets?ids=${userMarketIds.join(",")}`
-          );
+          const marketData = generateMarketData(userMarketIds);
+          setMarketData(marketData);
+        } else {
+          setMarketData([]);
         }
-
-        // Fetch brands and markets concurrently
-        const [brandsResponse, marketsResponse] = await Promise.all([
-          brandsPromise,
-          marketsPromise,
-        ]);
-
-        setAvailableBrands(brandsResponse.data);
-        setMarketData(marketsResponse.data);
 
         // Dispatch fetchGuidance thunk
         dispatch(fetchGuidance());

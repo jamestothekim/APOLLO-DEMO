@@ -236,21 +236,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         tokenService.setAuthHeader(token);
       }
 
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/users/verify-token?_=${Date.now()}`
-      );
+      // Demo mode - generate demo user data
+      const { generateDemoUser } = await import("./playData/dataGenerators");
+      const { simulateApiDelay } = await import("./playData/demoConfig");
 
-      if (response.data.user) {
-        dispatch({ type: "UPDATE_USER", payload: response.data.user });
-        await appDispatch(loadGuidanceSettings()).unwrap();
-        return true;
-      }
-      dispatch({ type: "LOGOUT" });
-      return false;
+      await simulateApiDelay(); // Simulate API delay
+
+      const demoUser = generateDemoUser();
+      dispatch({ type: "UPDATE_USER", payload: demoUser });
+      await appDispatch(loadGuidanceSettings()).unwrap();
+      return true;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error("[UserContext] Authentication error:", error.message);
-      }
+      console.error("[UserContext] Authentication error:", error);
       dispatch({ type: "LOGOUT" });
       return false;
     } finally {
@@ -260,29 +257,29 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/users/login`,
-        { email, password, skip2FA: true } // Add skip2FA flag since we've already verified
+      // Demo login - generate demo user and token
+      const { generateDemoUser } = await import("./playData/dataGenerators");
+      const { createDemoToken, simulateApiDelay } = await import(
+        "./playData/demoConfig"
       );
 
-      if (response.data.user && response.data.token) {
-        const { token } = response.data;
+      await simulateApiDelay(); // Simulate API delay
 
-        // First dispatch the LOGIN action to set the token
-        dispatch({
-          type: "LOGIN",
-          payload: {
-            user: response.data.user,
-            token: token,
-          },
-        });
+      const demoUser = generateDemoUser();
+      const token = createDemoToken(demoUser.id);
 
-        // Load guidance settings with the token directly to avoid localStorage timing issues
-        await appDispatch(loadGuidanceSettings(token)).unwrap();
-        return true;
-      }
+      // First dispatch the LOGIN action to set the token
+      dispatch({
+        type: "LOGIN",
+        payload: {
+          user: demoUser,
+          token: token,
+        },
+      });
 
-      return false;
+      // Load guidance settings with the token directly
+      await appDispatch(loadGuidanceSettings(token)).unwrap();
+      return true;
     } catch (error) {
       console.error("Login error:", error);
       return false;
@@ -294,8 +291,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       // Sync all settings before logging out
       await appDispatch(syncAllSettings()).unwrap();
 
-      // Then proceed with logout
-      await axios.post(`${import.meta.env.VITE_API_URL}/users/logout`);
+      // Demo logout - no API call needed
+      const { simulateApiDelay } = await import("./playData/demoConfig");
+      await simulateApiDelay(100, 300); // Quick delay for logout
     } catch (error) {
       console.error("Error during logout:", error);
     } finally {
@@ -461,25 +459,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
 
               if (userMarketIds.length > 0) {
                 try {
-                  // Fetch details for ALL market IDs
-                  const response = await axios.get<MarketAccess[]>(
-                    `${
-                      import.meta.env.VITE_API_URL
-                    }/volume/get-markets?ids=${userMarketIds.join(",")}`,
-                    {
-                      headers: {
-                        Authorization: `Bearer ${tokenService.getToken()}`,
-                      },
-                    }
+                  // Demo mode - generate detailed market data
+                  const { generateDetailedMarkets } = await import(
+                    "./playData/dataGenerators"
+                  );
+                  const { simulateApiDelay } = await import(
+                    "./playData/demoConfig"
                   );
 
-                  if (response.data && response.data.length > 0) {
-                    detailedMarkets = response.data;
-                  } else {
-                  }
+                  await simulateApiDelay();
+                  detailedMarkets = generateDetailedMarkets(userMarketIds);
                 } catch (error) {
                   console.error(
-                    "[UserProvider] Error fetching full market details:",
+                    "[UserProvider] Error generating market details:",
                     error
                   );
                 }
