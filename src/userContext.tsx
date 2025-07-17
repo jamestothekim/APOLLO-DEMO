@@ -19,6 +19,17 @@ import {
 import { loadGuidanceSettings } from "./redux/guidance/guidanceSlice";
 
 // Types
+type Customer = {
+  customer_id: string;
+  customer_coding: string;
+  planning_member_id: string;
+  customer_stat_level: string;
+  customer_actual_data: string;
+  customer_stat_level_id: string;
+  planning_member_coding: string;
+  customer_stat_level_coding: string;
+};
+
 export interface MarketAccess {
   id: number;
   market: string;
@@ -26,16 +37,7 @@ export interface MarketAccess {
   market_hyperion: string;
   market_coding: string;
   market_id: string;
-  customers: {
-    customer_id: string;
-    customer_coding: string;
-    planning_member_id: string;
-    customer_stat_level: string;
-    customer_actual_data: string;
-    customer_stat_level_id: string;
-    planning_member_coding: string;
-    customer_stat_level_coding: string;
-  }[];
+  customers: Customer[];
   settings: {
     managed_by: string;
   };
@@ -255,7 +257,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (_email: string, _password: string): Promise<boolean> => {
     try {
       // Demo login - generate demo user and token
       const { generateDemoUser } = await import("./playData/dataGenerators");
@@ -277,8 +279,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       });
 
-      // Load guidance settings with the token directly
-      await appDispatch(loadGuidanceSettings(token)).unwrap();
+      // Load guidance settings without passing token (it will use the one from localStorage)
+      await appDispatch(loadGuidanceSettings()).unwrap();
       return true;
     } catch (error) {
       console.error("Login error:", error);
@@ -377,7 +379,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       clearInterval(tokenCheckInterval);
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, []);
+  }, [checkAuth]);
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -449,7 +451,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
           const fetchMarketDetailsAndVolumeData = async () => {
             let marketViewMarketIds: string[] = [];
             let customerViewCustomerIds: string[] = [];
-            let detailedMarkets: MarketAccess[] = [];
+            let detailedMarkets: any[] = [];
 
             // 1. Fetch FULL details for ALL markets user has access to
             if (state.user?.user_access?.Markets?.length) {
@@ -502,13 +504,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
                 const rawCustomerIds = customerManagedMarkets
                   .flatMap(
                     (market) =>
-                      market.customers?.map((cust) => cust.customer_id) || []
+                      market.customers?.map(
+                        (cust: Customer) => cust.customer_id
+                      ) || []
                   )
                   .filter((id): id is string => !!id);
 
                 customerViewCustomerIds = [...new Set(rawCustomerIds)];
               }
-            } else {
             }
 
             // Create promises for volume data fetching

@@ -18,6 +18,75 @@ export function generateRandomId(): string {
 }
 
 // =============================================================================
+// TYPE DEFINITIONS
+// =============================================================================
+
+interface MarketData {
+  id: number;
+  market: string;
+  market_code: string;
+  market_id: string;
+}
+
+interface VolumeDataItem {
+  market_id: string;
+  market: string;
+  market_area_name: string;
+  customer_id: string;
+  customer: string;
+  brand: string;
+  variant: string;
+  variant_id: string;
+  variant_size_pack_desc: string;
+  variant_size_pack_id: string;
+  year: number;
+  month: number;
+  forecast_method: string;
+  forecast_generation_month_date: string;
+  data_type: string;
+  is_manual_input: boolean;
+  forecast_status: string;
+  current_version: number;
+  group_id: null;
+  publication_id: null;
+  tag_id: number[];
+  tag_name: string[];
+  comment: null;
+  case_equivalent_volume: number;
+  py_case_equivalent_volume: string;
+  cy_3m_case_equivalent_volume: string;
+  cy_6m_case_equivalent_volume: string;
+  cy_12m_case_equivalent_volume: string;
+  py_3m_case_equivalent_volume: string;
+  py_6m_case_equivalent_volume: string;
+  py_12m_case_equivalent_volume: string;
+  projected_case_equivalent_volume: string;
+  prev_published_case_equivalent_volume: string;
+  gsv_rate: string;
+  gross_sales_value: string;
+  py_gross_sales_value: string;
+  manual_case_equivalent_volume: string;
+  forecast_case_equivalent_volume: string;
+  quantity: number;
+  sales_dollars: number;
+  case_equivalent_quantity: number;
+}
+
+interface AccountSalesData {
+  outlet_id: string;
+  outlet_name: string;
+  volume: number;
+  sales_value: number;
+}
+
+interface AccountDetailsData {
+  brand: string;
+  month: number;
+  volume: number;
+  value: number;
+}
+
+// =============================================================================
 // DEMO DATA CONSTANTS
 // =============================================================================
 
@@ -28,7 +97,7 @@ export const DEMO_BRANDS = [
   'Bacardi Superior Plus', "Maker's Mark II", 'Buffalo Trace Route', 'Woodford Reserved', 'Bulleit Rye Plus'
 ];
 
-export const DEMO_MARKETS = [
+export const DEMO_MARKETS: MarketData[] = [
   { id: 8, market: 'Delaware', market_code: 'DE', market_id: 'USADE1' },
   { id: 9, market: 'District Of Columbia', market_code: 'DC', market_id: 'USADC1' },
   { id: 21, market: 'Maryland - All Other', market_code: 'MDO', market_id: 'USAMD1' },
@@ -37,7 +106,7 @@ export const DEMO_MARKETS = [
   { id: 15, market: 'Georgia', market_code: 'GA', market_id: 'USAGA1' }
 ];
 
-const DEMO_VARIANTS = {
+const DEMO_VARIANTS: Record<string, string[]> = {
   'Jack Donaldson': ['Old No. 8', 'Single Barrel Select', 'Gentleman Jake', 'Tennessee Fire'],
   'Johnny Stroller': ['Red Tag', 'Black Tag', 'Blue Tag', 'Gold Tag Reserve'],
   'Gray Moose': ['Original', "L'Orange", 'La Poire', 'Le Citron'],
@@ -61,7 +130,7 @@ const DEMO_VARIANTS = {
 // USER & AUTH DATA GENERATORS
 // =============================================================================
 
-export function generateDemoUser() {
+export function generateDemoUser(): any {
   return {
     id: 10,
     email: 'james@illysium.ai',
@@ -107,7 +176,7 @@ export function generateDemoUser() {
   };
 }
 
-export function generateUserSettings() {
+export function generateUserSettings(): any {
   return {
     guidance_settings: generateGuidanceSettings(),
     forecast_selected_tags: [],
@@ -118,7 +187,7 @@ export function generateUserSettings() {
   };
 }
 
-export function generateGuidanceSettings() {
+export function generateGuidanceSettings(): any {
   return {
     summary_cols: [1007, 1006, 1005, 1001],
     summary_defs: [
@@ -184,9 +253,9 @@ export function generateGuidanceSettings() {
 // VOLUME & FORECAST DATA GENERATORS
 // =============================================================================
 
-export function generateVolumeDataItem(market: any, brand: string, month: number, year: number = 2025) {
+export function generateVolumeDataItem(market: MarketData | undefined, brand: string, month: number, year: number = 2025): VolumeDataItem {
   // Safe variant lookup with fallback
-  const variants = DEMO_VARIANTS[brand as keyof typeof DEMO_VARIANTS];
+  const variants = DEMO_VARIANTS[brand];
   const variant = variants ? getRandomFromArray(variants) : `${brand} Original`;
   const brandCode = brand.replace(/[^A-Za-z]/g, '').substring(0, 2).toUpperCase() || 'XX';
   const variantId = `${brandCode}${Math.floor(Math.random() * 100).toString().padStart(3, '0')}`;
@@ -236,8 +305,8 @@ export function generateVolumeDataItem(market: any, brand: string, month: number
   };
 }
 
-export function generateVolumeData(markets: string[], brands: string[] | null, isCustomerView: boolean = false) {
-  const data: any[] = [];
+export function generateVolumeData(markets: string[], brands: string[] | null, isCustomerView: boolean = false): VolumeDataItem[] {
+  const data: VolumeDataItem[] = [];
   const relevantMarkets = DEMO_MARKETS.filter(m => 
     markets.includes(isCustomerView ? '17259' : m.market_id)
   );
@@ -262,12 +331,12 @@ export function generateVolumeData(markets: string[], brands: string[] | null, i
 // DASHBOARD DATA GENERATOR
 // =============================================================================
 
-export function generateDashboardConfig() {
+export function generateDashboardConfig(): any[] {
   return [
     {
       id: generateRandomId(),
       name: 'Demo Dashboard',
-      type: 'table' as 'table',
+      type: 'table' as const,
       order: 1,
       config: {
         calcId: 'case_equivalent_volume',
@@ -279,7 +348,7 @@ export function generateDashboardConfig() {
       gridPosition: {
         col: 0,
         row: 0,
-        width: 12 as 12
+        width: 12 as const
       }
     }
   ];
@@ -289,7 +358,7 @@ export function generateDashboardConfig() {
 // MARKET DATA GENERATOR
 // =============================================================================
 
-export function generateDetailedMarkets(marketIds: number[]) {
+export function generateDetailedMarkets(marketIds: number[]): any[] {
   return DEMO_MARKETS
     .filter(m => marketIds.includes(m.id))
     .map(market => ({
@@ -321,7 +390,7 @@ export function generateDetailedMarkets(marketIds: number[]) {
 // MARKET DATA GENERATOR FOR VOLUME VIEW
 // =============================================================================
 
-export function generateMarketData(marketIds: number[]) {
+export function generateMarketData(marketIds: number[]): any[] {
   return DEMO_MARKETS
     .filter(m => marketIds.includes(m.id))
     .map(market => ({
@@ -353,9 +422,9 @@ export function generateMarketData(marketIds: number[]) {
 // ACCOUNT LEVEL DATA GENERATORS
 // =============================================================================
 
-export function generateAccountLevelSales(market: string, product: string, month: number, year: number) {
+export function generateAccountLevelSales(): AccountSalesData[] {
   const numAccounts = Math.floor(getRandomBetween(3, 8));
-  const accounts = [];
+  const accounts: AccountSalesData[] = [];
   
   for (let i = 0; i < numAccounts; i++) {
     accounts.push({
@@ -369,18 +438,18 @@ export function generateAccountLevelSales(market: string, product: string, month
   return accounts;
 }
 
-export function generateAccountDetails(outletId: string, period: string = 'R12') {
+export function generateAccountDetails(): AccountDetailsData[] {
   const numBrands = Math.floor(getRandomBetween(4, 8));
-  const data = [];
+  const data: AccountDetailsData[] = [];
   
   for (let i = 0; i < numBrands; i++) {
     const brand = getRandomFromArray(DEMO_BRANDS);
     for (let month = 1; month <= 12; month++) {
       data.push({
-        brand: brand,
-        month: month,
+        brand,
+        month,
         volume: getRandomBetween(10, 100, 2),
-        value: getRandomBetween(2000, 15000, 2)
+        value: getRandomBetween(2000, 15000, 2),
       });
     }
   }
