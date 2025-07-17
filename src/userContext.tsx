@@ -258,6 +258,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const login = async (_email: string, _password: string): Promise<boolean> => {
+    console.log("UserContext login called with:", _email);
     try {
       // Demo login - generate demo user and token
       const { generateDemoUser } = await import("./playData/dataGenerators");
@@ -265,11 +266,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         "./playData/demoConfig"
       );
 
+      console.log("Simulating API delay...");
       await simulateApiDelay(); // Simulate API delay
 
+      console.log("Generating demo user...");
       const demoUser = generateDemoUser();
       const token = createDemoToken(demoUser.id);
 
+      console.log("Dispatching LOGIN action...");
       // First dispatch the LOGIN action to set the token
       dispatch({
         type: "LOGIN",
@@ -279,11 +283,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       });
 
+      console.log("Loading guidance settings...");
       // Load guidance settings without passing token (it will use the one from localStorage)
       await appDispatch(loadGuidanceSettings()).unwrap();
+      console.log("Login successful!");
       return true;
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Login error in userContext:", error);
       return false;
     }
   };

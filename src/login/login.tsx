@@ -25,8 +25,8 @@ export const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
+    email: "james@illysium.ai",
+    password: "demo",
     twoFactorCode: "",
   });
   const [notification, setNotification] = useState({
@@ -94,6 +94,15 @@ export const Login: React.FC = () => {
         // Demo login - check credentials against demo data
         const { DEMO_CREDENTIALS } = await import("../playData/demoConfig");
 
+        console.log("Login attempt:", {
+          email: formData.email,
+          password: formData.password,
+          expectedEmail1: DEMO_CREDENTIALS.email,
+          expectedPassword1: DEMO_CREDENTIALS.password,
+          expectedEmail2: DEMO_CREDENTIALS.admin.email,
+          expectedPassword2: DEMO_CREDENTIALS.admin.password,
+        });
+
         if (
           (formData.email === DEMO_CREDENTIALS.email &&
             formData.password === DEMO_CREDENTIALS.password) ||
@@ -119,7 +128,8 @@ export const Login: React.FC = () => {
         } else {
           setNotification({
             open: true,
-            message: "Invalid credentials. Use james@illysium.ai / demo",
+            message:
+              "Invalid credentials. Try: james@illysium.ai / demo OR admin@apollo.com / admin123",
             severity: "error",
           });
         }
