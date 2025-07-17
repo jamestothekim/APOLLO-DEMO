@@ -22,9 +22,10 @@ export function generateRandomId(): string {
 // =============================================================================
 
 export const DEMO_BRANDS = [
-  'Balvenie', 'Hendricks', 'Glenfiddich', 'Leyenda Del Milagro', 
-  'The Macallan', 'Monkey Shoulder', 'Tullamore Dew', 'Drambuie',
-  'Sailor Jerry', 'Milagro', 'Reyka', 'Kininvie'
+  'Jack Donaldson', 'Johnny Stroller', 'Gray Moose', 'Absolute Zero', 
+  'Jamerson', 'Crown Loyal', 'Patton Silver', 'Captain Morgains',
+  'Jose Quervo', 'Smirnov', 'Bombay Sapphire Plus', 'Tanqueray Green',
+  'Bacardi Superior Plus', 'Maker\'s Mark II', 'Buffalo Trace Route', 'Woodford Reserved', 'Bulleit Rye Plus'
 ];
 
 export const DEMO_MARKETS = [
@@ -37,11 +38,23 @@ export const DEMO_MARKETS = [
 ];
 
 const DEMO_VARIANTS = {
-  'Balvenie': ['Balvenie 12', 'Balvenie 14', 'Balvenie 21', 'Balvenie Other'],
-  'Hendricks': ['Hendricks Original', 'Hendricks Neptunia', 'Hendricks Lunar'],
-  'Glenfiddich': ['Glenfiddich 12', 'Glenfiddich 15', 'Glenfiddich 18', 'Glenfiddich 21'],
-  'The Macallan': ['Macallan 12', 'Macallan 18', 'Macallan 25'],
-  'Tullamore Dew': ['Tullamore Dew Original', 'Tullamore Dew 12yo']
+  'Jack Donaldson': ['Old No. 8', 'Single Barrel Select', 'Gentleman Jake', 'Tennessee Fire'],
+  'Johnny Stroller': ['Red Tag', 'Black Tag', 'Blue Tag', 'Gold Tag Reserve'],
+  'Gray Moose': ['Original', 'L\'Orange', 'La Poire', 'Le Citron'],
+  'Absolute Zero': ['Original', 'Citron', 'Vanilla', 'Mandrin'],
+  'Jamerson': ['Original', 'Black Barrel', '18 Year', 'Caskmates'],
+  'Crown Loyal': ['Original', 'Reserve', 'XR', 'Northern Harvest'],
+  'Patton Silver': ['Silver', 'Reposado', 'Añejo', 'Extra Añejo'],
+  'Captain Morgains': ['Original Spiced', 'Private Stock', '100 Proof', 'Coconut Rum'],
+  'Jose Quervo': ['Especial', 'Tradicional', 'Reserva', 'Platino'],
+  'Smirnov': ['No. 21', 'Triple Distilled', 'Premium', 'Ice'],
+  'Bombay Sapphire Plus': ['Original', 'East', 'Star of Bombay', 'Premier Cru'],
+  'Tanqueray Green': ['London Dry', 'Rangpur', 'No. TEN', 'Sevilla'],
+  'Bacardi Superior Plus': ['White', 'Gold', 'Black', 'Reserva Ocho'],
+  'Maker\'s Mark II': ['Original', '46', 'Private Select', 'Cask Strength'],
+  'Buffalo Trace Route': ['Original', 'Single Barrel', 'Antique', 'White Dog'],
+  'Woodford Reserved': ['Double Oaked', 'Rye', 'Master\'s Collection', 'Wheat'],
+  'Bulleit Rye Plus': ['Bourbon', 'Rye', '10 Year', 'Barrel Strength']
 };
 
 // =============================================================================
@@ -98,7 +111,7 @@ export function generateUserSettings() {
   return {
     guidance_settings: generateGuidanceSettings(),
     forecast_selected_tags: [],
-    summary_selected_brands: DEMO_BRANDS.slice(0, 4),
+    summary_selected_brands: ['Jack Donaldson', 'Johnny Stroller', 'Gray Moose', 'Absolute Zero'],
     forecast_selected_brands: [],
     summary_selected_markets: [],
     forecast_selected_markets: []
